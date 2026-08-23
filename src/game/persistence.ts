@@ -157,6 +157,23 @@ export function setActiveProjectId(projectId: string): void {
   }
 }
 
+/**
+ * Forget which wedding is open, WITHOUT touching a single project.
+ *
+ * MEASURED IN THE BROWSER (journey acceptance): once a wedding had been
+ * opened, `hasChosenProject()` stayed true forever and the public site — with
+ * its "Mes mariages" list — became unreachable from inside the product. The
+ * only way back was clearing localStorage by hand. Returning to the landing is
+ * a navigation, not a deletion: the projects and their snapshots stay.
+ */
+export function clearActiveProjectId(): void {
+  try {
+    localStorage.removeItem(ACTIVE_PROJECT_ID_KEY);
+  } catch (err) {
+    reportStorageFailure('save', ACTIVE_PROJECT_ID_KEY, err);
+  }
+}
+
 // ---------------- FULL WEDDING STATE PERSISTENCE ----------------
 
 /** Returns whether the write actually reached storage — never assumed. */

@@ -92,9 +92,16 @@ function MirrorProjection() {
       {/* Keyboard users land here first: one key to reach the content. */}
       <a className="wc-skip" href="#mirror-programme">Aller au programme</a>
 
-      <MirrorHero hero={hero} />
-
+      {/* Imposed vertical order — [navigation du site] ↓ [contenu] ↓ [capsule].
+          MEASURED IN THE BROWSER (journey acceptance): with the rail placed
+          after the hero, its flow position landed at the very bottom of the
+          first screen, exactly where the fixed projection capsule sits, and
+          the capsule covered 03 PRESTATAIRES / 04 LIEUX / 05 MUSIQUE on every
+          first paint. Sticky at the top from the first pixel, the contents
+          page reads like a magazine and never meets the capsule. */}
       <MirrorNav sections={navSections} />
+
+      <MirrorHero hero={hero} />
 
       {/* ------------------------------------------------------ 01 PROGRAMME */}
       {programme.hasData ? (
@@ -244,6 +251,17 @@ function MirrorProjection() {
                 style={{ ...editBtnStyle, textTransform: 'none' }}
               >
                 Explorer le Monde 3D
+              </button>
+              {/* The site is a wedding's site, but the product has several
+                  weddings. Without this link the public landing — and the
+                  list of every wedding in this browser — was unreachable
+                  once a first wedding had been opened. */}
+              <button
+                className="wc-action"
+                onClick={() => store.returnToLanding()}
+                style={{ ...editBtnStyle, textTransform: 'none' }}
+              >
+                Mes mariages
               </button>
             </span>
           </div>

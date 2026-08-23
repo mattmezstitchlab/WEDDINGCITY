@@ -110,7 +110,9 @@ export function BottomOrchestrator() {
           }}
         />
 
-        <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%' }}>
+        {/* Seven moment labels cannot share 300px: on a phone the strip
+            scrolls instead of pushing the dock past the screen. */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%', gap: 6, overflowX: 'auto' }}>
           {milestones.map((m) => {
             const isActive = Math.abs(currentTime - m.hour) < 1.0;
             return (
@@ -157,12 +159,18 @@ export function BottomOrchestrator() {
 
 const dockWrapperStyle: React.CSSProperties = {
   position: 'absolute',
-  bottom: 14,
+  // The bottom lane belongs to the projection capsule (see ProjectionSwitcher);
+  // the dock starts above it so the two never share a pixel.
+  bottom: 68,
   left: 16,
   right: 16,
   display: 'flex',
-  alignItems: 'center',
+  alignItems: 'flex-end',
   justifyContent: 'space-between',
+  // MEASURED IN THE BROWSER (journey acceptance): on one unbreakable line the
+  // dock ran past the right edge below ~1100px — at 768 the whole milestone
+  // strip and the play controls were outside the viewport.
+  flexWrap: 'wrap',
   gap: 12,
   zIndex: 50,
   pointerEvents: 'none',
@@ -172,6 +180,8 @@ const dockWrapperStyle: React.CSSProperties = {
 const dockPillStyle: React.CSSProperties = {
   display: 'flex',
   alignItems: 'center',
+  flexWrap: 'wrap',
+  maxWidth: '100%',
   gap: 5,
   background: 'rgba(18, 21, 30, 0.92)',
   border: `1px solid ${BRAND_BORDER}`,
@@ -194,6 +204,7 @@ const zoneChipBtnStyle = (selected: boolean): React.CSSProperties => ({
 
 const milestoneBtnStyle = (active: boolean): React.CSSProperties => ({
   background: 'transparent',
+  whiteSpace: 'nowrap',
   border: 'none',
   color: active ? BRAND_ACCENT : BRAND_TEXT_MUTED,
   fontSize: 9,

@@ -65,7 +65,7 @@ export function MirrorHero({ hero }: { hero: HeroProjection }) {
         </div>
 
         {/* The names set as a monumental two-line lockup. */}
-        <h1 style={heroTitleStyle}>
+        <h1 className="wc-hero-title" style={heroTitleStyle}>
           {names.length > 1 ? (
             <>
               <span style={{ display: 'block' }}>{names[0]}</span>

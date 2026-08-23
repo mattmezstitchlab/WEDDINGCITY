@@ -31,6 +31,7 @@ import {
   saveWeddingProject,
   getActiveProjectId,
   setActiveProjectId,
+  clearActiveProjectId,
   savePersistedState,
   loadPersistedState,
   getActiveAccount,
@@ -1504,7 +1505,11 @@ function createDefaultDomainState(): PersistedDomainState {
   return clone({
     time: 15.4,
     userIdentity: DEFAULT_USER_IDENTITY,
-    userDmcIdentity: DEFAULT_DMC_IDENTITY,
+    // MEASURED IN THE BROWSER (journey acceptance): DEFAULT_DMC_IDENTITY
+    // carries `customBadgeText: 'Clara & Alexandre'`, so every brand-new
+    // wedding was persisted with the demo couple written inside it. An empty
+    // world knows no names until someone types them.
+    userDmcIdentity: { ...DEFAULT_DMC_IDENTITY, customBadgeText: '' },
     places: INITIAL_PLACES,
     agents: INITIAL_AGENTS,
     docs: INITIAL_DOCS,
@@ -1817,6 +1822,35 @@ class WeddingStore {
   /** A wedding is now open: the landing must step aside. */
   private markProjectChosen(): void {
     this.projectChosen = true;
+  }
+
+  /**
+   * Close the current wedding and go back to the public site.
+   *
+   * MEASURED IN THE BROWSER (journey acceptance): after the first wedding was
+   * opened, nothing in the product led back to the landing and its
+   * "Mes mariages" list — the only exit was clearing the browser storage.
+   *
+   * This is a NAVIGATION, not a deletion: every project and every snapshot
+   * stays exactly where it is. Only "which wedding is open" is forgotten, and
+   * the selections that belong to that wedding are dropped so no id survives
+   * into the next one.
+   */
+  public returnToLanding(): void {
+    this.saveCurrentState();
+    clearActiveProjectId();
+    this.projectChosen = false;
+    this.projection = 'mirror';
+    this.canvasOpen = false;
+    this.canvasFocus = null;
+    this.canvasSection = null;
+    this.selectedEntity = null;
+    this.mirrorFocusPersonId = null;
+    this.interiorMode = false;
+    this.brandMenuOpen = false;
+    this.weddingCreationOpen = false;
+    this.createWeddingModalOpen = false;
+    this.notify();
   }
 
   public openCanvas(
@@ -3294,15 +3328,20 @@ class WeddingStore {
   }) {
     weddingAudio.playWeddingChimes();
     const newId = `proj_${Date.now()}`;
-    const code = `WC-${new Date(params.weddingDate).getFullYear() || 2025}-${params.coupleNames.split('&')[0].trim().toUpperCase()}`;
+    const code = `WC-${new Date(params.weddingDate).getFullYear() || new Date().getFullYear()}-${params.coupleNames.split('&')[0].trim().toUpperCase()}`;
 
     const newProject: WeddingProject = {
       id: newId,
       title: `Mariage de ${params.coupleNames}`,
       worldType: 'wedding',
       coupleNames: params.coupleNames,
-      weddingDate: params.weddingDate || '2025-09-20',
-      locationName: params.locationName || 'Domaine d’Exception',
+      // Nothing is invented here. The creation surface explicitly lets the
+      // couple answer "je ne sais pas encore" / "le lieu n’est pas encore
+      // choisi"; filling those blanks with a fake date and a fake estate name
+      // made the World and the Mirror state something untrue. Empty stays
+      // empty, and every projection already knows how to say so.
+      weddingDate: params.weddingDate || '',
+      locationName: params.locationName || '',
       budgetTarget: params.budgetTarget || 25000,
       guestCountTarget: params.guestCountTarget || 100,
       ownerId: this.activeAccount?.id || 'account_user',
@@ -3338,6 +3377,9 @@ class WeddingStore {
     // They are real data, so they become real Persons — but they get NO
     // spatial projection: inventing a position in the 3D world would be
     // fabricating. The World says so explicitly instead.
+    // The badge belongs to THIS wedding, not to the constant it came from.
+    this.userDmcIdentity = { ...this.userDmcIdentity, customBadgeText: params.coupleNames };
+
     const names = params.coupleNames.split('&').map((n) => n.trim()).filter(Boolean);
     for (const displayName of names.slice(0, 2)) {
       this.createPerson({ displayName, asGuest: false });

@@ -28,9 +28,14 @@ export function ProjectionSwitcher() {
         // The editorial navigation belongs to the site and sits at the very
         // top; this capsule belongs to the projection system and sits under
         // the content. In the World it stays where the HUD expects it.
-        ...(onLight
-          ? { bottom: 'max(18px, env(safe-area-inset-bottom))' }
-          : { top: 'max(14px, env(safe-area-inset-top))' }),
+        // MEASURED IN THE BROWSER (journey acceptance): pinned to the top of
+        // the World it sat exactly on the HUD pills — it covered NERVE CENTER
+        // and CONNECTEURS at 1440, WORLDMAP 3D and TIMELINE at 768 and 390.
+        // One lane, both surfaces: the very bottom of the screen belongs to
+        // the projection capsule, and the World dock starts above it (see
+        // BottomOrchestrator). That holds at every width, including when the
+        // dock wraps onto three rows on a phone.
+        bottom: 'max(18px, env(safe-area-inset-bottom))',
         left: '50%',
         transform: 'translateX(-50%)',
         zIndex: 1000,

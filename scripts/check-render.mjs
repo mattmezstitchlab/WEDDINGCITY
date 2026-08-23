@@ -355,8 +355,14 @@ try {
     const switcher = readFileSync(p2('components', 'ui', 'ProjectionSwitcher.tsx'), 'utf8');
     r.check(/position: 'sticky', top: 0/.test(nav),
       'the editorial rail owns the top of the page');
-    r.check(/onLight[\s\S]{0,120}bottom: 'max\(18px/.test(switcher),
-      'and the projection capsule sits below the content in the Mirror');
+    // LOCATOR ADAPTED (journey acceptance): the capsule used to be at the
+    // bottom only on the light surface (`onLight ? bottom : top`). Measured in
+    // Chromium, the top placement covered the World HUD pills, so the bottom
+    // lane is now unconditional — the same guarantee, on both surfaces: the
+    // capsule is anchored to the bottom and can never cover the rail.
+    r.check(/bottom: 'max\(18px, env\(safe-area-inset-bottom\)\)'/.test(switcher)
+      && !/top: 'max\(14px/.test(switcher),
+      'and the projection capsule sits below the content, on both surfaces');
     r.check(/scrollMarginTop: 64/.test(readFileSync(p2('components', 'mirror', 'MirrorPrimitives.tsx'), 'utf8')),
       'an anchored section lands below the rail, not under it');
 

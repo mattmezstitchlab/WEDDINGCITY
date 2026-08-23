@@ -48,7 +48,9 @@
 
 /* --- the cover ------------------------------------------------------------- */
 .wc-hero {
-  min-height: min(94vh, 1000px);
+  /* The rail now sits above the hero (see MirrorSite), so the first screen is
+     the rail + a nearly full-height cover. */
+  min-height: min(calc(94vh - 38px), 1000px);
   justify-content: flex-end;
 }
 
@@ -56,10 +58,18 @@
   /* Shorter, and the lockup sits low but not marooned: the first section
      starts to show, which is what invites the scroll. */
   .wc-hero {
-    min-height: 86vh;
+    min-height: calc(86vh - 44px);
     justify-content: center;
     padding-top: 96px;
   }
+}
+
+/* MEASURED IN THE BROWSER (journey acceptance) at 390px: a long real name
+   ("ALPHA-ACCEPTATION") was cut off by the right edge of the cover — the page
+   does not scroll horizontally, so the end of the name was simply unreadable.
+   A name is data: it wraps, it is never truncated. */
+.wc-hero-title {
+  overflow-wrap: anywhere;
 }
 
 /* --- the timeline, the spine of the site ---------------------------------- */

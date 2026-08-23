@@ -99,13 +99,29 @@ export function BrandMenuModal({ isOpen, onClose }: BrandMenuModalProps) {
           </button>
 
           <button
+            /* ONE creation flow. This used to open the legacy modal directly,
+               which bypassed startWeddingCreation() and therefore always gave
+               the spatial panel — even when the visitor had arrived from the
+               editorial site. Measured during the journey acceptance pass. */
             onClick={() => handleAction(() => {
-              store.createWeddingModalOpen = true;
+              store.startWeddingCreation();
             })}
             style={menuItemBtnStyle}
           >
             <IconPlus size={14} color="#ffffff" />
             <span>Créer un Mariage (Wedding City)</span>
+          </button>
+
+          <button
+            /* The way back to the public site and its "Mes mariages" list.
+               Nothing is deleted — see weddingStore.returnToLanding. */
+            onClick={() => handleAction(() => {
+              store.returnToLanding();
+            })}
+            style={menuItemBtnStyle}
+          >
+            <span style={{ width: 14, textAlign: 'center' }}>←</span>
+            <span>Mes mariages (revenir au site)</span>
           </button>
 
           {/* --- the projects that really exist in this browser --- */}
@@ -219,8 +235,9 @@ export function BrandMenuModal({ isOpen, onClose }: BrandMenuModalProps) {
 
           {project.isDemo ? (
             <button
+              /* Same single creation flow as everywhere else. */
               onClick={() => handleAction(() => {
-                store.createWeddingModalOpen = true;
+                store.startWeddingCreation();
               })}
               style={{ ...menuItemBtnStyle, color: BRAND_ACCENT }}
             >

@@ -198,8 +198,13 @@ try {
 
     // Navigation at the very top, capsule below the content.
     r.check(/position: 'sticky', top: 0/.test(nav), 'the site navigation owns the top');
-    r.check(/onLight[\s\S]{0,140}bottom: 'max\(18px/.test(switcher),
-      'the capsule sits at the bottom in the Mirror');
+    // LOCATOR ADAPTED (journey acceptance): the bottom anchor is no longer
+    // conditional on the light surface — measured in Chromium, the World's top
+    // placement covered the HUD pills, so both surfaces now use the bottom
+    // lane. Guarantee unchanged: the capsule never sits on the navigation.
+    r.check(/bottom: 'max\(18px, env\(safe-area-inset-bottom\)\)'/.test(switcher)
+      && !/top: 'max\(14px/.test(switcher),
+      'the capsule sits at the bottom, under the content');
     r.check(!/backdropFilter|backdrop-filter/i.test(
       readFileSync(path.join(SRC, 'components', 'mirror', 'MirrorLanding.tsx'), 'utf8')),
       'no glassmorphism on the landing');
