@@ -1,0 +1,57 @@
+import { createRoot } from 'react-dom/client';
+import App from './App';
+import './App.css';
+import { weddingStore } from './game/weddingStore';
+
+// Expose __agon_preview immediately at top-level
+if (typeof window !== 'undefined') {
+  const w = window as any;
+  w.__agon_preview = {
+    ready: () => true,
+    shots: () => ['wide', 'hero', 'mairie', 'ceremonie', 'cocktail', 'reception', 'dancefloor'],
+    setShot: (name: string) => {
+      weddingStore.showIdentityModal = false;
+      weddingStore.introCinematicActive = false;
+      weddingStore.interiorMode = false;
+      if (name === 'wide') {
+        weddingStore.cameraTargetPos = [0, 0, 0];
+      } else if (name === 'hero') {
+        weddingStore.cameraTargetPos = [-8, 1, 4];
+      } else if (name === 'mairie') {
+        weddingStore.focusPlace('place_mairie');
+      } else if (name === 'ceremonie') {
+        weddingStore.focusPlace('place_ceremonie');
+      } else if (name === 'cocktail') {
+        weddingStore.focusPlace('place_cocktail');
+      } else if (name === 'reception') {
+        weddingStore.focusPlace('place_reception');
+      } else if (name === 'dancefloor') {
+        weddingStore.focusPlace('place_dancefloor');
+      }
+      weddingStore.notify();
+    },
+    setPose: (pos: [number, number, number], target: [number, number, number]) => {
+      weddingStore.showIdentityModal = false;
+      weddingStore.introCinematicActive = false;
+      weddingStore.cameraTargetPos = target;
+      weddingStore.notify();
+    },
+    actions: () => ['start-sim', 'select-photographer', 'resolve-conflict', 'goto-cocktail'],
+    runAction: (name: string) => {
+      weddingStore.showIdentityModal = false;
+      if (name === 'start-sim') {
+        weddingStore.isPlaying = true;
+        weddingStore.notify();
+      } else if (name === 'select-photographer') {
+        weddingStore.selectEntity('agent', 'agent_photographer');
+      } else if (name === 'resolve-conflict') {
+        weddingStore.resolveConflict('conflict_photo_time');
+      } else if (name === 'goto-cocktail') {
+        weddingStore.setTime(17.5);
+        weddingStore.focusPlace('place_cocktail');
+      }
+    },
+  };
+}
+
+createRoot(document.getElementById('root')!).render(<App />);
