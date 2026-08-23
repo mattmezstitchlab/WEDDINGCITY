@@ -144,7 +144,7 @@ export function Chip({
       >
         {label}
       </button>
-      {sub && <span style={{ color: K.textMuted, fontSize: 9.5 }}>{sub}</span>}
+      {sub && <span style={{ color: K.textMuted, fontSize: typography.size.caption }}>{sub}</span>}
       {onRemove && (
         <button
           onClick={onRemove}
@@ -214,7 +214,7 @@ export function InlinePicker<T extends { id: string; label: string; sub?: string
             style={pickerRowStyle}
           >
             <span>{i.label}</span>
-            {i.sub && <span style={{ color: K.textMuted, fontSize: 10 }}>{i.sub}</span>}
+            {i.sub && <span style={{ color: K.textMuted, fontSize: typography.size.caption }}>{i.sub}</span>}
           </button>
         ))}
       </div>
@@ -245,7 +245,7 @@ export function FieldRow({ label, children }: { label: string; children: React.R
 }
 
 export const fieldLabelStyle: CSSProperties = {
-  fontSize: 9, letterSpacing: '0.13em', textTransform: 'uppercase',
+  fontSize: typography.size.caption, letterSpacing: '0.13em', textTransform: 'uppercase',
   color: K.textMuted, fontWeight: 700, paddingTop: 7,
 };
 

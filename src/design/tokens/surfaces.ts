@@ -36,7 +36,16 @@ export const surfaces = {
     lineStrong: 'rgba(16, 18, 24, 0.14)',
     textPrimary: '#16181d',
     textSecondary: '#4b5059',
-    textMuted: '#8a8f99',
+    /**
+     * MEASURED (final visual audit): the previous #8a8f99 scored 2.98:1 on the
+     * ivory background — under the WCAG AA floor of 4.5:1 — across ~216 pieces
+     * of secondary text. "Discreet" had become "hard to read".
+     *
+     * This value keeps the same blue-grey cast and the same position in the
+     * hierarchy (below textSecondary), and measures 5.12:1 on #F7F5F0,
+     * 5.50:1 on #FFFDFA and 4.68:1 on the darkest tint in use.
+     */
+    textMuted: '#636874',
   },
 } as const;
 

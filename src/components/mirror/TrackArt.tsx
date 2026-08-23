@@ -130,7 +130,7 @@ export function TrackArt({
 /** Discreet note when a track simply cannot be listened to. Honest, not loud. */
 export function NoAudioNote() {
   return (
-    <span style={{ fontSize: typography.size.micro, color: M.textMuted, letterSpacing: '0.08em' }}>
+    <span style={{ fontSize: typography.editorial.micro, color: M.textMuted, letterSpacing: '0.08em' }}>
       écoute indisponible
     </span>
   );

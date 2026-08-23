@@ -123,7 +123,7 @@ const itemStyle = (active: boolean): React.CSSProperties => ({
   font: 'inherit', background: 'transparent', border: 'none', cursor: 'pointer',
   display: 'inline-flex', alignItems: 'baseline', gap: 6,
   padding: 0, whiteSpace: 'nowrap',
-  fontSize: typography.size.caption, letterSpacing: '0.09em', textTransform: 'uppercase',
+  fontSize: typography.editorial.caption, letterSpacing: '0.09em', textTransform: 'uppercase',
   fontWeight: active ? typography.weight.bold : typography.weight.medium,
   color: active ? M.textPrimary : M.textSecondary,
   opacity: active ? 1 : 0.75,
@@ -131,14 +131,14 @@ const itemStyle = (active: boolean): React.CSSProperties => ({
 });
 
 const idxStyle: React.CSSProperties = {
-  fontFamily: typography.family.mono, fontSize: 9, letterSpacing: 0,
+  fontFamily: typography.family.mono, fontSize: typography.editorial.micro, letterSpacing: 0,
 };
 
 export const editBtnStyle: React.CSSProperties = {
   appearance: 'none', cursor: 'pointer',
   background: 'transparent', color: M.textSecondary,
   border: `1px solid ${M.line}`, borderRadius: radius.pill,
-  padding: '5px 13px', fontSize: typography.size.caption,
+  padding: '5px 13px', fontSize: typography.editorial.caption,
   letterSpacing: '0.06em', textTransform: 'uppercase', fontWeight: 600,
   boxShadow: shadowFor(0, 'composition'),
 };

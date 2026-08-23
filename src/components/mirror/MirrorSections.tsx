@@ -22,6 +22,13 @@ const PLACE_KIND_LABEL: Record<string, string> = {
   vendor_space: 'Espace prestataire', other: 'Autre',
 };
 
+/** Stored categories are lowercase keys; the page shows real words. */
+const VENDOR_CATEGORY_LABEL: Record<string, string> = {
+  traiteur: 'Traiteur', photographe: 'Photographie', dj: 'DJ & son',
+  fleuriste: 'Fleurs', lieu: 'Lieu', robe: 'Tenues', transport: 'Transport',
+  musique: 'Musique live', voyage: 'Voyage', autre: 'Autres intervenants',
+};
+
 const VENDOR_STATUS: Record<string, string> = {
   prospect: 'Prospect', quoted: 'Devis', contracted: 'Contractualisé', cancelled: 'Annulé',
 };
@@ -36,7 +43,7 @@ export function MirrorVendors({ vendors }: { vendors: VendorsProjection }) {
       {vendors.byCategory.map((group, gi) => (
         <Reveal key={group.category} delay={Math.min(gi, 4) * 50}>
           <section>
-            <Rule label={group.category} />
+            <Rule label={VENDOR_CATEGORY_LABEL[group.category] ?? group.category} />
             <div style={{ display: 'grid', gap: fluid(22, 34), marginTop: fluid(20, 30) }}>
               {group.vendors.map((v) => {
                 const cover = v.media.find((m) => m.kind === 'image');
@@ -176,7 +183,9 @@ export function MirrorPlaces({ places }: { places: PlacesProjection }) {
                           title={v.category}
                         >
                           {v.companyName}
-                          <span style={{ color: M.textMuted }}> · {v.category}</span>
+                          <span style={{ color: M.textMuted }}>
+                            {' · '}{VENDOR_CATEGORY_LABEL[v.category] ?? v.category}
+                          </span>
                         </button>
                       ))}
                     </span>
@@ -210,7 +219,7 @@ export function MirrorPlaces({ places }: { places: PlacesProjection }) {
               {secondary.map((p) => (
                 <button key={p.placeId} onClick={() => store.showPlaceInWorld(p.placeId)} style={secondaryItemStyle}>
                   <span style={{ color: M.textPrimary }}>{p.name}</span>
-                  <span style={{ color: M.textMuted, fontSize: typography.size.caption }}>
+                  <span style={{ color: M.textMuted, fontSize: typography.editorial.caption }}>
                     {PLACE_KIND_LABEL[p.kind] ?? p.kind}
                   </span>
                 </button>
@@ -227,9 +236,19 @@ export function MirrorPlaces({ places }: { places: PlacesProjection }) {
 
 export function MirrorMusic({ music }: { music: MusicProjection }) {
   const store = weddingStore;
+  // When NOTHING is playable, saying it on all ten lines is noise: it is a
+  // property of the section, not of each track. When some tracks CAN be
+  // heard, the absence becomes distinctive information and returns per track.
+  const nonePlayable = music.counts.playable === 0;
 
   return (
     <div style={{ display: 'grid', gap: fluid(36, 62) }}>
+      {nonePlayable && (
+        <p style={sectionNoteStyle}>
+          Aucun extrait n’est encore rattaché à ces titres : la sélection se lit,
+          elle ne s’écoute pas encore.
+        </p>
+      )}
       {music.byMoment.map((group, gi) => (
         <Reveal key={group.phaseId ?? 'unscheduled'} delay={Math.min(gi, 4) * 50}>
           <section>
@@ -274,7 +293,7 @@ export function MirrorMusic({ music }: { music: MusicProjection }) {
                       </span>
                     </button>
 
-                    {!sg.audioSource && <NoAudioNote />}
+                    {!sg.audioSource && !nonePlayable && <NoAudioNote />}
                   </div>
                 </li>
               ))}
@@ -338,11 +357,16 @@ const vendorMomentsStyle: React.CSSProperties = {
 const momentLinkStyle: React.CSSProperties = {
   appearance: 'none', background: 'transparent', border: 'none', padding: 0,
   cursor: 'pointer', textAlign: 'left',
-  font: 'inherit', fontSize: typography.size.body, color: M.textSecondary,
+  font: 'inherit', fontSize: typography.editorial.body, color: M.textSecondary,
 };
 
 const momentTimeStyle: React.CSSProperties = {
-  fontFamily: typography.family.mono, fontSize: typography.size.caption, color: M.textPrimary,
+  fontFamily: typography.family.mono, fontSize: typography.editorial.caption, color: M.textPrimary,
+};
+
+const sectionNoteStyle: React.CSSProperties = {
+  margin: 0, maxWidth: 520,
+  fontSize: typography.editorial.caption, color: M.textMuted, lineHeight: 1.6,
 };
 
 const placeVendorsStyle: React.CSSProperties = {
@@ -351,7 +375,7 @@ const placeVendorsStyle: React.CSSProperties = {
 };
 
 const placeVendorsLabelStyle: React.CSSProperties = {
-  fontSize: 9, letterSpacing: '0.15em', textTransform: 'uppercase',
+  fontSize: typography.editorial.micro, letterSpacing: '0.15em', textTransform: 'uppercase',
   color: M.textMuted, fontWeight: 700,
 };
 
@@ -362,7 +386,7 @@ const galleryFigureStyle: React.CSSProperties = {
 
 const contactRowStyle: React.CSSProperties = {
   display: 'flex', gap: 14, flexWrap: 'wrap', marginTop: fluid(12, 16),
-  fontSize: typography.size.caption,
+  fontSize: typography.editorial.caption,
 };
 
 const contactLinkStyle: React.CSSProperties = {
@@ -372,8 +396,9 @@ const contactLinkStyle: React.CSSProperties = {
 
 const ghostBtnStyle: React.CSSProperties = {
   appearance: 'none', background: 'transparent', cursor: 'pointer',
-  border: `1px solid ${M.line}`, borderRadius: radius.pill, padding: '6px 14px',
-  font: 'inherit', fontSize: typography.size.micro,
+  border: `1px solid ${M.line}`, borderRadius: radius.pill, padding: '8px 16px',
+  // An action is never set at the smallest, most discreet tier.
+  font: 'inherit', fontSize: typography.editorial.caption,
   letterSpacing: '0.09em', textTransform: 'uppercase', fontWeight: 600, color: M.textMuted,
 };
 
@@ -382,7 +407,7 @@ const placeImgStyle: React.CSSProperties = {
 };
 
 const placeKindStyle: React.CSSProperties = {
-  fontSize: typography.size.micro, letterSpacing: '0.16em', textTransform: 'uppercase',
+  fontSize: typography.editorial.micro, letterSpacing: '0.16em', textTransform: 'uppercase',
   color: M.textMuted, fontWeight: 700,
 };
 
@@ -409,7 +434,7 @@ const secondaryItemStyle: React.CSSProperties = {
   appearance: 'none', background: 'transparent', border: 'none', padding: '8px 0',
   cursor: 'pointer', textAlign: 'left', font: 'inherit',
   display: 'flex', flexDirection: 'column', gap: 3,
-  borderTop: `1px solid ${M.line}`, fontSize: typography.size.body,
+  borderTop: `1px solid ${M.line}`, fontSize: typography.editorial.body,
 };
 
 const musicHeadStyle: React.CSSProperties = {
@@ -428,7 +453,7 @@ const musicMomentStyle: React.CSSProperties = {
 
 const miniLinkStyle: React.CSSProperties = {
   appearance: 'none', background: 'transparent', border: 'none', padding: 0, cursor: 'pointer',
-  font: 'inherit', fontSize: typography.size.caption, color: M.textMuted,
+  font: 'inherit', fontSize: typography.editorial.caption, color: M.textMuted,
 };
 
 const songListStyle: React.CSSProperties = {
@@ -456,11 +481,11 @@ const songTitleStyle: React.CSSProperties = {
 };
 
 const songArtistStyle: React.CSSProperties = {
-  display: 'block', fontSize: typography.size.caption, color: M.textMuted, marginTop: 3,
+  display: 'block', fontSize: typography.editorial.caption, color: M.textMuted, marginTop: 3,
 };
 
 const songMetaStyle: React.CSSProperties = {
-  fontFamily: typography.family.mono, fontSize: typography.size.caption,
+  fontFamily: typography.family.mono, fontSize: typography.editorial.caption,
   color: M.textMuted, whiteSpace: 'nowrap',
 };
 
@@ -473,7 +498,7 @@ const galleryImgStyle: React.CSSProperties = {
 const captionStyle: React.CSSProperties = {
   position: 'absolute', left: 0, right: 0, bottom: 0,
   padding: '26px 14px 10px',
-  fontSize: typography.size.caption, color: '#fff',
+  fontSize: typography.editorial.caption, color: '#fff',
   background: 'linear-gradient(to top, rgba(12,10,8,.55), rgba(12,10,8,0))',
   overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
 };

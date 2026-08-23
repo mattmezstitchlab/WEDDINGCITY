@@ -131,12 +131,12 @@ const indexStyle: React.CSSProperties = {
 };
 
 const focusLineStyle: React.CSSProperties = {
-  marginTop: 10, fontSize: typography.size.body, color: M.textSecondary,
+  marginTop: 10, fontSize: typography.editorial.body, color: M.textSecondary,
   display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap',
 };
 
 const clearFocusStyle: React.CSSProperties = {
-  font: 'inherit', fontSize: typography.size.caption, color: M.textMuted,
+  font: 'inherit', fontSize: typography.editorial.caption, color: M.textMuted,
   background: 'transparent', border: 'none', cursor: 'pointer',
   borderBottom: `1px solid ${M.line}`, padding: 0,
 };
@@ -150,7 +150,7 @@ const railItemStyle = (active: boolean): React.CSSProperties => ({
   font: 'inherit', background: 'transparent', border: 'none', cursor: 'pointer',
   display: 'inline-flex', alignItems: 'baseline', gap: 7,
   padding: '0 0 12px', whiteSpace: 'nowrap',
-  fontSize: typography.size.caption, letterSpacing: '0.08em', textTransform: 'uppercase',
+  fontSize: typography.editorial.caption, letterSpacing: '0.08em', textTransform: 'uppercase',
   fontWeight: active ? typography.weight.bold : typography.weight.medium,
   color: active ? M.textPrimary : M.textSecondary,
   borderBottom: `2px solid ${active ? M.textPrimary : 'transparent'}`,
@@ -158,7 +158,7 @@ const railItemStyle = (active: boolean): React.CSSProperties => ({
 });
 
 const railIndexStyle: React.CSSProperties = {
-  fontFamily: typography.family.mono, fontSize: 9.5, letterSpacing: 0,
+  fontFamily: typography.family.mono, fontSize: typography.editorial.micro, letterSpacing: 0,
 };
 
 const mainStyle: React.CSSProperties = {
@@ -169,12 +169,12 @@ const doneBtnStyle: React.CSSProperties = {
   appearance: 'none', cursor: 'pointer', border: 'none',
   background: M.textPrimary, color: M.surface,
   borderRadius: radius.pill, padding: '9px 18px',
-  fontSize: typography.size.caption, fontWeight: typography.weight.semibold,
+  fontSize: typography.editorial.caption, fontWeight: typography.weight.semibold,
   letterSpacing: '0.04em', boxShadow: shadowFor(1, 'composition'),
 };
 
 const footerStyle: React.CSSProperties = {
   padding: `${fluid(20, 28)} ${fluid(20, 72)}`,
   borderTop: `1px solid ${M.line}`,
-  fontSize: typography.size.caption, color: K.textMuted,
+  fontSize: typography.editorial.caption, color: K.textMuted,
 };

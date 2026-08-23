@@ -192,13 +192,13 @@ const hourStyle: React.CSSProperties = {
 };
 
 const untilStyle: React.CSSProperties = {
-  marginTop: 8, fontSize: typography.size.micro, letterSpacing: '0.1em',
+  marginTop: 8, fontSize: typography.editorial.micro, letterSpacing: '0.1em',
   textTransform: 'uppercase', color: M.textMuted,
 };
 
 const nowStyle: React.CSSProperties = {
   display: 'inline-block', marginTop: 10,
-  fontSize: 9, letterSpacing: '0.14em', textTransform: 'uppercase',
+  fontSize: typography.editorial.micro, letterSpacing: '0.14em', textTransform: 'uppercase',
   color: '#4c7a63', fontWeight: 700,
 };
 
@@ -251,7 +251,7 @@ const contextBlockStyle: React.CSSProperties = {
 };
 
 const contextLabelStyle: React.CSSProperties = {
-  fontSize: 9, letterSpacing: '0.15em', textTransform: 'uppercase',
+  fontSize: typography.editorial.micro, letterSpacing: '0.15em', textTransform: 'uppercase',
   color: M.textMuted, fontWeight: 700,
 };
 
@@ -270,7 +270,7 @@ const peopleRowStyle: React.CSSProperties = {
 const personChipStyle: React.CSSProperties = {
   appearance: 'none', background: 'transparent', border: 'none', padding: 0,
   cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 8,
-  font: 'inherit', fontSize: typography.size.caption, color: M.textSecondary,
+  font: 'inherit', fontSize: typography.editorial.caption, color: M.textSecondary,
 };
 
 const momentMediaStyle: React.CSSProperties = {
@@ -289,19 +289,20 @@ const contextItemsStyle: React.CSSProperties = {
 const contextLinkStyle: React.CSSProperties = {
   appearance: 'none', background: 'transparent', border: 'none', padding: 0,
   cursor: 'pointer', textAlign: 'left',
-  font: 'inherit', fontSize: typography.size.body, color: M.textSecondary,
+  font: 'inherit', fontSize: typography.editorial.body, color: M.textSecondary,
 };
 
 const noteStyle: React.CSSProperties = {
   margin: `${fluid(16, 22)} 0 0`, maxWidth: 540,
-  fontSize: typography.size.caption, lineHeight: 1.6, color: M.textMuted,
+  fontSize: typography.editorial.caption, lineHeight: 1.6, color: M.textMuted,
   borderLeft: `2px solid ${M.line}`, paddingLeft: 12,
 };
 
 const editStyle: React.CSSProperties = {
   appearance: 'none', background: 'transparent', cursor: 'pointer',
   border: `1px solid ${M.line}`, borderRadius: radius.pill,
-  marginTop: fluid(18, 24), padding: '6px 14px',
-  font: 'inherit', fontSize: typography.size.micro,
+  marginTop: fluid(18, 24), padding: '8px 16px',
+  // An action is never set at the smallest, most discreet tier.
+  font: 'inherit', fontSize: typography.editorial.caption,
   letterSpacing: '0.1em', textTransform: 'uppercase', fontWeight: 600, color: M.textMuted,
 };

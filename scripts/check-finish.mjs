@@ -55,11 +55,19 @@ try {
     const phaseWithPeople = store.phases.find((p) => (p.keyAgentIds ?? []).length > 0);
     if (phaseWithPeople) {
       const moment = model.programme.moments.find((m) => m.phaseId === phaseWithPeople.id);
-      r.check(moment.persons.length === moment.keyPersonIds.length,
+      r.check(moment.persons.length > 0 && moment.persons.length <= moment.keyPersonIds.length,
         'a moment exposes its people as resolved references, not just ids',
         `${moment.persons.length}/${moment.keyPersonIds.length}`);
       r.check(moment.persons.every((p) => store.persons.some((x) => x.id === p.personId)),
         'each of them resolves to a real Person');
+      // Final visual audit: a vendor's contact person was rendered twice in the
+      // same moment — once as a person, once as the company. The person side
+      // now drops whoever is already named as a vendor.
+      const vendorContacts = new Set(moment.vendors
+        .map((v) => store.vendors.find((x) => x.id === v.vendorId)?.contactPersonId)
+        .filter(Boolean));
+      r.check(moment.persons.every((p) => !vendorContacts.has(p.personId)),
+        'and never repeats someone already named as a vendor of that moment');
       // The same edge, seen from the person.
       const someone = moment.persons[0];
       const guest = model.guests.guests.find((g) => g.personId === someone.personId);

@@ -30,6 +30,10 @@ const RELATION_LABEL: Record<string, string> = {
 
 export function MirrorPeople({ guests }: { guests: GuestsProjection }) {
   const [openId, setOpenId] = useState<string | null>(null);
+  // When every single guest shares the same answer, repeating it under all 27
+  // names adds nothing — the summary line above already says it once. The
+  // moment RSVPs actually differ, the per-person label comes back on its own.
+  const rsvpDistinguishes = guests.presentStatuses.length > 1;
 
   return (
     <div>
@@ -77,6 +81,7 @@ export function MirrorPeople({ guests }: { guests: GuestsProjection }) {
                     <PersonName
                       key={g.guestId}
                       guest={g}
+                      showRsvp={rsvpDistinguishes}
                       open={openId === g.guestId}
                       onToggle={() => setOpenId(openId === g.guestId ? null : g.guestId)}
                     />
@@ -96,6 +101,7 @@ export function MirrorPeople({ guests }: { guests: GuestsProjection }) {
                   <PersonName
                     key={g.guestId}
                     guest={g}
+                    showRsvp={rsvpDistinguishes}
                     open={openId === g.guestId}
                     onToggle={() => setOpenId(openId === g.guestId ? null : g.guestId)}
                   />
@@ -109,8 +115,8 @@ export function MirrorPeople({ guests }: { guests: GuestsProjection }) {
   );
 }
 
-function PersonName({ guest, open, onToggle }: {
-  guest: GuestProjection; open: boolean; onToggle: () => void;
+function PersonName({ guest, open, onToggle, showRsvp }: {
+  guest: GuestProjection; open: boolean; onToggle: () => void; showRsvp: boolean;
 }) {
   const store = weddingStore;
 
@@ -133,12 +139,15 @@ function PersonName({ guest, open, onToggle }: {
 
         <span style={{ minWidth: 0 }}>
           <span style={personNameStyle}>{guest.displayName}</span>
-          <span style={personMetaStyle}>
-            <span style={{ ...dotStyle, background: RSVP_COLOR[guest.rsvp] }} />
-            {RSVP_LABEL[guest.rsvp]}
-            {guest.plusOnes > 0 ? ` +${guest.plusOnes}` : ''}
-            {guest.dietary ? ` · ${guest.dietary}` : ''}
-          </span>
+          {/* Secondary line: only what actually distinguishes this person. */}
+          {(showRsvp || guest.plusOnes > 0 || guest.dietary) && (
+            <span style={personMetaStyle}>
+              {showRsvp && <span style={{ ...dotStyle, background: RSVP_COLOR[guest.rsvp] }} />}
+              {showRsvp ? RSVP_LABEL[guest.rsvp] : ''}
+              {guest.plusOnes > 0 ? `${showRsvp ? ' ' : ''}+${guest.plusOnes}` : ''}
+              {guest.dietary ? `${showRsvp || guest.plusOnes > 0 ? ' · ' : ''}${guest.dietary}` : ''}
+            </span>
+          )}
         </span>
       </button>
 
@@ -219,11 +228,11 @@ const tableTitleStyle: React.CSSProperties = {
 };
 
 const tableCountStyle: React.CSSProperties = {
-  fontFamily: typography.family.mono, fontSize: typography.size.caption, color: M.textPrimary,
+  fontFamily: typography.family.mono, fontSize: typography.editorial.caption, color: M.textPrimary,
 };
 
 const tablePlaceStyle: React.CSSProperties = {
-  fontSize: typography.size.caption, color: M.textMuted,
+  fontSize: typography.editorial.caption, color: M.textMuted,
 };
 
 const peopleGridStyle: React.CSSProperties = {
@@ -241,7 +250,7 @@ const nameBtnStyle: React.CSSProperties = {
 const inlineLinkStyle: React.CSSProperties = {
   appearance: 'none', background: 'transparent', border: 'none', padding: 0,
   marginRight: 12, cursor: 'pointer', font: 'inherit',
-  fontSize: typography.size.caption, color: M.textSecondary,
+  fontSize: typography.editorial.caption, color: M.textSecondary,
 };
 
 const personNameStyle: React.CSSProperties = {
@@ -251,7 +260,7 @@ const personNameStyle: React.CSSProperties = {
 
 const personMetaStyle: React.CSSProperties = {
   display: 'flex', alignItems: 'center', gap: 6, marginTop: 3,
-  fontSize: typography.size.caption, color: M.textMuted,
+  fontSize: typography.editorial.caption, color: M.textMuted,
 };
 
 const detailStyle: React.CSSProperties = {
@@ -259,16 +268,16 @@ const detailStyle: React.CSSProperties = {
 };
 
 const detailLineStyle: React.CSSProperties = {
-  fontSize: typography.size.caption, color: M.textSecondary, marginTop: 2,
+  fontSize: typography.editorial.caption, color: M.textSecondary, marginTop: 2,
 };
 
 const actionStyle: React.CSSProperties = {
   appearance: 'none', background: 'transparent', cursor: 'pointer',
-  border: `1px solid ${M.line}`, borderRadius: radius.pill, padding: '5px 12px',
-  font: 'inherit', fontSize: typography.size.micro,
+  border: `1px solid ${M.line}`, borderRadius: radius.pill, padding: '7px 14px',
+  font: 'inherit', fontSize: typography.editorial.caption,
   letterSpacing: '0.09em', textTransform: 'uppercase', fontWeight: 600, color: M.textMuted,
 };
 
 const emptyTableStyle: React.CSSProperties = {
-  marginTop: 16, fontSize: typography.size.caption, color: M.textMuted, fontStyle: 'italic',
+  marginTop: 16, fontSize: typography.editorial.caption, color: M.textMuted, fontStyle: 'italic',
 };

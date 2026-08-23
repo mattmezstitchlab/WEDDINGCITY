@@ -163,7 +163,7 @@ const dotStyle: React.CSSProperties = {
 
 const scrollHintStyle: React.CSSProperties = {
   position: 'relative', maxWidth: 1080, margin: `${fluid(34, 54)} auto 0`, width: '100%',
-  fontSize: typography.size.micro, letterSpacing: '0.18em', textTransform: 'uppercase',
+  fontSize: typography.editorial.micro, letterSpacing: '0.18em', textTransform: 'uppercase',
   appearance: 'none', background: 'transparent', border: 'none', padding: 0,
   cursor: 'pointer', font: 'inherit', textAlign: 'left', display: 'block',
 };

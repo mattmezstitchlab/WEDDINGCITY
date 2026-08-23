@@ -228,7 +228,7 @@ function ProgrammeSurface({ model }: { model: ReturnType<typeof projectWorldMode
               >
                 ↓
               </button>
-              <span style={{ fontSize: 10, color: K.textMuted, fontFamily: typography.family.mono }}>
+              <span style={{ fontSize: typography.size.caption, color: K.textMuted, fontFamily: typography.family.mono }}>
                 {String(index + 1).padStart(2, '0')} · {m.time} → {m.endTime}
               </span>
             </div>
@@ -618,7 +618,7 @@ function MediaField({ ownerKind, ownerId, existing }: {
           <span style={{ display: 'inline-grid', gap: 2 }}>
             <Chip label={m.title ?? m.kind} onRemove={() => store.removeMedia(m.id)} />
             {/* PROVENANCE — Canvas only. The Mirror never shows this. */}
-            <span style={{ fontSize: 9.5, color: K.textMuted }}>
+            <span style={{ fontSize: typography.size.caption, color: K.textMuted }}>
               {m.origin === 'manual'
                 ? 'Import manuel'
                 : m.origin === 'research'
@@ -865,7 +865,7 @@ function MusicSurface({ model }: { model: ReturnType<typeof projectWorldModel> }
               <FieldRow label="Pochette / audio">
                 <div style={{ display: 'grid', gap: 6 }}>
                   <MediaField ownerKind="song" ownerId={sg.songId} existing={sg.media.length} />
-                  <span style={{ fontSize: 10, color: K.textMuted }}>
+                  <span style={{ fontSize: typography.size.caption, color: K.textMuted }}>
                     {sg.audioSource
                       ? 'Écoutable : une source audio réelle est rattachée.'
                       : 'Aucune source audio : le bouton Écouter n’apparaît pas dans le site.'}
@@ -987,7 +987,7 @@ function EnrichmentActivation() {
       >
         {on ? 'Désactiver iTunes Search' : 'Activer iTunes Search'}
       </button>
-      <span style={{ fontSize: 10, color: K.textMuted, flex: 1, minWidth: 220 }}>
+      <span style={{ fontSize: typography.size.caption, color: K.textMuted, flex: 1, minWidth: 220 }}>
         {describeActivation()}
         {' '}
         La connexion à Apple n’a pas pu être vérifiée depuis l’environnement de
@@ -1063,9 +1063,9 @@ function EnrichmentField({ songId, title, artist }: { songId: string; title: str
           </button>
         </div>
         {prov?.attribution && (
-          <span style={{ fontSize: 9.5, color: K.textMuted }}>{prov.attribution}</span>
+          <span style={{ fontSize: typography.size.caption, color: K.textMuted }}>{prov.attribution}</span>
         )}
-        {message && <span style={{ fontSize: 10, color: K.textMuted }}>{message}</span>}
+        {message && <span style={{ fontSize: typography.size.caption, color: K.textMuted }}>{message}</span>}
       </div>
     );
   }
@@ -1082,7 +1082,7 @@ function EnrichmentField({ songId, title, artist }: { songId: string; title: str
           {busy ? 'Recherche…' : 'Enrichir le morceau'}
         </button>
         {!available && (
-          <span style={{ fontSize: 10, color: K.textMuted }}>
+          <span style={{ fontSize: typography.size.caption, color: K.textMuted }}>
             Enrichissement automatique indisponible — import manuel disponible ci-dessus.
           </span>
         )}
@@ -1107,17 +1107,17 @@ function EnrichmentField({ songId, title, artist }: { songId: string; title: str
                   <span style={{ display: 'block', fontSize: 11.5, color: K.textPrimary }}>
                     {c.title}
                     {exact && (
-                      <span style={{ marginLeft: 6, fontSize: 9.5, color: '#4c7a63' }}>
+                      <span style={{ marginLeft: 6, fontSize: typography.size.caption, color: '#4c7a63' }}>
                         correspondance exacte
                       </span>
                     )}
                   </span>
-                  <span style={{ display: 'block', fontSize: 10, color: K.textMuted }}>
+                  <span style={{ display: 'block', fontSize: typography.size.caption, color: K.textMuted }}>
                     {c.artist}
                     {c.album ? ` · ${c.album}` : ''}
                     {duration ? ` · ${duration}` : ''}
                   </span>
-                  <span style={{ display: 'block', fontSize: 9.5, color: K.textMuted }}>
+                  <span style={{ display: 'block', fontSize: typography.size.caption, color: K.textMuted }}>
                     {c.artworkUrl ? 'pochette' : 'sans pochette'}
                     {c.previewUrl ? ' · extrait écoutable' : ' · sans extrait'}
                   </span>
@@ -1129,13 +1129,13 @@ function EnrichmentField({ songId, title, artist }: { songId: string; title: str
             );
           })}
           {cached.attribution && (
-            <span style={{ fontSize: 9.5, color: K.textMuted }}>{cached.attribution}</span>
+            <span style={{ fontSize: typography.size.caption, color: K.textMuted }}>{cached.attribution}</span>
           )}
         </div>
       )}
 
-      {message && <span style={{ fontSize: 10, color: K.textMuted }}>{message}</span>}
-      <span style={{ fontSize: 9.5, color: K.textMuted }}>
+      {message && <span style={{ fontSize: typography.size.caption, color: K.textMuted }}>{message}</span>}
+      <span style={{ fontSize: typography.size.caption, color: K.textMuted }}>
         Recherche « {title} — {artist} ». Un import manuel a toujours priorité.
       </span>
     </div>

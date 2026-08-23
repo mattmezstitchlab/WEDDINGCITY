@@ -19,7 +19,7 @@ export function Eyebrow({ children }: { children: React.ReactNode }) {
   return (
     <div
       style={{
-        fontSize: typography.size.micro,
+        fontSize: typography.editorial.micro,
         fontWeight: typography.weight.bold,
         letterSpacing: '0.18em',
         textTransform: 'uppercase',
@@ -133,7 +133,7 @@ export function EmptyState({ title, body, note }: { title: string; body: string;
         style={{
           margin: '10px auto 0',
           maxWidth: 460,
-          fontSize: typography.size.body,
+          fontSize: typography.editorial.body,
           lineHeight: typography.leading.relaxed,
           color: M.textSecondary,
         }}
@@ -141,7 +141,7 @@ export function EmptyState({ title, body, note }: { title: string; body: string;
         {body}
       </p>
       {note && (
-        <div style={{ marginTop: 12, fontSize: typography.size.caption, color: M.textMuted }}>{note}</div>
+        <div style={{ marginTop: 12, fontSize: typography.editorial.caption, color: M.textMuted }}>{note}</div>
       )}
     </div>
   );
@@ -166,7 +166,7 @@ export function BigFigure({ value, label, sub }: { value: string | number; label
       <div
         style={{
           marginTop: 10,
-          fontSize: typography.size.micro,
+          fontSize: typography.editorial.micro,
           letterSpacing: '0.14em',
           textTransform: 'uppercase',
           color: M.textMuted,
@@ -176,7 +176,7 @@ export function BigFigure({ value, label, sub }: { value: string | number; label
         {label}
       </div>
       {sub && (
-        <div style={{ marginTop: 4, fontSize: typography.size.caption, color: M.textSecondary }}>{sub}</div>
+        <div style={{ marginTop: 4, fontSize: typography.editorial.caption, color: M.textSecondary }}>{sub}</div>
       )}
     </div>
   );
@@ -215,8 +215,17 @@ export function Portrait({
   useEffect(() => { setBroken(false); }, [source]);
   const usable = broken ? null : source;
 
-  const initials = name.trim().split(/\s+/).slice(0, 2)
-    .map((part) => part.charAt(0)).join('').toUpperCase();
+  // Letters only: "Jean-Luc (Chauffeur)" produced "J(" before this.
+  const initials = name
+    .normalize('NFD')
+    .replace(/[^\p{L}\s'’-]/gu, ' ')
+    .trim()
+    .split(/[\s'’-]+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part.charAt(0))
+    .join('')
+    .toUpperCase() || '·';
 
   return (
     <span
@@ -241,7 +250,7 @@ export function Portrait({
         <span
           aria-hidden
           style={{
-            fontSize: Math.max(9, Math.round(size * 0.32)),
+            fontSize: Math.max(10, Math.round(size * 0.34)),
             fontWeight: typography.weight.semibold,
             letterSpacing: '0.04em', color: M.textSecondary,
           }}
@@ -328,7 +337,7 @@ export function Rule({ label }: { label?: string }) {
     <div style={{ display: 'flex', alignItems: 'center', gap: 14, width: '100%' }}>
       {label && (
         <span style={{
-          fontSize: typography.size.micro, letterSpacing: '0.16em',
+          fontSize: typography.editorial.micro, letterSpacing: '0.16em',
           textTransform: 'uppercase', color: M.textMuted, fontWeight: 700, whiteSpace: 'nowrap',
         }}>
           {label}
@@ -346,7 +355,7 @@ export function MetaLine({ items }: { items: (string | null | undefined)[] }) {
   return (
     <div style={{
       display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap',
-      fontSize: typography.size.caption, color: M.textMuted,
+      fontSize: typography.editorial.caption, color: M.textMuted,
     }}>
       {real.map((item, i) => (
         <span key={i} style={{ display: 'inline-flex', alignItems: 'center', gap: 10 }}>

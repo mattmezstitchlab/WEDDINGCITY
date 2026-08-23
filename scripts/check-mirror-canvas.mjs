@@ -262,7 +262,12 @@ try {
     // Rhythm: the page must not be six identical blocks.
     const site = readFileSync(path.join(dir, 'MirrorSite.tsx'), 'utf8');
     r.check(/scale="dominant"/.test(site), 'PROGRAMME is the dominant section');
-    r.check(/scale="quiet"/.test(site), 'supporting sections are quieter');
+    // The quiet weight is now applied conditionally (an empty gallery is quiet,
+    // a full one is normal), so the literal attribute is no longer written out.
+    // The rhythm itself is measured on the RENDERED page by check-render.mjs
+    // ("sections carry unequal weight"), which is a stronger proof than this.
+    r.check(/scale=\{[^}]*'quiet'/.test(site) || /scale="quiet"/.test(site),
+      'supporting sections are quieter');
     r.check((site.match(/tone="surface"/g) ?? []).length >= 2,
       'sections alternate between background and paper surface');
 

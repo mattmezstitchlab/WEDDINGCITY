@@ -45,8 +45,6 @@ export function MirrorSite() {
   const galleryImages = gallery.filter((m) => m.kind === 'image');
   const otherMedia = gallery.length - galleryImages.length;
 
-  const storySection = availability.find((a) => a.id === 'story');
-  const gallerySection = availability.find((a) => a.id === 'gallery');
 
   // The nav lists exactly the sections that really render.
   const navSections = [
@@ -203,22 +201,17 @@ export function MirrorSite() {
             title="Votre histoire visuelle commencera ici"
             body={otherMedia > 0
               ? `Aucune image pour l’instant : les ${otherMedia} fichier(s) rattaché(s) au projet sont des extraits audio ou des documents. La première photographie ajoutée apparaîtra ici, et pourra devenir la couverture du site.`
-              : 'Aucun média n’est encore rattaché au projet. Rien n’est affiché à la place : ces images n’existent pas. Le premier fichier ajouté apparaîtra ici, et pourra devenir la couverture du site.'}
-            note={gallerySection?.reason}
+              : 'Aucune photographie n’est encore rattachée à ce mariage. Rien n’est affiché à la place : ces images n’existent pas. La première ajoutée apparaîtra ici, et pourra devenir la couverture du site.'}
           />
         )}
       </SectionShell>
 
-      {/* Story has no backing field in the model — stated, never faked. */}
-      {storySection && !storySection.available && (
-        <SectionShell id="story" scale="quiet" eyebrow="Le récit" title="Notre histoire">
-          <EmptyState
-            title="Votre récit n’a pas encore été écrit"
-            body="Cette section restera vide tant qu’aucun texte n’existera dans le projet."
-            note={storySection.reason}
-          />
-        </SectionShell>
-      )}
+      {/* "Notre histoire" has NO field in the model, so a visitor can neither
+          read it nor fill it: showing an empty section — and, worse, the
+          diagnostic sentence explaining that the field does not exist — was
+          developer talk on a wedding site. The gap stays declared in
+          projectAvailability() for the Canvas and the System Nerve; the page
+          simply does not pretend the section exists. */}
 
       <footer style={footerStyle}>
         <Reveal>
@@ -247,7 +240,7 @@ export function MirrorSite() {
 
 const otherMediaStyle: React.CSSProperties = {
   margin: `${fluid(18, 26)} 0 0`, maxWidth: 520,
-  fontSize: typography.size.caption, color: M.textMuted, lineHeight: 1.6,
+  fontSize: typography.editorial.caption, color: M.textMuted, lineHeight: 1.6,
 };
 
 const pageStyle: React.CSSProperties = {
@@ -266,5 +259,5 @@ const footerInnerStyle: React.CSSProperties = {
   maxWidth: 1080, margin: '0 auto',
   display: 'flex', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap',
   alignItems: 'baseline',
-  fontSize: typography.size.caption, color: M.textSecondary,
+  fontSize: typography.editorial.caption, color: M.textSecondary,
 };

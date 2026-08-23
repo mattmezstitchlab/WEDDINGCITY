@@ -21,6 +21,26 @@ export const typography = {
     display: 28,
     hero: 42,
   },
+  /**
+   * EDITORIAL scale — the Mirror.
+   *
+   * The `size` scale above is the dense World HUD, and the file always said so.
+   * The Mirror was nevertheless consuming it, which is why an editorial site
+   * ended up with 9px eyebrows and 12px body copy: readable on a 27" screen
+   * from 40cm, small everywhere else, and well under any comfortable reading
+   * size on a phone.
+   *
+   * These are the same steps, expressed fluidly between a 360px and a 1280px
+   * viewport, with a floor that stays legible on a phone. Same mechanism as
+   * fluid() in MirrorPrimitives — no second type system, no arbitrary values.
+   */
+  editorial: {
+    micro: 'clamp(10px, calc(10px + 1 * ((100vw - 360px) / 920)), 11px)',
+    caption: 'clamp(12px, calc(12px + 1 * ((100vw - 360px) / 920)), 13px)',
+    body: 'clamp(14px, calc(14px + 2 * ((100vw - 360px) / 920)), 16px)',
+    bodyLg: 'clamp(16px, calc(16px + 2 * ((100vw - 360px) / 920)), 18px)',
+  },
+
   weight: { regular: 400, medium: 500, semibold: 600, bold: 700 },
   tracking: {
     /** Uppercase eyebrow labels. */

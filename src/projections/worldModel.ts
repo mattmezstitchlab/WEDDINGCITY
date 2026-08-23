@@ -197,6 +197,17 @@ export function projectProgramme(): ProgrammeProjection {
         };
       });
 
+      // A vendor's contact person is a Person too. Listing them under "Autour"
+      // AND under "Avec" showed the same human twice in the same moment, which
+      // is exactly the kind of repetition the editorial brief forbids. The
+      // person side keeps only people who are not already named as a vendor.
+      const vendorContactIds = new Set(
+        vendors
+          .map((v) => weddingStore.vendors.find((x) => x.id === v.vendorId)?.contactPersonId)
+          .filter((id): id is string => Boolean(id)),
+      );
+      const personIds = keyPersonIds.filter((id) => !vendorContactIds.has(id));
+
       return {
         phaseId: ph.id,
         time: formatHour(ph.startHour),
@@ -211,7 +222,7 @@ export function projectProgramme(): ProgrammeProjection {
         isCurrent: now >= ph.startHour && now < ph.endHour,
         notes: ph.notes ?? null,
         keyPersonIds,
-        persons: keyPersonIds
+        persons: personIds
           .map((id) => projectPersonRef(id))
           .filter((x): x is PersonRef => x !== null),
         vendors,
@@ -466,7 +477,11 @@ export function projectVendors(): VendorsProjection {
 
   const vendors: VendorProjection[] = weddingStore.vendors.map((v) => {
     const contact = v.contactPersonId ? weddingStore.getPerson(v.contactPersonId) : null;
-    const places = v.placeIds
+    // MEASURED BUG (final visual audit): several vendors carry the same
+    // placeId twice in the stored data, which rendered the same place twice
+    // under their name in 03 PRESTATAIRES. A vendor works in a place once —
+    // the relation is de-duplicated here, without rewriting stored data.
+    const places = [...new Set(v.placeIds)]
       .map((id) => weddingStore.places.find((p) => p.id === id))
       .filter((p): p is NonNullable<typeof p> => Boolean(p))
       .map((p) => ({ placeId: p.id, name: p.name }));
@@ -563,9 +578,9 @@ export function projectPlaces(): PlacesProjection {
         ? `${formatHour(p.activeFromHour)} – ${formatHour(p.activeToHour)}`
         : null,
       moments,
-      vendors: weddingStore.getVendorsForPlace(p.id).map((v) => ({
-        vendorId: v.id, companyName: v.companyName, category: v.category,
-      })),
+      vendors: [...new Map(weddingStore.getVendorsForPlace(p.id)
+        .map((v) => [v.id, v])).values()]
+        .map((v) => ({ vendorId: v.id, companyName: v.companyName, category: v.category })),
       tableCount: weddingStore.seatingTables.filter((t) => t.placeId === p.id).length,
       media: projectMedia('place', p.id),
       canShowInWorld: true,
