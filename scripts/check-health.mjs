@@ -17,7 +17,7 @@
  * cannot quietly start claiming to be real while making no network calls.
  */
 
-import { readFileSync, readdirSync } from 'node:fs';
+import { readFileSync, readdirSync, existsSync } from 'node:fs';
 import path from 'node:path';
 import { compileGameModules, createMemoryStorage, installBrowserGlobals, createReporter, SRC } from './lib/esm-harness.mjs';
 
@@ -163,15 +163,45 @@ try {
         `${constName}.network declaration matches reality (declared=${declaresNetwork}, real=${reallyCalls})`);
     }
 
-    // Nothing in src/ should perform network calls while modules claim MOCK.
+    // ------------------------------------------------------------------
+    // NETWORK POLICY — updated explicitly in Phase F.2, not bypassed.
+    //
+    // The rule was "no engine performs network calls". Music enrichment
+    // introduces the app's first legitimate outbound call, so the rule is now:
+    //
+    //   1. No engine at the ROOT of src/game may call the network.
+    //   2. src/game/enrichment/ may, because that is its declared purpose.
+    //   3. Any such provider must be DISABLED BY DEFAULT, so a default build
+    //      still makes zero network calls — which is asserted below.
+    //
+    // Reason it ships disabled: the Phase F.2 audit could not reach a single
+    // music metadata host from the build environment (itunes, spotify,
+    // musicbrainz, coverartarchive, deezer all refused; npm and github
+    // answered 200). The integration is therefore UNVERIFIED, and unverified
+    // code must not run by default.
+    // ------------------------------------------------------------------
     const gameFiles = readdirSync(path.join(SRC, 'game')).filter((f) => f.endsWith('.ts'));
     const networkUsers = gameFiles.filter((f) => {
       const body = readFileSync(path.join(SRC, 'game', f), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
       return /\bfetch\s*\(/.test(body);
     });
     r.check(networkUsers.length === 0,
-      'no engine silently performs network calls (would contradict the MOCK labels)',
+      'no root engine performs network calls (would contradict the MOCK labels)',
       networkUsers.join(', '));
+
+    // The enrichment provider may call out, but only when explicitly enabled.
+    const enrichDir = path.join(SRC, 'game', 'enrichment');
+    if (existsSync(enrichDir)) {
+      const provider = readFileSync(path.join(enrichDir, 'itunesProvider.ts'), 'utf8');
+      r.check(/\bfetch\s*\(/.test(provider),
+        'the enrichment provider is a real implementation, not a stub');
+      r.check(/let enabled = false;/.test(provider),
+        'the enrichment provider is DISABLED by default (unverified integration)');
+      r.check(/if \(!enabled\) return \[\];/.test(provider),
+        'it returns no candidates and makes no request while disabled');
+      r.check(/UNVERIFIED/.test(provider),
+        'its unverified status is documented in the source');
+    }
   }
   // -------------------------------------------------------------------------
   console.log('\n[6/6] Repairs are verified by re-measurement, never self-declared');

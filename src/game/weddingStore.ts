@@ -2129,8 +2129,17 @@ class WeddingStore {
     }
   }
 
+  /**
+   * Media attached to an entity, MANUAL FIRST.
+   *
+   * A file the user uploaded always precedes one obtained by enrichment, so
+   * automatic data can never visually override a deliberate choice.
+   */
   public getMediaFor(kind: MediaOwnerKind, id: string): MediaAsset[] {
-    return this.media.filter((m) => m.ownerKind === kind && m.ownerId === id);
+    const rank = (m: MediaAsset) => (m.origin === 'manual' ? 0 : m.origin === 'research' ? 1 : 2);
+    return this.media
+      .filter((m) => m.ownerKind === kind && m.ownerId === id)
+      .sort((a, b) => rank(a) - rank(b));
   }
 
   /**

@@ -5,6 +5,10 @@ import { radius, typography, shadowFor } from '../../design/tokens';
 import {
   K, InlineText, InlineSelect, Chip, InlinePicker, FieldRow, canvasCard, addBtnStyle, fieldLabelStyle,
 } from './CanvasPrimitives';
+import {
+  searchEnrichment, confirmEnrichment, removeEnrichment, getEnrichmentState,
+  getCachedResult, getEnabledProviders, EnrichmentCandidate,
+} from '../../game/enrichment';
 
 // ---------------------------------------------------------------------------
 // CANVAS CORE — the composition logic, with NO layout of its own.
@@ -725,6 +729,10 @@ function MusicSurface({ model }: { model: ReturnType<typeof projectWorldModel> }
                   </span>
                 </div>
               </FieldRow>
+
+              <FieldRow label="Enrichir">
+                <EnrichmentField songId={sg.songId} title={track.title} artist={track.artist} />
+              </FieldRow>
             </div>
           </article>
         );
@@ -797,6 +805,129 @@ function MediaSurface({ model }: { model: ReturnType<typeof projectWorldModel> }
     </div>
   );
 }
+
+// ===========================================================================
+// ENRICHMENT — inline, contextual, never automatic
+// ===========================================================================
+// Explicit user action only: nothing is searched during a render. The result
+// is cached per song for the session, so re-rendering never re-queries.
+//
+// An ambiguous match is NEVER auto-applied — the candidates are listed and a
+// human picks. When no provider is enabled (the default in this build), the
+// field says so plainly instead of offering a button that cannot work.
+
+function EnrichmentField({ songId, title, artist }: { songId: string; title: string; artist: string }) {
+  const store = weddingStore;
+  const [busy, setBusy] = useState(false);
+  const [tick, setTick] = useState(0);
+  const [message, setMessage] = useState<string | null>(null);
+
+  const state = getEnrichmentState(songId);
+  const cached = getCachedResult(songId);
+  const providersOn = getEnabledProviders().length > 0;
+  void tick;
+
+  const runSearch = async () => {
+    setBusy(true);
+    setMessage(null);
+    const result = await searchEnrichment(songId);
+    setBusy(false);
+    setTick((n) => n + 1);
+    if (result.state === 'unavailable') {
+      setMessage('Aucun service d’enrichissement activé dans cette version.');
+    } else if (result.state === 'not_found') {
+      setMessage('Aucune correspondance trouvée pour ce titre.');
+    }
+  };
+
+  const apply = (c: EnrichmentCandidate) => {
+    const outcome = confirmEnrichment(songId, c.externalId);
+    setTick((n) => n + 1);
+    if (!outcome.ok) {
+      setMessage(outcome.reason === 'nothing_usable'
+        ? 'Cette correspondance n’apporte ni pochette ni extrait.'
+        : 'Association impossible.');
+      return;
+    }
+    const kept = [
+      outcome.keptManualArtwork ? 'pochette manuelle conservée' : null,
+      outcome.keptManualPreview ? 'audio manuel conservé' : null,
+    ].filter(Boolean).join(' · ');
+    setMessage(kept ? `Associé — ${kept}.` : 'Associé.');
+  };
+
+  if (state === 'enriched') {
+    return (
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+        <span style={{ fontSize: 10.5, color: '#4c7a63' }}>Enrichi</span>
+        <button
+          onClick={() => { removeEnrichment(songId); setTick((n) => n + 1); setMessage(null); }}
+          style={{ ...addBtnStyle, border: 'none', color: '#b4536b' }}
+        >
+          Retirer l’enrichissement
+        </button>
+        {message && <span style={{ fontSize: 10, color: K.textMuted }}>{message}</span>}
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ display: 'grid', gap: 8 }}>
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+        <button onClick={runSearch} disabled={busy || !providersOn} style={{
+          ...addBtnStyle,
+          borderStyle: 'solid',
+          opacity: providersOn ? 1 : 0.45,
+          cursor: providersOn ? 'pointer' : 'not-allowed',
+        }}>
+          {busy ? 'Recherche…' : 'Enrichir le morceau'}
+        </button>
+        {!providersOn && (
+          <span style={{ fontSize: 10, color: K.textMuted }}>
+            Service non activé — import manuel disponible ci-dessus.
+          </span>
+        )}
+      </div>
+
+      {/* Candidates: a human always chooses. */}
+      {cached && cached.candidates.length > 0 && (
+        <div style={{ display: 'grid', gap: 6 }}>
+          {cached.candidates.map((c) => (
+            <div key={c.externalId} style={candidateStyle}>
+              {c.artworkUrl && (
+                <img src={c.artworkUrl} alt="" loading="lazy" decoding="async"
+                  style={{ width: 34, height: 34, objectFit: 'cover', borderRadius: radius.xs }} />
+              )}
+              <span style={{ flex: 1, minWidth: 0 }}>
+                <span style={{ display: 'block', fontSize: 11.5, color: K.textPrimary }}>{c.title}</span>
+                <span style={{ display: 'block', fontSize: 10, color: K.textMuted }}>
+                  {c.artist}
+                  {c.previewUrl ? ' · extrait disponible' : ' · sans extrait'}
+                </span>
+              </span>
+              <button onClick={() => apply(c)} style={{ ...addBtnStyle, borderStyle: 'solid' }}>
+                Associer
+              </button>
+            </div>
+          ))}
+          {cached.attribution && (
+            <span style={{ fontSize: 9.5, color: K.textMuted }}>{cached.attribution}</span>
+          )}
+        </div>
+      )}
+
+      {message && <span style={{ fontSize: 10, color: K.textMuted }}>{message}</span>}
+      <span style={{ fontSize: 9.5, color: K.textMuted }}>
+        Recherche « {title} — {artist} ». Un import manuel a toujours priorité.
+      </span>
+    </div>
+  );
+}
+
+const candidateStyle: React.CSSProperties = {
+  display: 'flex', alignItems: 'center', gap: 10,
+  border: `1px solid ${K.line}`, borderRadius: radius.xs, padding: '7px 9px',
+};
 
 // --- helpers / styles -------------------------------------------------------
 

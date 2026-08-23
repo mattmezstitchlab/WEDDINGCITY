@@ -318,16 +318,24 @@ export interface MediaProjection {
   source: string;
   title: string | null;
   caption: string | null;
+  /** 'manual' = uploaded by the user, 'research' = confirmed enrichment. */
+  origin?: MediaAsset['origin'];
 }
 
 export function projectMedia(ownerKind: MediaAsset['ownerKind'], ownerId: string): MediaProjection[] {
-  return weddingStore.getMediaFor(ownerKind, ownerId).map((m) => ({
-    mediaId: m.id,
-    kind: m.kind,
-    source: m.source,
-    title: m.title ?? null,
-    caption: m.caption ?? null,
-  }));
+  // PRIORITY: a manually uploaded asset always precedes an enriched one, so
+  // `find()` downstream naturally picks the user's own file first.
+  const rank = (m: MediaAsset) => (m.origin === 'manual' ? 0 : m.origin === 'research' ? 1 : 2);
+  return [...weddingStore.getMediaFor(ownerKind, ownerId)]
+    .sort((a, b) => rank(a) - rank(b))
+    .map((m) => ({
+      mediaId: m.id,
+      kind: m.kind,
+      source: m.source,
+      title: m.title ?? null,
+      caption: m.caption ?? null,
+      origin: m.origin,
+    }));
 }
 
 // --- Vendors ----------------------------------------------------------------

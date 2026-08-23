@@ -28,7 +28,7 @@ export async function compileGameModules() {
   const out = mkdtempSync(path.join(holder, 'run-'));
 
   const inputs = [];
-  for (const dir of ['game', 'types', 'projections', 'design/tokens']) {
+  for (const dir of ['game', 'game/enrichment', 'types', 'projections', 'design/tokens']) {
     const abs = path.join(SRC, dir);
     if (!existsSync(abs)) continue;
     for (const f of readdirSync(abs)) if (f.endsWith('.ts')) inputs.push(path.join(abs, f));
@@ -46,11 +46,13 @@ export async function compileGameModules() {
   });
 
   // Node requires explicit extensions on relative specifiers.
-  for (const dir of ['game', 'types', 'projections', 'design/tokens']) {
+  for (const dir of ['game', 'game/enrichment', 'types', 'projections', 'design/tokens']) {
     const abs = path.join(out, dir);
     if (!existsSync(abs)) continue;
     for (const f of readdirSync(abs)) {
       const fp = path.join(abs, f);
+      // Skip nested directories: they are handled by their own entry above.
+      if (!f.endsWith('.mjs')) continue;
       writeFileSync(fp, readFileSync(fp, 'utf8').replace(
         /from\s*"(\.[^"]+)"/g, (m, spec) => (spec.endsWith('.mjs') ? m : `from "${spec}.mjs"`)));
     }
