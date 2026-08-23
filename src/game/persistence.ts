@@ -123,6 +123,22 @@ export function saveWeddingProject(project: WeddingProject): void {
   }
 }
 
+/**
+ * Whether this browser has ever opened a wedding.
+ *
+ * getActiveProjectId() below always answers with the demo, which is convenient
+ * for the engine but means the product had no notion of "no wedding yet". The
+ * Mirror needs that notion to be able to act as a public landing page, so the
+ * question is asked separately here — the storage key is the only truth.
+ */
+export function hasChosenProject(): boolean {
+  try {
+    return Boolean(localStorage.getItem(ACTIVE_PROJECT_ID_KEY));
+  } catch {
+    return false;
+  }
+}
+
 export function getActiveProjectId(): string {
   try {
     const raw = localStorage.getItem(ACTIVE_PROJECT_ID_KEY);

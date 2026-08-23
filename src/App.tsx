@@ -93,7 +93,10 @@ export default function App() {
       } else if (e.code === 'KeyM' && !weddingStore.showIdentityModal) {
         weddingStore.setDjBoothOpen(!weddingStore.djBoothModalOpen);
       } else if (e.code === 'KeyK' && !weddingStore.showIdentityModal) {
-        if (weddingStore.canvasOpen) weddingStore.closeCanvas();
+        // Nothing to compose before a wedding is open: the landing asks for
+        // one instead of quietly opening the demo.
+        if (!weddingStore.projectChosen) weddingStore.startWeddingCreation();
+        else if (weddingStore.canvasOpen) weddingStore.closeCanvas();
         else weddingStore.openCanvas();
       } else if (e.code === 'KeyG' && !weddingStore.showIdentityModal) {
         // Phase B prototype surface. Deliberately a shortcut rather than a new
@@ -116,8 +119,10 @@ export default function App() {
              WeddingWorld) rather than drawing behind an opaque page. */}
       <WeddingWorld />
 
-      {/* Dimension selector: one World Model, several projections. */}
-      <ProjectionSwitcher />
+      {/* Dimension selector: one World Model, several projections.
+          Hidden until a wedding is open — with none chosen there is nothing to
+          switch between, and offering WORLD would show the demo. */}
+      {weddingStore.projectChosen && <ProjectionSwitcher />}
 
       {/* The crossing itself: a short fade in the colour of the destination.
           The 3D scene is never remounted, so nothing is rebuilt or lost. */}
@@ -126,7 +131,8 @@ export default function App() {
       {/* A brand-new wedding has no spaces yet, and none are invented for it.
           The World says what is missing and where to add it, instead of
           showing an empty grid with no explanation. */}
-      {weddingStore.projection === 'world'
+      {weddingStore.projectChosen
+        && weddingStore.projection === 'world'
         && weddingStore.places.length === 0
         && !weddingStore.canvasOpen
         && !weddingStore.showIdentityModal && (
@@ -152,7 +158,7 @@ export default function App() {
 
       {/* CANVAS — the composition projection. A contextual side surface, not a
           page: the World stays visible behind it so context is never lost. */}
-      {weddingStore.canvasOpen && (
+      {weddingStore.canvasOpen && weddingStore.projectChosen && (
         <Suspense fallback={null}>
           {/* Same CanvasCore, two shells: a side panel over the 3D world, an
               editorial surface inside the Mirror. The projection decides. */}

@@ -73,9 +73,9 @@ export function SectionShell({
             ? `${fluid(52, 96)} ${fluid(20, 72)}`
             : `${fluid(72, 148)} ${fluid(20, 72)}`,
         borderTop: tone === 'surface' ? 'none' : `1px solid ${M.line}`,
-        // Rail (sticky at 62) + its own height: an anchored section must not
-        // land underneath it.
-        scrollMarginTop: 116,
+        // The sticky rail sits at the top: an anchored section must land
+        // below it, not underneath.
+        scrollMarginTop: 64,
       }}
     >
       <div style={{ maxWidth: 1080, margin: '0 auto' }}>

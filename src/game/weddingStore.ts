@@ -26,6 +26,7 @@ import { DEFAULT_DMC_IDENTITY } from './dmcPalette';
 import { INITIAL_AD_SLOTS } from './advertisingEngine';
 import { weddingAudio } from './audio';
 import {
+  hasChosenProject,
   getStoredProjects,
   saveWeddingProject,
   getActiveProjectId,
@@ -1591,6 +1592,15 @@ class WeddingStore {
   // screen — never a second copy of the data.
   // -------------------------------------------------------------------------
   public projection: 'world' | 'mirror' = 'world';
+  /**
+   * False until this browser has opened or created a wedding.
+   *
+   * The store still holds a project (the demo) so the engine always has
+   * something coherent to work with, but the interface must NOT present it:
+   * a first-time visitor lands on the Mirror as a public site, and no demo
+   * data is shown until they choose or create a wedding.
+   */
+  public projectChosen: boolean = true;
   /** Entity the user arrived on when crossing from another projection. */
   public mirrorFocusPersonId: string | null = null;
 
@@ -1727,6 +1737,10 @@ class WeddingStore {
   private initFromPersistence() {
     try {
       this.activeAccount = getActiveAccount();
+      this.projectChosen = hasChosenProject();
+      // A visitor who has never opened a wedding arrives on the editorial
+      // surface, not in somebody else's 3D venue.
+      if (!this.projectChosen) this.projection = 'mirror';
       const activeProjId = getActiveProjectId();
       const projects = getStoredProjects();
       const proj = projects.find((p) => p.id === activeProjId) || projects[0];
@@ -1766,6 +1780,25 @@ class WeddingStore {
    * not a place: it now composes on top of whichever projection is open, and
    * the shell adapts (side panel over World, editorial surface inside Mirror).
    */
+  /**
+   * THE single entry point for "create my wedding".
+   *
+   * Every call-to-action — landing navigation, hero, end of page, brand menu —
+   * goes through this one method, so there is exactly one creation flow and it
+   * is the one already validated by the multi-project acceptance pass.
+   */
+  public startWeddingCreation(): void {
+    this.createWeddingModalOpen = true;
+    this.brandMenuOpen = false;
+    this.worldLabModalOpen = false;
+    this.notify();
+  }
+
+  /** A wedding is now open: the landing must step aside. */
+  private markProjectChosen(): void {
+    this.projectChosen = true;
+  }
+
   public openCanvas(
     focus?: { kind: 'event' | 'person' | 'vendor' | 'place' | 'song'; id: string },
     section?: CanvasSection,
@@ -3262,6 +3295,9 @@ class WeddingStore {
     saveWeddingProject(newProject);
     setActiveProjectId(newId);
     this.currentProject = newProject;
+    this.markProjectChosen();
+    // The new world is where the couple lands.
+    this.projection = 'world';
 
     this.userIdentity = {
       role: params.userRole,
@@ -3329,6 +3365,8 @@ class WeddingStore {
     saveWeddingProject(newProject);
     setActiveProjectId(newId);
     this.currentProject = newProject;
+    this.markProjectChosen();
+    this.projection = 'world';
 
     // MEASURED IN THE BROWSER (World Lab acceptance): this used to overwrite
     // only places/agents/docs/tasks/phases/tracks and leave EVERYTHING ELSE
@@ -3384,6 +3422,7 @@ class WeddingStore {
 
     setActiveProjectId(projectId);
     this.currentProject = proj;
+    this.markProjectChosen();
     const saved = loadPersistedState(projectId);
     // Same single restore path as boot. With no snapshot, the fallback depends
     // on WHICH project this is: the demo falls back to the demo, any real

@@ -25,7 +25,12 @@ export function ProjectionSwitcher() {
       aria-label="Projection"
       style={{
         position: 'fixed',
-        top: 'max(14px, env(safe-area-inset-top))',
+        // The editorial navigation belongs to the site and sits at the very
+        // top; this capsule belongs to the projection system and sits under
+        // the content. In the World it stays where the HUD expects it.
+        ...(onLight
+          ? { bottom: 'max(18px, env(safe-area-inset-bottom))' }
+          : { top: 'max(14px, env(safe-area-inset-top))' }),
         left: '50%',
         transform: 'translateX(-50%)',
         zIndex: 1000,

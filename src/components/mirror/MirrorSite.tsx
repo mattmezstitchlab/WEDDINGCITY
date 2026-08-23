@@ -8,6 +8,7 @@ import { MirrorHero } from './MirrorHero';
 import { MirrorTimeline } from './MirrorTimeline';
 import { MirrorPeople } from './MirrorPeople';
 import { MirrorVendors, MirrorPlaces, MirrorMusic, MirrorGallery } from './MirrorSections';
+import { MirrorLanding } from './MirrorLanding';
 import './mirror.css';
 
 // ---------------------------------------------------------------------------
@@ -27,6 +28,18 @@ import './mirror.css';
 // ---------------------------------------------------------------------------
 
 export function MirrorSite() {
+  const store = weddingStore;
+
+  // Before any wedding has been opened or created in this browser, the Mirror
+  // is not a projection of anything: it is the public face of the product.
+  // No project data is read at all in that state — in particular, never the
+  // demo (see MirrorLanding).
+  if (!store.projectChosen) return <MirrorLanding />;
+
+  return <MirrorProjection />;
+}
+
+function MirrorProjection() {
   const store = weddingStore;
   const model = useMemo(() => projectWorldModel(), [store.version]);
   const { hero, programme, guests, vendors, places, music, gallery, availability } = model;

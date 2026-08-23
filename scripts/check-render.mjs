@@ -25,10 +25,20 @@ import { createReporter } from './lib/esm-harness.mjs';
 const r = createReporter();
 console.log('\u001b[1mAIME — rendered output: what the browser is actually told to draw\u001b[0m');
 
+// A first-time visitor gets the LANDING (see check-landing). To photograph the
+// editorial projection, a wedding must be open — exactly as a user would do.
+const OPEN_DEMO = `
+  weddingStore.loadProject('proj_demo_clara_alexandre');
+`;
+
 const MIRROR_ENTRY = `
 import { createRoot } from 'react-dom/client';
+import { weddingStore } from '../../../src/game/weddingStore';
 import { MirrorSite } from '../../../src/components/mirror/MirrorSite';
-export async function mount() { createRoot(document.getElementById('root')).render(<MirrorSite />); }
+export async function mount() {
+  ${OPEN_DEMO}
+  createRoot(document.getElementById('root')).render(<MirrorSite />);
+}
 `;
 
 const CANVAS_ENTRY = `
@@ -36,6 +46,7 @@ import { createRoot } from 'react-dom/client';
 import { weddingStore } from '../../../src/game/weddingStore';
 import { MirrorCanvasShell } from '../../../src/components/canvas/MirrorCanvasShell';
 export async function mount() {
+  weddingStore.loadProject('proj_demo_clara_alexandre');
   weddingStore.setProjection('mirror');
   weddingStore.openCanvas({ kind: 'event', id: weddingStore.phases[2].id });
   createRoot(document.getElementById('root')).render(<MirrorCanvasShell />);
@@ -266,6 +277,7 @@ try {
       import { MirrorSite } from '../../../src/components/mirror/MirrorSite';
       export async function mount() {
         const store = weddingStore;
+        store.loadProject('proj_demo_clara_alexandre');
         const person = store.guests[0].personId;
         const song = store.tracks[0].id;
         store.addMedia({ kind: 'image', source: 'data:image/png;base64,COVER',
@@ -336,11 +348,17 @@ try {
     const sections = readFileSync(p2('components', 'mirror', 'MirrorSections.tsx'), 'utf8');
     const app = readFileSync(path.join(SRC, 'App.tsx'), 'utf8');
 
-    // The fixed projection pill was drawn over the middle of the rail.
-    r.check(/position: 'sticky', top: 62/.test(nav),
-      'the editorial rail starts below the floating projection switcher');
-    r.check(/scrollMarginTop: 116/.test(readFileSync(p2('components', 'mirror', 'MirrorPrimitives.tsx'), 'utf8')),
-      'and an anchored section lands below the rail, not under it');
+    // The fixed projection pill used to be drawn over the middle of the rail.
+    // It now lives at the BOTTOM of the Mirror, so the editorial contents page
+    // takes the top of the page — same guarantee (rail never covered), better
+    // answer: the navigation belongs to the site, the capsule to the system.
+    const switcher = readFileSync(p2('components', 'ui', 'ProjectionSwitcher.tsx'), 'utf8');
+    r.check(/position: 'sticky', top: 0/.test(nav),
+      'the editorial rail owns the top of the page');
+    r.check(/onLight[\s\S]{0,120}bottom: 'max\(18px/.test(switcher),
+      'and the projection capsule sits below the content in the Mirror');
+    r.check(/scrollMarginTop: 64/.test(readFileSync(p2('components', 'mirror', 'MirrorPrimitives.tsx'), 'utf8')),
+      'an anchored section lands below the rail, not under it');
 
     // An inline `display` beat the mobile media query: orphan dot on a phone.
     r.check(!/display: 'flex'[^}]*alignSelf: 'stretch'/.test(timeline)

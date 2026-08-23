@@ -182,7 +182,8 @@ const overlayStyle: React.CSSProperties = {
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'center',
-  zIndex: 140,
+  // Above the Mirror landing (z 800), which is where the CTA lives.
+  zIndex: 900,
   padding: 20,
 };
 

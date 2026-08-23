@@ -202,3 +202,26 @@
     padding-top: 64px;
   }
 }
+
+/* --- landing navigation ----------------------------------------------------
+   MEASURED AT 390px: brand + three links + CTA did not fit, and the CTA was
+   cut off at the right edge. On a phone the links step aside — the page is
+   short and scrolling reaches every section — and the CTA stays reachable. */
+.wc-landing-links {
+  display: flex;
+}
+
+@media (max-width: 680px) {
+  .wc-landing-links {
+    display: none;
+  }
+  .wc-landing-nav {
+    gap: 10px;
+  }
+  .wc-landing-cta {
+    padding: 9px 14px;
+  }
+  .wc-landing-brand-suffix {
+    display: none;
+  }
+}

@@ -110,11 +110,10 @@ export function MirrorNav({ sections }: { sections: NavSection[] }) {
 }
 
 const barStyle: React.CSSProperties = {
-  // SEEN IN THE BROWSER: the fixed WORLD/MIRROR/CANVAS pill (top ~14px, 38px
-  // tall, centred) was drawn straight over the middle of this rail — "04 LIEUX"
-  // and "05 MUSIQUE" were unreadable at 1440px and worse on a phone. The rail
-  // now begins below the pill instead of fighting it.
-  position: 'sticky', top: 62, zIndex: 5,
+  // The projection capsule used to be pinned to the top and covered this rail.
+  // It now sits at the bottom of the Mirror (ProjectionSwitcher), so the
+  // editorial contents page takes the top of the page, where it belongs.
+  position: 'sticky', top: 0, zIndex: 5,
   // Opaque: at 92% the content scrolling underneath showed through the rail
   // and muddied the contents page. No blur — the audit forbids glassmorphism.
   background: M.bg,
