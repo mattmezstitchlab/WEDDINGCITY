@@ -1,0 +1,429 @@
+/* ---------------------------------------------------------------------------
+   LE GRAND JOUR® — the public page.
+   ---------------------------------------------------------------------------
+   Black, ivory, white. Photographs very large, type monumental, hairlines,
+   generous air, almost no visible UI. Every responsive value lives here — an
+   inline style always beats a media query, and that lesson was paid for.
+   --------------------------------------------------------------------------- */
+
+.wc-grandjour {
+  position: fixed;
+  inset: 0;
+  z-index: 800;
+  overflow-y: auto;
+  background: #08090b;
+  color: #f6f5f3;
+  font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, 'SF Pro Display', system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* --- 01 hero ---------------------------------------------------------------- */
+.wc-gj-hero {
+  position: relative;
+  min-height: 100vh;
+  min-height: 100svh;
+  display: flex;
+  flex-direction: column;
+}
+
+.wc-gj-hero-img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.wc-gj-hero-scrim {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(8, 9, 11, 0.62) 0%, rgba(8, 9, 11, 0.32) 34%, rgba(8, 9, 11, 0.88) 100%);
+}
+
+.wc-gj-nav {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 22px clamp(18px, 5vw, 64px);
+}
+
+.wc-gj-wordmark {
+  font-size: clamp(11px, 1.4vw, 13px);
+  letter-spacing: 0.28em;
+  font-weight: 700;
+}
+
+.wc-gj-mark {
+  font-size: 0.5em;
+  vertical-align: super;
+  letter-spacing: 0;
+  margin-left: 2px;
+}
+
+.wc-gj-hero-body {
+  position: relative;
+  margin-top: auto;
+  padding: 0 clamp(18px, 5vw, 64px) clamp(48px, 9vh, 110px);
+  max-width: 1180px;
+}
+
+.wc-gj-title {
+  margin: 0;
+  font-size: clamp(38px, 9vw, 132px);
+  line-height: 0.9;
+  letter-spacing: -0.045em;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.wc-gj-couple {
+  margin-top: clamp(18px, 3vw, 34px);
+  font-size: clamp(20px, 3.4vw, 44px);
+  letter-spacing: -0.02em;
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+
+.wc-gj-date {
+  margin-top: 14px;
+  display: flex;
+  gap: clamp(10px, 2vw, 22px);
+  align-items: baseline;
+  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: clamp(13px, 1.6vw, 19px);
+  letter-spacing: 0.16em;
+  color: rgba(246, 245, 243, 0.86);
+}
+
+.wc-gj-countdown {
+  margin-top: 12px;
+  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: clamp(22px, 3.2vw, 40px);
+  letter-spacing: 0.04em;
+  font-weight: 700;
+}
+
+.wc-gj-lead {
+  margin: clamp(18px, 3vw, 30px) 0 0;
+  max-width: 620px;
+  font-size: clamp(14px, 1.35vw, 17px);
+  line-height: 1.62;
+  color: rgba(246, 245, 243, 0.84);
+}
+
+.wc-gj-hero-actions {
+  margin-top: clamp(22px, 4vw, 40px);
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+/* --- controls --------------------------------------------------------------- */
+.wc-gj-cta,
+.wc-gj-cta-small {
+  appearance: none;
+  border: none;
+  cursor: pointer;
+  background: #f6f5f3;
+  color: #08090b;
+  border-radius: 999px;
+  font-weight: 600;
+  font-family: inherit;
+}
+
+.wc-gj-cta {
+  padding: 15px 26px;
+  font-size: clamp(13px, 1.2vw, 15px);
+  letter-spacing: 0.02em;
+}
+
+.wc-gj-cta-small {
+  padding: 10px 18px;
+  font-size: 12px;
+}
+
+.wc-gj-cta-ghost {
+  appearance: none;
+  cursor: pointer;
+  background: transparent;
+  color: #f6f5f3;
+  border: 1px solid rgba(246, 245, 243, 0.35);
+  border-radius: 999px;
+  padding: 14px 24px;
+  font-size: clamp(13px, 1.2vw, 15px);
+  font-family: inherit;
+}
+
+/* --- sections --------------------------------------------------------------- */
+.wc-gj-film,
+.wc-gj-band,
+.wc-gj-cols,
+.wc-gj-weddings,
+.wc-gj-final {
+  padding: clamp(46px, 9vw, 110px) 0;
+  border-top: 1px solid rgba(246, 245, 243, 0.12);
+}
+
+.wc-gj-section-head {
+  padding: 0 clamp(18px, 5vw, 64px) clamp(22px, 4vw, 40px);
+  max-width: 1180px;
+}
+
+.wc-gj-h2 {
+  margin: 0;
+  font-size: clamp(26px, 5vw, 64px);
+  line-height: 1.02;
+  letter-spacing: -0.035em;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.wc-gj-sub {
+  margin: 16px 0 0;
+  max-width: 560px;
+  font-size: clamp(13px, 1.2vw, 16px);
+  line-height: 1.62;
+  color: rgba(246, 245, 243, 0.72);
+}
+
+.wc-gj-actions {
+  margin-top: clamp(18px, 3vw, 30px);
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.wc-gj-note {
+  font-size: 13px;
+  color: rgba(246, 245, 243, 0.72);
+}
+
+.wc-gj-grid {
+  padding: 0 clamp(18px, 5vw, 64px);
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: clamp(18px, 3vw, 44px);
+  max-width: 1280px;
+}
+
+.wc-gj-cell {
+  border-top: 1px solid rgba(246, 245, 243, 0.16);
+  padding-top: 16px;
+}
+
+.wc-gj-h3 {
+  margin: 0;
+  font-size: clamp(15px, 1.4vw, 19px);
+  letter-spacing: -0.01em;
+  font-weight: 600;
+}
+
+.wc-gj-body {
+  margin: 10px 0 0;
+  font-size: clamp(13px, 1.1vw, 15px);
+  line-height: 1.6;
+  color: rgba(246, 245, 243, 0.72);
+}
+
+@media (max-width: 900px) {
+  .wc-gj-grid { grid-template-columns: repeat(2, 1fr); }
+}
+
+@media (max-width: 560px) {
+  .wc-gj-grid { grid-template-columns: 1fr; }
+}
+
+/* --- my weddings ------------------------------------------------------------ */
+.wc-gj-list {
+  list-style: none;
+  margin: 0;
+  padding: 0 clamp(18px, 5vw, 64px);
+  max-width: 1180px;
+}
+
+.wc-gj-list-item {
+  appearance: none;
+  cursor: pointer;
+  width: 100%;
+  background: transparent;
+  border: none;
+  border-top: 1px solid rgba(246, 245, 243, 0.16);
+  color: #f6f5f3;
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding: clamp(16px, 2.4vw, 26px) 0;
+  font-family: inherit;
+  text-align: left;
+}
+
+.wc-gj-list-name {
+  font-size: clamp(17px, 2.2vw, 28px);
+  letter-spacing: -0.02em;
+  overflow-wrap: anywhere;
+}
+
+.wc-gj-list-meta {
+  font-size: 12px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: rgba(246, 245, 243, 0.62);
+}
+
+/* --- final ------------------------------------------------------------------ */
+.wc-gj-final {
+  text-align: center;
+  padding-left: clamp(18px, 5vw, 64px);
+  padding-right: clamp(18px, 5vw, 64px);
+}
+
+.wc-gj-final-title {
+  margin: 0 auto clamp(24px, 4vw, 40px);
+  max-width: 820px;
+  font-size: clamp(26px, 5vw, 64px);
+  line-height: 1.03;
+  letter-spacing: -0.035em;
+  font-weight: 600;
+}
+
+.wc-gj-footer {
+  margin-top: clamp(40px, 7vw, 80px);
+  display: flex;
+  justify-content: center;
+  gap: 18px;
+  flex-wrap: wrap;
+  font-size: 12px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+/* --- a scene ---------------------------------------------------------------- */
+.wc-gj-scene {
+  position: fixed;
+  inset: 0;
+  z-index: 1400;
+  background: #08090b;
+  overflow-y: auto;
+}
+
+.wc-gj-scene-img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.wc-gj-scene-scrim {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(8, 9, 11, 0.45) 0%, rgba(8, 9, 11, 0.72) 46%, rgba(8, 9, 11, 0.95) 100%);
+}
+
+.wc-gj-scene-close {
+  position: absolute;
+  top: 18px;
+  right: clamp(18px, 5vw, 40px);
+  appearance: none;
+  cursor: pointer;
+  background: rgba(8, 9, 11, 0.6);
+  color: #f6f5f3;
+  border: 1px solid rgba(246, 245, 243, 0.3);
+  border-radius: 999px;
+  padding: 9px 16px;
+  font-size: 12px;
+  font-family: inherit;
+}
+
+.wc-gj-scene-body {
+  position: relative;
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: 12px;
+  padding: clamp(80px, 14vh, 160px) clamp(18px, 5vw, 64px) clamp(40px, 8vh, 90px);
+  max-width: 900px;
+}
+
+.wc-gj-scene-hour {
+  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: clamp(46px, 11vw, 140px);
+  line-height: 0.86;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+}
+
+.wc-gj-scene-title {
+  font-size: clamp(20px, 3.4vw, 40px);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  font-weight: 600;
+}
+
+.wc-gj-scene-range {
+  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 13px;
+  color: rgba(246, 245, 243, 0.75);
+}
+
+.wc-gj-scene-dims {
+  margin-top: 10px;
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.wc-gj-scene-dim {
+  border: 1px solid rgba(246, 245, 243, 0.24);
+  border-radius: 999px;
+  padding: 8px 14px;
+  font-size: 12px;
+}
+
+.wc-gj-scene-note {
+  margin: 8px 0 0;
+  max-width: 560px;
+  font-size: 13px;
+  line-height: 1.6;
+  color: rgba(246, 245, 243, 0.72);
+}
+
+.wc-gj-scene .wc-gj-cta {
+  align-self: flex-start;
+  margin-top: 12px;
+}
+
+/* --- accessibility ---------------------------------------------------------- */
+.wc-grandjour :focus-visible {
+  outline: 2px solid #f6f5f3;
+  outline-offset: 3px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wc-grandjour * { transition: none !important; }
+}
+
+/* --- skip link -------------------------------------------------------------
+   Hidden until a keyboard user tabs into it, then unmissable. Duplicated from
+   mirror.css because the public page no longer loads the editorial stylesheet. */
+.wc-grandjour .wc-skip {
+  position: absolute;
+  left: -9999px;
+  top: 10px;
+  z-index: 20;
+  background: #f6f5f3;
+  color: #08090b;
+  border-radius: 999px;
+  padding: 10px 18px;
+  font-size: 13px;
+  text-decoration: none;
+}
+
+.wc-grandjour .wc-skip:focus {
+  left: 16px;
+}

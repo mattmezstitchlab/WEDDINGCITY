@@ -472,7 +472,9 @@ check('aucune donnée de démonstration n’est apparue', !afterReload.hasDemoDa
 // --- 20. another wedding stays out ------------------------------------------
 say('\n=== 10. UN AUTRE MARIAGE N’APPARAÎT JAMAIS ICI ===');
 await clickTag('nav-weddings'); await wait(1600);
-check('« Mes mariages » ramène au site', await p.evaluate(() => !!document.querySelector('.wc-landing-cta')));
+// LOCATOR ADAPTED (Le Grand Jour pass): the public page is now the film page.
+check('« Mes mariages » ramène au site',
+  await p.evaluate(() => !!document.querySelector('[data-landing="page"]')));
 await clickText('Créer mon mariage'); await wait(900);
 await typeInto('Clara', 'CELIA-AUTRE');
 await typeInto('Alexandre', 'DAVID-AUTRE');

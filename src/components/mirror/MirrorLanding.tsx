@@ -1,527 +1,281 @@
 import { useEffect, useState } from 'react';
 import { weddingStore } from '../../game/weddingStore';
 import { getStoredProjects } from '../../game/persistence';
-import { typography, radius } from '../../design/tokens';
-import { EDITORIAL_ASSETS } from '../../design/editorialAssets';
-import { M, fluid, Eyebrow, Reveal } from './MirrorPrimitives';
+import { typography } from '../../design/tokens';
+import { GRAND_JOUR_HERO, DEMO_DAY, MOMENT_ASSETS } from '../../design/momentImagery';
+import { PRODUCT_NAME, PRODUCT_MARK, PRODUCT_TAGLINE } from '../../design/productIdentity';
+import { LandingFilm } from './timeline/LandingFilm';
+import './landing.css';
 
 // ---------------------------------------------------------------------------
-// MIRROR LANDING — the product before there is a wedding.
+// LE GRAND JOUR® — the public page.
 // ---------------------------------------------------------------------------
-// Until this browser has opened or created a wedding, the Mirror is not the
-// projection of anything: it is the public face of the product. It therefore
-// shows NO project data at all — no demo, no Clara & Alexandre, no venue.
+// The product is a film of the day, so the page shows the film. It does not
+// explain three surfaces before showing anything: the hero, then the timeline
+// itself, live and manipulable, within one screen of scrolling.
 //
-// Same language as the editorial site it will become: ivory paper, monumental
-// type, wide margins, hairlines, no cards, no glassmorphism, no dashboard.
-//
-// Everything here is either static product copy or the list of weddings that
-// really exist in this browser. Nothing is invented, nothing is persisted.
+// WHAT IS REAL AND WHAT IS A DEMONSTRATION — the line is drawn once, here:
+//   • the weddings of this browser are real, and appear under "Mes mariages";
+//   • the film on this page is a DEMONSTRATION, labelled as such, and carries
+//     no couple, no guest, no vendor, no venue and no price. It is a shape,
+//     not a fake wedding, and it never touches storage.
+// The hero counts down only when a real wedding exists in this browser.
 // ---------------------------------------------------------------------------
 
-const SECTIONS = [
-  { id: 'landing-discover', label: 'Découvrir' },
-  { id: 'landing-experience', label: 'L’expérience' },
-  { id: 'landing-concept', label: 'Le concept' },
+const MOMENT_DIMENSIONS = [
+  { icon: '📍', label: 'Lieu' },
+  { icon: '👥', label: 'Personnes' },
+  { icon: '📸', label: 'Prestataires' },
+  { icon: '🎵', label: 'Musique' },
+  { icon: '🍽️', label: 'Repas' },
+  { icon: '📄', label: 'Documents' },
+  { icon: '📝', label: 'Notes' },
 ];
 
-/** The three surfaces, described without a single technical word. */
-const DIMENSIONS = [
-  {
-    index: '01',
-    name: 'World',
-    line: 'Le monde vivant',
-    body: 'Les lieux, les personnes et les heures occupent un espace. On s’y déplace, on regarde qui est où, et la journée se comprend d’un seul coup d’œil.',
-    asset: EDITORIAL_ASSETS.world,
-  },
-  {
-    index: '02',
-    name: 'Mirror',
-    line: 'Le récit',
-    body: 'Le même mariage, raconté comme un site : le déroulé, les visages, les lieux, la musique. C’est ce que vous pourrez partager.',
-    asset: EDITORIAL_ASSETS.mirror,
-  },
-  {
-    index: '03',
-    name: 'Canvas',
-    line: 'La composition',
-    body: 'On écrit le mariage directement là où on le lit. Une heure, un lieu, un morceau : la modification apparaît aussitôt dans les deux autres espaces.',
-    asset: EDITORIAL_ASSETS.canvas,
-  },
-];
+function daysUntil(iso: string): number | null {
+  if (!iso) return null;
+  const target = new Date(iso);
+  if (Number.isNaN(target.getTime())) return null;
+  const today = new Date();
+  const ms = new Date(target.getFullYear(), target.getMonth(), target.getDate()).getTime()
+    - new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
+  return Math.round(ms / 86400000);
+}
 
 export function MirrorLanding() {
   const store = weddingStore;
   const [projects, setProjects] = useState<ReturnType<typeof getStoredProjects>>([]);
+  const [openMoment, setOpenMoment] = useState<number | null>(null);
+  const [shifted, setShifted] = useState<{ from: number; delta: number } | null>(null);
 
-  // Read once on mount: the list of weddings that really exist here.
   useEffect(() => { setProjects(getStoredProjects()); }, []);
 
   const create = () => store.startWeddingCreation();
-  const goTo = (id: string) => {
-    const el = document.getElementById(id);
-    el?.scrollIntoView({ block: 'start' });
-    el?.setAttribute('tabindex', '-1');
-    (el as HTMLElement | null)?.focus?.({ preventScroll: true });
-  };
+
+  // The countdown belongs to a REAL wedding or to nobody.
+  const real = projects.find((p) => !p.isDemo && p.weddingDate);
+  const countdown = real ? daysUntil(real.weddingDate) : null;
+  const dateParts = real?.weddingDate ? new Date(real.weddingDate) : null;
 
   return (
-    <div id="wc-mirror" style={pageStyle}>
-      <a className="wc-skip" href="#landing-hero">Aller au contenu</a>
+    <div id="wc-mirror" className="wc-grandjour" data-landing="page">
+      <a className="wc-skip" href="#film">Aller à la pellicule</a>
 
-      {/* ---- the site navigation, at the very top ---- */}
-      <nav style={navStyle} aria-label="Navigation du site">
-        <div className="wc-landing-nav" style={navInnerStyle}>
-          <span style={brandStyle}>
-            AIME
-            {/* The suffix steps aside on a phone so the CTA always fits. */}
-            <span className="wc-landing-brand-suffix" style={{ color: M.textMuted }}> · Wedding City</span>
-          </span>
-
-          <span style={{ flex: 1 }} />
-
-          <div className="wc-landing-links" style={navLinksStyle}>
-            {SECTIONS.map((s) => (
-              <button key={s.id} onClick={() => goTo(s.id)} style={navLinkStyle}>
-                {s.label}
-              </button>
-            ))}
-          </div>
-
-          <button className="wc-action wc-landing-cta" onClick={create} style={navCtaStyle}>
-            Créer mon mariage
-          </button>
-        </div>
-      </nav>
-
-      {/* ---- hero: a real picture, and the type on top of it ---- */}
-      <header id="landing-hero" style={heroStyle}>
+      {/* ---------------------------------------------------------------- 01 */}
+      <header className="wc-gj-hero" data-landing="hero">
         <img
-          src={EDITORIAL_ASSETS.hero.src}
-          alt={EDITORIAL_ASSETS.hero.alt}
-          width={EDITORIAL_ASSETS.hero.width}
-          height={EDITORIAL_ASSETS.hero.height}
-          /* The only image of the first screen: it loads immediately, the
-             others wait until they are scrolled to. */
+          src={GRAND_JOUR_HERO.src}
+          alt={GRAND_JOUR_HERO.alt}
+          width={GRAND_JOUR_HERO.width}
+          height={GRAND_JOUR_HERO.height}
           loading="eager"
           decoding="async"
-          style={heroImgStyle}
+          className="wc-gj-hero-img"
         />
-        <div style={heroScrimStyle} aria-hidden />
+        <div className="wc-gj-hero-scrim" aria-hidden />
 
-        <div style={heroInnerStyle}>
-          <Eyebrow inherit>Wedding City</Eyebrow>
-          <h1 style={heroTitleStyle}>
-            <span style={{ display: 'block' }}>Le mariage</span>
-            <span style={{ display: 'block' }}>devient un monde.</span>
+        <nav className="wc-gj-nav" aria-label="Navigation">
+          <span className="wc-gj-wordmark">
+            {PRODUCT_NAME}<span className="wc-gj-mark">{PRODUCT_MARK}</span>
+          </span>
+          <span style={{ flex: 1 }} />
+          <button onClick={create} className="wc-gj-cta-small" data-landing="nav-create">
+            Créer mon mariage
+          </button>
+        </nav>
+
+        <div className="wc-gj-hero-body">
+          <h1 className="wc-gj-title">
+            {PRODUCT_NAME}<span className="wc-gj-mark">{PRODUCT_MARK}</span>
           </h1>
-          <p style={heroLeadStyle}>
-            Une seule journée, trois façons de la regarder : un espace où tout
-            se situe, un récit que l’on partage, et une surface où l’on compose.
-            Rien n’est décoratif — tout ce qui s’affiche existe vraiment.
-          </p>
-          <div style={heroActionsStyle}>
-            <button className="wc-action" onClick={create} style={primaryCtaStyle}>
-              Créer mon mariage
+
+          {real ? (
+            <div className="wc-gj-hero-real" data-landing="hero-wedding">
+              <div className="wc-gj-couple">{real.coupleNames}</div>
+              {dateParts && (
+                <div className="wc-gj-date">
+                  <span>{dateParts.getDate()}</span>
+                  <span>{dateParts.toLocaleDateString('fr-FR', { month: 'long' }).toUpperCase()}</span>
+                  <span>{dateParts.getFullYear()}</span>
+                </div>
+              )}
+              {countdown !== null && countdown >= 0 && (
+                <div className="wc-gj-countdown">J − {countdown}</div>
+              )}
+            </div>
+          ) : (
+            <p className="wc-gj-lead">
+              {PRODUCT_TAGLINE} Votre journée devient un film : une pellicule
+              horizontale où chaque heure est une scène, et où tout — les
+              personnes, la musique, les prestataires, les documents — est
+              accroché au moment qui le concerne.
+            </p>
+          )}
+
+          <div className="wc-gj-hero-actions">
+            <button onClick={create} className="wc-gj-cta" data-landing="hero-create">
+              Entrer dans le grand jour <span aria-hidden>→</span>
             </button>
-            <button className="wc-action" onClick={() => goTo('landing-experience')} style={secondaryCtaStyle}>
-              Découvrir l’expérience
-            </button>
+            {projects.length > 0 && (
+              <button
+                onClick={() => document.getElementById('mes-mariages')?.scrollIntoView({ behavior: 'smooth' })}
+                className="wc-gj-cta-ghost"
+              >
+                Mes mariages
+              </button>
+            )}
           </div>
         </div>
       </header>
 
-      {/* ---- 01 discover ---- */}
-      <section id="landing-discover" style={sectionStyle}>
-        <div style={sectionInnerStyle}>
-          <Reveal>
-            <div style={ruleRowStyle}>
-              <span style={sectionIndexStyle}>01</span>
-              <span style={hairlineStyle} />
-            </div>
-            <h2 style={sectionTitleStyle}>Un mariage n’est pas une liste</h2>
-            <p style={sectionLeadStyle}>
-              C’est un lieu, une heure, des gens qui arrivent, une musique qui
-              commence. Wedding City garde ces liens intacts : déplacez un
-              moment et son lieu, ses prestataires et sa bande-son suivent.
-            </p>
-          </Reveal>
+      {/* ---------------------------------------------------------------- 02 */}
+      <section id="film" className="wc-gj-film" aria-label="La pellicule du jour J">
+        <div className="wc-gj-section-head">
+          <h2 className="wc-gj-h2">Une journée. Un seul fil.</h2>
+          <p className="wc-gj-sub">
+            Faites glisser, zoomez, ouvrez une scène. C’est exactement l’interface
+            dans laquelle vous construirez votre journée.
+          </p>
         </div>
+
+        <LandingFilm shifted={shifted} onOpenMoment={(i) => setOpenMoment(i)} />
       </section>
 
-      {/* ---- 02 the three dimensions ---- */}
-      <section id="landing-experience" style={{ ...sectionStyle, background: M.surface }}>
-        <div style={sectionInnerStyle}>
-          <Reveal>
-            <div style={ruleRowStyle}>
-              <span style={sectionIndexStyle}>02</span>
-              <span style={hairlineStyle} />
-            </div>
-            <h2 style={sectionTitleStyle}>Trois espaces, un seul mariage</h2>
-            <p style={sectionLeadStyle}>
-              Vous ne remplissez pas une application : vous composez un monde.
-              Chaque espace montre le même mariage sous un angle différent.
-            </p>
-          </Reveal>
-
-          {/* A sequence, not three cards: image and text alternate sides so
-              the scroll has a rhythm. */}
-          <div style={sequenceStyle}>
-            {DIMENSIONS.map((d, i) => (
-              <Reveal key={d.name} delay={Math.min(i, 3) * 60}>
-                <article className="wc-landing-row" style={sequenceRowStyle(i % 2 === 1)}>
-                  <div style={sequenceTextStyle}>
-                    <div style={dimensionIndexStyle}>{d.index}</div>
-                    <h3 style={dimensionNameStyle}>{d.name}</h3>
-                    <div style={dimensionLineStyle}>{d.line}</div>
-                    <p style={dimensionBodyStyle}>{d.body}</p>
-                  </div>
-                  <figure style={sequenceFigureStyle}>
-                    <img
-                      src={d.asset.src}
-                      alt={d.asset.alt}
-                      width={d.asset.width}
-                      height={d.asset.height}
-                      loading="lazy"
-                      decoding="async"
-                      style={sequenceImgStyle}
-                    />
-                  </figure>
-                </article>
-              </Reveal>
-            ))}
+      {/* ---------------------------------------------------------------- 03 */}
+      <section className="wc-gj-band" aria-label="Chaque changement se propage">
+        <div className="wc-gj-section-head">
+          <h2 className="wc-gj-h2">Chaque changement se propage.</h2>
+          <p className="wc-gj-sub">
+            Déplacez le cocktail d’une demi-heure : le dîner, la première danse
+            et la soirée suivent. Le produit propose, vous décidez.
+          </p>
+          <div className="wc-gj-actions">
+            <button
+              onClick={() => setShifted(shifted ? null : { from: 3, delta: 0.5 })}
+              className="wc-gj-cta"
+              data-landing="propagate"
+            >
+              {shifted ? 'Revenir en arrière' : 'Décaler le cocktail de 30 min'}
+            </button>
+            {shifted && (
+              <span className="wc-gj-note" data-landing="propagate-note">
+                5 moments recalculés — cocktail, dîner, première danse, party, after.
+              </span>
+            )}
           </div>
         </div>
       </section>
 
-      {/* ---- immersive band: almost no words, a lot of air ---- */}
-      <section style={immersiveStyle} aria-label="Un jour, des milliers de relations">
-        <img
-          src={EDITORIAL_ASSETS.immersive.src}
-          alt={EDITORIAL_ASSETS.immersive.alt}
-          width={EDITORIAL_ASSETS.immersive.width}
-          height={EDITORIAL_ASSETS.immersive.height}
-          loading="lazy"
-          decoding="async"
-          style={immersiveImgStyle}
-        />
-        <div style={immersiveScrimStyle} aria-hidden />
-        <div style={immersiveTextStyle}>
-          <span style={{ display: 'block' }}>Un jour.</span>
-          <span style={{ display: 'block' }}>Des milliers de relations.</span>
+      {/* ---------------------------------------------------------------- 04 */}
+      <section className="wc-gj-cols" aria-label="Ce qui vit dans un moment">
+        <div className="wc-gj-section-head">
+          <h2 className="wc-gj-h2">Tout ce dont vous avez besoin, au bon moment.</h2>
+        </div>
+        <div className="wc-gj-grid">
+          {[
+            { t: 'Les personnes', b: 'Les mariés, la famille, les témoins, les invités : rattachés à l’heure où on les attend, avec leur photo dès que vous l’ajoutez.' },
+            { t: 'Les prestataires', b: 'Le photographe apparaît dans les moments qu’il couvre, le traiteur dans ceux qu’il sert. Jamais une liste hors du temps.' },
+            { t: 'La musique', b: 'Un morceau appartient à une scène. Sa durée compte : si elle dépasse le moment, la pellicule vous le dit.' },
+            { t: 'Les documents', b: 'Contrats, devis, plans, captures : le fichier se lit et se range sur le moment qu’il concerne.' },
+          ].map((c) => (
+            <article key={c.t} className="wc-gj-cell">
+              <h3 className="wc-gj-h3">{c.t}</h3>
+              <p className="wc-gj-body">{c.b}</p>
+            </article>
+          ))}
         </div>
       </section>
 
-      {/* ---- 03 concept ---- */}
-      <section id="landing-concept" style={sectionStyle}>
-        <div style={sectionInnerStyle}>
-          <Reveal>
-            <div style={ruleRowStyle}>
-              <span style={sectionIndexStyle}>03</span>
-              <span style={hairlineStyle} />
-            </div>
-            <h2 style={sectionTitleStyle}>Rien d’inventé</h2>
-            <p style={sectionLeadStyle}>
-              Aucune photographie de banque d’images, aucun invité fictif,
-              aucune statistique décorative. Tant qu’une information n’existe
-              pas, la page le dit simplement — et le jour où elle arrive, elle
-              apparaît partout à la fois.
-            </p>
-          </Reveal>
-        </div>
-      </section>
-
-      {/* ---- weddings that really exist in this browser ---- */}
+      {/* ---------------------------------------------------------------- 05 */}
       {projects.length > 0 && (
-        <section style={{ ...sectionStyle, paddingTop: fluid(40, 70), paddingBottom: fluid(40, 70) }}>
-          <div style={sectionInnerStyle}>
-            <Reveal>
-              <div style={ruleRowStyle}>
-                <span style={sectionIndexStyle}>Mes mariages</span>
-                <span style={hairlineStyle} />
-              </div>
-              <ul style={projectListStyle}>
-                {projects.map((p) => (
-                  <li key={p.id}>
-                    <button
-                      onClick={() => store.loadProject(p.id)}
-                      style={projectItemStyle}
-                      title={`Ouvrir ${p.coupleNames || p.title}`}
-                    >
-                      <span style={projectNameStyle}>{p.coupleNames || p.title}</span>
-                      <span style={projectMetaStyle}>
-                        {p.isDemo ? 'démonstration' : p.locationName || ''}
-                        <span aria-hidden style={{ marginLeft: 12 }}>→</span>
-                      </span>
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            </Reveal>
+        <section id="mes-mariages" className="wc-gj-weddings" aria-label="Mes mariages">
+          <div className="wc-gj-section-head">
+            <h2 className="wc-gj-h2">Mes mariages</h2>
           </div>
+          <ul className="wc-gj-list">
+            {projects.map((p) => (
+              <li key={p.id}>
+                <button onClick={() => store.loadProject(p.id)} className="wc-gj-list-item">
+                  <span className="wc-gj-list-name">{p.coupleNames || p.title}</span>
+                  <span className="wc-gj-list-meta">
+                    {p.isDemo ? 'démonstration' : p.locationName || ''}
+                    <span aria-hidden style={{ marginLeft: 12 }}>→</span>
+                  </span>
+                </button>
+              </li>
+            ))}
+          </ul>
         </section>
       )}
 
-      {/* ---- closing call ---- */}
-      <section style={{ ...sectionStyle, background: M.surface }}>
-        <div style={{ ...sectionInnerStyle, textAlign: 'center' }}>
-          <Reveal>
-            <h2 style={{ ...sectionTitleStyle, maxWidth: 760, margin: '0 auto' }}>
-              Votre mariage commence par un nom.
-            </h2>
-            <div style={{ ...heroActionsStyle, justifyContent: 'center', marginTop: fluid(26, 38) }}>
-              <button className="wc-action" onClick={create} style={primaryCtaStyle}>
-                Créer mon mariage
-              </button>
-            </div>
-          </Reveal>
+      {/* ---------------------------------------------------------------- 06 */}
+      <section className="wc-gj-final">
+        <h2 className="wc-gj-final-title">Votre grand jour commence par un nom.</h2>
+        <button onClick={create} className="wc-gj-cta" data-landing="final-create">
+          Créer mon mariage <span aria-hidden>→</span>
+        </button>
+        <div className="wc-gj-footer">
+          <span>{PRODUCT_NAME}{PRODUCT_MARK}</span>
+          <span style={{ opacity: 0.6 }}>{PRODUCT_TAGLINE}</span>
         </div>
       </section>
 
-      <footer style={footerStyle}>
-        <span>AIME · Wedding City</span>
-        <span style={{ color: M.textMuted }}>
-          Un monde, un récit, une surface de composition.
-        </span>
-      </footer>
+      {/* ---- a scene, opened from the film ---- */}
+      {openMoment !== null && (
+        <DemoScene index={openMoment} onClose={() => setOpenMoment(null)} onCreate={create} />
+      )}
     </div>
   );
 }
 
-// --- styles -----------------------------------------------------------------
+/**
+ * A scene of the demonstration.
+ *
+ * It shows WHAT a moment holds — and deliberately not invented content: no
+ * guest names, no vendor names, no counts. In your wedding those lines carry
+ * your own data; here they carry their own label, and the page says so.
+ */
+function DemoScene({ index, onClose, onCreate }: { index: number; onClose: () => void; onCreate: () => void }) {
+  const m = DEMO_DAY[index];
+  const asset = MOMENT_ASSETS[m.key];
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    document.addEventListener('keydown', onKey);
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { document.removeEventListener('keydown', onKey); document.body.style.overflow = previous; };
+  }, [onClose]);
 
-const pageStyle: React.CSSProperties = {
-  position: 'fixed', inset: 0, zIndex: 800, overflowY: 'auto',
-  background: M.bg, color: M.textPrimary,
-  fontFamily: typography.family.sans,
-  WebkitFontSmoothing: 'antialiased',
-};
+  const fmt = (h: number) => {
+    const t = Math.round(h * 60);
+    return `${String(Math.floor(t / 60) % 24).padStart(2, '0')}:${String(t % 60).padStart(2, '0')}`;
+  };
 
-const navStyle: React.CSSProperties = {
-  position: 'sticky', top: 0, zIndex: 6,
-  background: M.bg, borderBottom: `1px solid ${M.line}`,
-};
-
-const navInnerStyle: React.CSSProperties = {
-  maxWidth: 1080, margin: '0 auto',
-  display: 'flex', alignItems: 'center', gap: fluid(10, 24),
-  padding: `12px ${fluid(20, 72)}`,
-};
-
-const brandStyle: React.CSSProperties = {
-  fontSize: typography.editorial.caption,
-  letterSpacing: '0.16em', textTransform: 'uppercase',
-  fontWeight: typography.weight.bold, color: M.textPrimary, whiteSpace: 'nowrap',
-};
-
-// `display` lives in mirror.css (.wc-landing-links): an inline value would beat
-// the mobile media query — the exact trap that left the CTA cut off at 390px.
-const navLinksStyle: React.CSSProperties = {
-  gap: fluid(12, 28), overflowX: 'auto',
-};
-
-const navLinkStyle: React.CSSProperties = {
-  font: 'inherit', background: 'transparent', border: 'none', cursor: 'pointer',
-  padding: 0, whiteSpace: 'nowrap',
-  fontSize: typography.editorial.caption, color: M.textSecondary,
-  letterSpacing: '0.06em',
-};
-
-const navCtaStyle: React.CSSProperties = {
-  appearance: 'none', cursor: 'pointer', whiteSpace: 'nowrap',
-  background: M.textPrimary, color: M.surface, border: 'none',
-  borderRadius: radius.pill, padding: '9px 16px',
-  fontSize: typography.editorial.caption, fontWeight: typography.weight.semibold,
-  letterSpacing: '0.04em',
-};
-
-const heroStyle: React.CSSProperties = {
-  position: 'relative', overflow: 'hidden',
-  display: 'flex', flexDirection: 'column', justifyContent: 'flex-end',
-  minHeight: 'min(88vh, 940px)',
-  padding: `${fluid(90, 150)} ${fluid(20, 72)} ${fluid(50, 84)}`,
-  color: '#fff',
-};
-
-const heroImgStyle: React.CSSProperties = {
-  position: 'absolute', inset: 0, width: '100%', height: '100%',
-  objectFit: 'cover', objectPosition: 'center 58%', display: 'block',
-};
-
-// Enough veil for white type to hold over a bright picture, little enough for
-// the orangery to stay readable. Measured, not guessed (see check-landing).
-const heroScrimStyle: React.CSSProperties = {
-  position: 'absolute', inset: 0,
-  background:
-    'linear-gradient(to top, rgba(14,12,10,.76) 0%, rgba(14,12,10,.48) 46%, rgba(14,12,10,.26) 100%)',
-};
-
-const heroInnerStyle: React.CSSProperties = {
-  position: 'relative', maxWidth: 1080, margin: '0 auto', width: '100%',
-};
-
-const heroTitleStyle: React.CSSProperties = {
-  margin: `${fluid(20, 30)} 0 0`,
-  fontSize: fluid(44, 116),
-  lineHeight: 0.92,
-  fontWeight: typography.weight.semibold,
-  letterSpacing: '-0.042em',
-};
-
-const heroLeadStyle: React.CSSProperties = {
-  margin: `${fluid(24, 34)} 0 0`, maxWidth: 560,
-  fontSize: fluid(15, 19), lineHeight: typography.leading.relaxed,
-  color: 'rgba(255,253,250,0.88)',
-};
-
-const heroActionsStyle: React.CSSProperties = {
-  display: 'flex', gap: 14, flexWrap: 'wrap', marginTop: fluid(30, 44),
-};
-
-const primaryCtaStyle: React.CSSProperties = {
-  appearance: 'none', cursor: 'pointer',
-  background: M.surface, color: M.textPrimary, border: 'none',
-  borderRadius: radius.pill, padding: '13px 26px',
-  fontSize: typography.editorial.body, fontWeight: typography.weight.semibold,
-  letterSpacing: '0.02em',
-};
-
-const secondaryCtaStyle: React.CSSProperties = {
-  appearance: 'none', cursor: 'pointer',
-  background: 'transparent', color: '#fff',
-  border: '1px solid rgba(255,253,250,0.5)',
-  borderRadius: radius.pill, padding: '13px 22px',
-  fontSize: typography.editorial.body, fontWeight: typography.weight.medium,
-};
-
-const sectionStyle: React.CSSProperties = {
-  padding: `${fluid(64, 130)} ${fluid(20, 72)}`,
-  scrollMarginTop: 70,
-};
-
-const sectionInnerStyle: React.CSSProperties = { maxWidth: 1080, margin: '0 auto' };
-
-const ruleRowStyle: React.CSSProperties = {
-  display: 'flex', alignItems: 'center', gap: 16, marginBottom: fluid(18, 26),
-};
-
-const sectionIndexStyle: React.CSSProperties = {
-  fontFamily: typography.family.mono, fontSize: typography.editorial.micro,
-  color: M.textMuted, letterSpacing: '0.08em', textTransform: 'uppercase', whiteSpace: 'nowrap',
-};
-
-const hairlineStyle: React.CSSProperties = { flex: 1, height: 1, background: M.line };
-
-const sectionTitleStyle: React.CSSProperties = {
-  margin: 0, fontSize: fluid(30, 62), lineHeight: 1.0,
-  fontWeight: typography.weight.semibold, letterSpacing: '-0.03em', color: M.textPrimary,
-};
-
-const sectionLeadStyle: React.CSSProperties = {
-  margin: `${fluid(20, 28)} 0 0`, maxWidth: 620,
-  fontSize: fluid(14, 18), lineHeight: typography.leading.relaxed, color: M.textSecondary,
-};
-
-const sequenceStyle: React.CSSProperties = {
-  display: 'grid', gap: fluid(48, 96), marginTop: fluid(40, 70),
-};
-
-// Columns live in mirror.css (.wc-landing-row) so a phone can stack them.
-const sequenceRowStyle = (reversed: boolean): React.CSSProperties => ({
-  gap: `${fluid(20, 34)} ${fluid(26, 64)}`,
-  alignItems: 'center',
-  direction: reversed ? 'rtl' : 'ltr',
-});
-
-const sequenceTextStyle: React.CSSProperties = { direction: 'ltr', minWidth: 0 };
-
-const sequenceFigureStyle: React.CSSProperties = {
-  direction: 'ltr', margin: 0, overflow: 'hidden', borderRadius: radius.md,
-  background: 'rgba(16,18,24,0.05)',
-};
-
-const sequenceImgStyle: React.CSSProperties = {
-  width: '100%', height: '100%', aspectRatio: '4 / 3',
-  objectFit: 'cover', display: 'block',
-};
-
-const immersiveStyle: React.CSSProperties = {
-  position: 'relative', overflow: 'hidden',
-  minHeight: 'min(72vh, 640px)',
-  display: 'flex', alignItems: 'flex-end',
-  padding: `${fluid(50, 90)} ${fluid(20, 72)}`,
-};
-
-const immersiveImgStyle: React.CSSProperties = {
-  position: 'absolute', inset: 0, width: '100%', height: '100%',
-  objectFit: 'cover', display: 'block',
-};
-
-const immersiveScrimStyle: React.CSSProperties = {
-  position: 'absolute', inset: 0,
-  background: 'linear-gradient(to top, rgba(14,12,10,.66) 0%, rgba(14,12,10,.20) 60%, rgba(14,12,10,.10) 100%)',
-};
-
-const immersiveTextStyle: React.CSSProperties = {
-  position: 'relative', maxWidth: 1080, margin: '0 auto', width: '100%',
-  color: '#fff', fontSize: fluid(28, 62), lineHeight: 1.04,
-  fontWeight: typography.weight.semibold, letterSpacing: '-0.032em',
-};
-
-const dimensionsStyle: React.CSSProperties = {
-  display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
-  gap: `${fluid(30, 48)} ${fluid(24, 56)}`, marginTop: fluid(36, 60),
-};
-
-const dimensionStyle: React.CSSProperties = { minWidth: 0 };
-
-const dimensionIndexStyle: React.CSSProperties = {
-  fontFamily: typography.family.mono, fontSize: typography.editorial.micro,
-  color: M.textMuted, letterSpacing: '0.08em',
-};
-
-const dimensionNameStyle: React.CSSProperties = {
-  margin: '10px 0 0', fontSize: fluid(24, 40), lineHeight: 1.05,
-  fontWeight: typography.weight.semibold, letterSpacing: '-0.028em', color: M.textPrimary,
-};
-
-const dimensionLineStyle: React.CSSProperties = {
-  marginTop: 6, fontSize: typography.editorial.caption,
-  letterSpacing: '0.12em', textTransform: 'uppercase', color: M.textMuted,
-  fontWeight: typography.weight.bold,
-};
-
-const dimensionBodyStyle: React.CSSProperties = {
-  margin: '14px 0 0', fontSize: typography.editorial.body,
-  lineHeight: typography.leading.relaxed, color: M.textSecondary,
-};
-
-const projectListStyle: React.CSSProperties = {
-  listStyle: 'none', margin: `${fluid(18, 26)} 0 0`, padding: 0,
-  display: 'grid', gap: 0,
-};
-
-const projectItemStyle: React.CSSProperties = {
-  appearance: 'none', background: 'transparent', border: 'none',
-  borderBottom: `1px solid ${M.line}`, cursor: 'pointer',
-  width: '100%', textAlign: 'left', padding: `${fluid(16, 22)} 0`,
-  display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 18,
-  font: 'inherit',
-};
-
-const projectNameStyle: React.CSSProperties = {
-  fontSize: fluid(18, 28), letterSpacing: '-0.02em', color: M.textPrimary,
-  fontWeight: typography.weight.medium,
-};
-
-const projectMetaStyle: React.CSSProperties = {
-  fontSize: typography.editorial.caption, color: M.textMuted, whiteSpace: 'nowrap',
-};
-
-const footerStyle: React.CSSProperties = {
-  padding: `${fluid(34, 54)} ${fluid(20, 72)}`,
-  borderTop: `1px solid ${M.line}`,
-  display: 'flex', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap',
-  maxWidth: 1080, margin: '0 auto', width: '100%',
-  fontSize: typography.editorial.caption, color: M.textSecondary,
-};
+  return (
+    <div className="wc-gj-scene" role="dialog" aria-modal="true" aria-label={`Scène ${m.label}`} data-landing="scene">
+      <img src={asset.src} alt={asset.alt} width={asset.width} height={asset.height} className="wc-gj-scene-img" />
+      <div className="wc-gj-scene-scrim" aria-hidden />
+      <button onClick={onClose} className="wc-gj-scene-close" data-landing="scene-close">Fermer</button>
+      <div className="wc-gj-scene-body">
+        <div className="wc-gj-scene-hour">{fmt(m.hour)}</div>
+        <div className="wc-gj-scene-title">{m.label}</div>
+        <div className="wc-gj-scene-range">{fmt(m.hour)} — {fmt(m.endHour)}</div>
+        <div className="wc-gj-scene-dims">
+          {MOMENT_DIMENSIONS.map((d) => (
+            <span key={d.label} className="wc-gj-scene-dim">
+              <span aria-hidden>{d.icon}</span> {d.label}
+            </span>
+          ))}
+        </div>
+        <p className="wc-gj-scene-note">
+          Dans votre mariage, chacune de ces lignes porte vos données — et
+          s’édite ici même, sans quitter la scène. Cette démonstration n’en
+          invente aucune.
+        </p>
+        <button onClick={onCreate} className="wc-gj-cta" data-landing="scene-create">
+          Créer mon mariage <span aria-hidden>→</span>
+        </button>
+      </div>
+    </div>
+  );
+}

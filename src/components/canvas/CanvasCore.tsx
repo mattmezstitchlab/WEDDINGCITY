@@ -133,18 +133,33 @@ function ProgrammeSurface({ model }: { model: ReturnType<typeof projectWorldMode
   const places = store.places.map((p) => ({ id: p.id, label: p.name, sub: p.code }));
 
   // ---- TEMPORAL DRAG & DROP -------------------------------------------------
-  // Dragging a moment re-chains the programme from its earliest start, each
-  // moment keeping its own duration (store.movePhaseToIndex). One undo step,
-  // persisted, and no invented hour.
+  // TWO DIFFERENT GESTURES, ON PURPOSE:
   //
-  // Pointer drag is a desktop affordance, so the SAME move is also available
-  // from the keyboard and from two touch-sized buttons — the feature is never
-  // reachable by mouse only.
-  const [dragId, setDragId] = useState<string | null>(null);
+  //   • on the JOUR J film, the card itself follows the finger — you are
+  //     placing an object on a time scale, so you must see it land;
+  //   • HERE, in the editing Canvas, the block must NOT move while you drag.
+  //     Only the handle travels with the pointer, the programme stays legible,
+  //     a line shows the target position — and NOTHING is applied until the
+  //     move is validated, with its consequences written out beforehand.
+  //
+  // The same move stays available from the keyboard and from two touch-sized
+  // buttons: it is never reachable by mouse only.
+  const [drag, setDrag] = useState<{ phaseId: string; x: number; y: number } | null>(null);
   const [overIndex, setOverIndex] = useState<number | null>(null);
   const [moveNote, setMoveNote] = useState<string | null>(null);
+  const [pending, setPending] = useState<{
+    phaseId: string; title: string; index: number;
+    changes: { id: string; name: string; from: number; to: number }[];
+  } | null>(null);
 
   const moments = model.programme.moments;
+
+  /** Wall clock, with "(+1)" when the hour belongs to the following morning. */
+  const clock = (h: number) => {
+    const t = Math.round(h * 60);
+    const base = `${String(Math.floor(t / 60) % 24).padStart(2, '0')}:${String(t % 60).padStart(2, '0')}`;
+    return h >= 24 ? `${base} (+1)` : base;
+  };
 
   const move = (phaseId: string, targetIndex: number) => {
     const done = store.movePhaseToIndex(phaseId, targetIndex);
@@ -153,15 +168,75 @@ function ProgrammeSurface({ model }: { model: ReturnType<typeof projectWorldMode
       : 'Déplacement impossible : la journée ne peut pas accueillir ce moment ici.');
   };
 
+  /** Drop = ask. The programme is only rewritten once the user validates. */
+  const proposeMove = (phaseId: string, targetIndex: number, title: string) => {
+    const changes = store.previewMoveToIndex(phaseId, targetIndex);
+    if (!changes || changes.length === 0) {
+      setMoveNote('Ce déplacement ne changerait aucun horaire.');
+      return;
+    }
+    setPending({ phaseId, title, index: targetIndex, changes });
+  };
+
   return (
     <div style={{ display: 'grid', gap: 14 }}>
       <div style={{ display: 'flex', gap: 10, alignItems: 'baseline', flexWrap: 'wrap' }}>
         <span style={{ fontSize: 10.5, color: K.textMuted }}>
-          Glissez un moment par sa poignée pour le déplacer dans la journée, ou
-          utilisez les flèches. Chaque moment conserve sa durée.
+          Glissez la poignée d’un moment pour le déplacer dans la journée, ou
+          utilisez les flèches. Le bloc reste en place : vous validez le
+          déplacement, puis les horaires se recalculent.
         </span>
         {moveNote && <span style={{ fontSize: 10.5, color: K.textSecondary }}>{moveNote}</span>}
       </div>
+
+      {/* Only the handle travels — a small object under the pointer. */}
+      {drag && (
+        <div
+          aria-hidden
+          data-canvas="drag-ghost"
+          style={{
+            position: 'fixed', left: drag.x - 12, top: drag.y - 12, zIndex: 2000,
+            width: 24, height: 24, borderRadius: 6, pointerEvents: 'none',
+            background: K.textPrimary, color: K.bg,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontSize: 12, boxShadow: shadowFor(4, 'composition'),
+          }}
+        >
+          ⠿
+        </div>
+      )}
+
+      {/* MODIFICATIONS DÉTECTÉES — written out before anything moves. */}
+      {pending && (
+        <div style={pendingBoxStyle} role="status" data-canvas="move-validation">
+          <div style={{ fontSize: 10.5, letterSpacing: '0.14em', textTransform: 'uppercase', color: K.textMuted }}>
+            Modifications détectées
+          </div>
+          <div style={{ marginTop: 8, fontSize: typography.size.bodyLg, color: K.textPrimary }}>
+            Déplacer « {pending.title} » en position {String(pending.index + 1).padStart(2, '0')}
+          </div>
+          <ul style={{ listStyle: 'none', margin: '10px 0 0', padding: 0, display: 'grid', gap: 6 }}>
+            {pending.changes.map((c) => (
+              <li key={c.id} style={{ fontSize: typography.size.body, color: K.textSecondary, fontFamily: typography.family.mono }}>
+                {c.name} : {clock(c.from)} → {clock(c.to)}
+                {' '}({c.to > c.from ? '+' : '−'}{Math.abs(Math.round((c.to - c.from) * 60))} min)
+              </li>
+            ))}
+          </ul>
+          <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+            <button
+              onClick={() => { move(pending.phaseId, pending.index); setPending(null); }}
+              style={{ ...addBtnStyle, borderStyle: 'solid' }}
+              data-canvas="move-apply"
+            >
+              Appliquer
+            </button>
+            <button onClick={() => setPending(null)} style={{ ...addBtnStyle, border: 'none' }} data-canvas="move-cancel">
+              Annuler
+            </button>
+          </div>
+        </div>
+      )}
 
       {moments.length === 0 && (
         <CanvasEmpty
@@ -172,43 +247,62 @@ function ProgrammeSurface({ model }: { model: ReturnType<typeof projectWorldMode
 
       {moments.map((m, index) => {
         const isFocus = store.canvasFocus?.kind === 'event' && store.canvasFocus.id === m.phaseId;
-        const isDragging = dragId === m.phaseId;
-        const isTarget = overIndex === index && dragId !== null && !isDragging;
+        const isDragging = drag?.phaseId === m.phaseId;
+        const isTarget = overIndex === index && drag !== null && !isDragging;
         return (
           <article
             key={m.phaseId}
-            onDragOver={(e) => { if (dragId) { e.preventDefault(); setOverIndex(index); } }}
-            onDrop={(e) => {
-              if (!dragId) return;
-              e.preventDefault();
-              move(dragId, index);
-              setDragId(null); setOverIndex(null);
-            }}
+            data-canvas="moment-row"
+            data-phase-id={m.phaseId}
+            onPointerEnter={() => { if (drag) setOverIndex(index); }}
             style={{
               ...canvasCard,
               padding: '18px 20px',
               boxShadow: isFocus ? shadowFor(4, 'composition') : shadowFor(2, 'composition'),
-              borderColor: isFocus ? K.lineStrong : K.line,
-              opacity: isDragging ? 0.55 : 1,
+              // The dragged block stays exactly where it is — it is only
+              // outlined, never displaced (see the note above).
+              borderColor: isDragging ? K.textPrimary : isFocus ? K.lineStrong : K.line,
               borderTop: isTarget ? `2px solid ${K.textPrimary}` : undefined,
-              transition: 'opacity 160ms ease',
             }}
           >
             {/* ---- move controls: pointer, keyboard and touch ---- */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
               <span
-                draggable
-                onDragStart={() => { setDragId(m.phaseId); setMoveNote(null); }}
-                onDragEnd={() => { setDragId(null); setOverIndex(null); }}
                 role="button"
                 tabIndex={0}
                 aria-label={`Déplacer ${m.title} dans le programme. Flèches haut et bas pour changer sa position.`}
+                data-canvas="drag-handle"
+                onPointerDown={(e) => {
+                  (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+                  setDrag({ phaseId: m.phaseId, x: e.clientX, y: e.clientY });
+                  setOverIndex(index);
+                  setMoveNote(null);
+                }}
+                onPointerMove={(e) => {
+                  if (!drag) return;
+                  setDrag({ ...drag, x: e.clientX, y: e.clientY });
+                  // The row under the pointer is the target position.
+                  const row = document.elementFromPoint(e.clientX, e.clientY)?.closest('[data-canvas="moment-row"]');
+                  const id = row?.getAttribute('data-phase-id');
+                  const at = moments.findIndex((x) => x.phaseId === id);
+                  if (at >= 0) setOverIndex(at);
+                }}
+                onPointerUp={() => {
+                  if (!drag) return;
+                  const target = overIndex;
+                  const current = drag;
+                  setDrag(null);
+                  setOverIndex(null);
+                  if (target === null || target === index) return;
+                  proposeMove(current.phaseId, target, m.title);
+                }}
+                onPointerCancel={() => { setDrag(null); setOverIndex(null); }}
                 onKeyDown={(e) => {
                   if (e.key === 'ArrowUp') { e.preventDefault(); move(m.phaseId, index - 1); }
                   if (e.key === 'ArrowDown') { e.preventDefault(); move(m.phaseId, index + 1); }
                 }}
-                style={dragHandleStyle}
-                title="Glisser pour déplacer"
+                style={{ ...dragHandleStyle, touchAction: 'none' }}
+                title="Glisser pour déplacer — le déplacement est proposé avant d’être appliqué"
               >
                 ⠿
               </span>
@@ -1141,6 +1235,12 @@ function EnrichmentField({ songId, title, artist }: { songId: string; title: str
     </div>
   );
 }
+
+const pendingBoxStyle: React.CSSProperties = {
+  ...canvasCard,
+  padding: '14px 18px',
+  borderColor: K.lineStrong,
+};
 
 const dragHandleStyle: React.CSSProperties = {
   cursor: 'grab', userSelect: 'none',

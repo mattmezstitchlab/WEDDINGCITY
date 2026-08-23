@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { weddingStore } from '../../../game/weddingStore';
 import { typography } from '../../../design/tokens';
 import { momentImage, MOMENT_TEMPLATES } from '../../../design/momentImagery';
+import { PRODUCT_NAME } from '../../../design/productIdentity';
 import { MomentHub } from './MomentHub';
 import './timeline.css';
 
@@ -46,6 +47,29 @@ const MIN_CARD_PX = 96;
 const DEFAULT_DAY_START = 7;
 const DEFAULT_DAY_END = 27;
 
+/** The current time of day, in the same decimal hours as the model. */
+function nowHour(): number {
+  const d = new Date();
+  return d.getHours() + d.getMinutes() / 60;
+}
+
+/**
+ * 01:00 typed on a wedding day means the NIGHT of that day, not one o'clock in
+ * the morning before the preparations. MEASURED: an after-party entered as
+ * "01:00" landed at the very beginning of the day and re-chained the whole
+ * programme backwards. When the day already runs past noon, a small hour is
+ * read as the night that follows it — the model has room for it (0 → 30).
+ */
+export function normalizeNightHour(hour: number, phases: { endHour: number }[]): number {
+  if (hour >= 6) return hour;
+  return phases.some((p) => p.endHour > 12) ? hour + 24 : hour;
+}
+
+/** Wall clock, with the day marker when the hour belongs to the next morning. */
+export function formatHourWithDay(h: number): string {
+  return h >= 24 ? `${formatHour(h)} (+1)` : formatHour(h);
+}
+
 export function formatHour(h: number): string {
   const total = Math.round(h * 60);
   const hh = Math.floor(total / 60) % 24;
@@ -82,6 +106,9 @@ export function TimelineStudio() {
   );
 
   const [pxPerHour, setPxPerHour] = useState(DEFAULT_PX_PER_HOUR);
+  // Same reason as the landing film: two clicks in one frame must compound.
+  const pxRef = useRef(DEFAULT_PX_PER_HOUR);
+  pxRef.current = pxPerHour;
   const [drag, setDrag] = useState<DragState | null>(null);
   const [cursorHour, setCursorHour] = useState<number | null>(null);
   const [openPhaseId, setOpenPhaseId] = useState<string | null>(null);
@@ -90,6 +117,18 @@ export function TimelineStudio() {
   const [draftStart, setDraftStart] = useState('15:00');
   const [draftDuration, setDraftDuration] = useState('60');
   const [ripple, setRipple] = useState<{ phaseId: string; delta: number; count: number } | null>(null);
+  const [nowMode, setNowMode] = useState(false);
+  const [clock, setClock] = useState(() => nowHour());
+
+  // MODE JOUR J — the real clock, ticking. Nothing is simulated: the marker is
+  // where the actual time is, and the page says plainly whether today IS the
+  // wedding day.
+  useEffect(() => {
+    if (!nowMode) return;
+    const id = setInterval(() => setClock(nowHour()), 20000);
+    setClock(nowHour());
+    return () => clearInterval(id);
+  }, [nowMode]);
 
   const stripRef = useRef<HTMLDivElement>(null);
   const panRef = useRef<{ startX: number; startScroll: number } | null>(null);
@@ -114,14 +153,16 @@ export function TimelineStudio() {
     return w > 0 ? w / (DAY_END - DAY_START) : MIN_PX_PER_HOUR;
   };
 
-  const zoomAround = (nextPx: number, clientX?: number) => {
+  const zoomAround = (factor: number, clientX?: number) => {
     const strip = stripRef.current;
+    const current = pxRef.current;
     const floor = Math.min(MIN_PX_PER_HOUR, fullDayPxPerHour());
-    const clamped = Math.max(floor, Math.min(MAX_PX_PER_HOUR, nextPx));
+    const clamped = Math.max(floor, Math.min(MAX_PX_PER_HOUR, current * factor));
+    pxRef.current = clamped;
     if (!strip) { setPxPerHour(clamped); return; }
     const rect = strip.getBoundingClientRect();
     const anchorX = (clientX ?? rect.left + rect.width / 2) - rect.left;
-    const hourUnderPointer = DAY_START + (strip.scrollLeft + anchorX) / pxPerHour;
+    const hourUnderPointer = DAY_START + (strip.scrollLeft + anchorX) / current;
     setPxPerHour(clamped);
     requestAnimationFrame(() => {
       const el = stripRef.current;
@@ -137,7 +178,7 @@ export function TimelineStudio() {
     const onWheel = (e: WheelEvent) => {
       if (e.ctrlKey || e.metaKey) {
         e.preventDefault();
-        zoomAround(pxPerHour * (e.deltaY < 0 ? 1.12 : 1 / 1.12), e.clientX);
+        zoomAround(e.deltaY < 0 ? 1.12 : 1 / 1.12, e.clientX);
       } else if (Math.abs(e.deltaX) < Math.abs(e.deltaY) && e.shiftKey) {
         e.preventDefault();
         strip.scrollLeft += e.deltaY;
@@ -231,9 +272,10 @@ export function TimelineStudio() {
   };
 
   const submitMoment = () => {
-    const start = parseClock(draftStart);
+    const parsed = parseClock(draftStart);
     const minutes = Number(draftDuration);
-    if (!draftName.trim() || start === null || !Number.isFinite(minutes) || minutes <= 0) return;
+    if (!draftName.trim() || parsed === null || !Number.isFinite(minutes) || minutes <= 0) return;
+    const start = normalizeNightHour(parsed, phases);
     const created = store.createPhase({
       name: draftName.trim(),
       startHour: start,
@@ -289,16 +331,33 @@ export function TimelineStudio() {
           <button onClick={() => setComposing((v) => !v)} style={primaryBtn} data-jourj="add-moment">
             + Ajouter un moment
           </button>
+          <button
+            onClick={() => {
+              const next = !nowMode;
+              setNowMode(next);
+              if (next) {
+                const strip = stripRef.current;
+                if (strip) strip.scrollLeft = Math.max(0, xForHour(nowHour()) - strip.clientWidth / 2);
+              }
+            }}
+            style={nowMode ? primaryBtn : ghostBtn}
+            data-jourj="now-mode"
+            aria-pressed={nowMode}
+          >
+            Mode Jour J
+          </button>
           <div style={zoomGroup} role="group" aria-label="Zoom temporel">
-            <button onClick={() => zoomAround(pxPerHour / 1.4)} style={zoomBtn} aria-label="Dézoomer" data-jourj="zoom-out">−</button>
+            <button onClick={() => zoomAround(1 / 1.4)} style={zoomBtn} aria-label="Dézoomer" data-jourj="zoom-out">−</button>
             <span style={zoomLabel} data-jourj="zoom-level">
               {pxPerHour >= 420 ? 'précision' : pxPerHour >= 150 ? 'moments' : pxPerHour >= 80 ? 'demi-journée' : 'journée'}
             </span>
-            <button onClick={() => zoomAround(pxPerHour * 1.4)} style={zoomBtn} aria-label="Zoomer" data-jourj="zoom-in">+</button>
+            <button onClick={() => zoomAround(1.4)} style={zoomBtn} aria-label="Zoomer" data-jourj="zoom-in">+</button>
           </div>
           <button
             onClick={() => {
-              setPxPerHour(fullDayPxPerHour());
+              const full = fullDayPxPerHour();
+              pxRef.current = full;
+              setPxPerHour(full);
               requestAnimationFrame(() => { if (stripRef.current) stripRef.current.scrollLeft = 0; });
             }}
             style={ghostBtn}
@@ -451,6 +510,13 @@ export function TimelineStudio() {
             );
           })}
 
+          {/* MAINTENANT — the real time, on the real scale */}
+          {nowMode && clock >= DAY_START && clock <= DAY_END && (
+            <div style={{ position: 'absolute', left: xForHour(clock), top: 0, bottom: 0, width: 2, background: '#e0736a', zIndex: 24, pointerEvents: 'none' }}>
+              <div style={nowBadge} data-jourj="now-badge">{formatHour(clock)} · maintenant</div>
+            </div>
+          )}
+
           {/* where you are in the day */}
           {cursorHour !== null && !drag && (
             <div style={{ position: 'absolute', left: xForHour(cursorHour), top: 0, bottom: 0, width: 1, background: 'rgba(246,245,243,0.35)', pointerEvents: 'none' }}>
@@ -459,6 +525,13 @@ export function TimelineStudio() {
           )}
         </div>
       </div>
+      )}
+
+      {/* ---- MODE JOUR J: what is happening, and what comes next ---- */}
+      {nowMode && (
+        <div style={nowPanel} data-jourj="now-panel">
+          <NowState phases={phases} clock={clock} weddingDate={project.weddingDate} />
+        </div>
       )}
 
       {/* ---- the empty day: beautiful, and honest about being empty ---- */}
@@ -526,6 +599,68 @@ export function TimelineStudio() {
         <MomentHub phaseId={openPhaseId} onClose={() => setOpenPhaseId(null)} />
       )}
     </section>
+  );
+}
+
+/**
+ * The companion of the day: what is happening now, and what comes next.
+ *
+ * It never pretends. If today is not the wedding day, it says so and shows the
+ * same reading of the day at the current time — because that is exactly what
+ * the couple will see on the day itself.
+ */
+function NowState({ phases, clock, weddingDate }: {
+  phases: { id: string; name: string; startHour: number; endHour: number }[];
+  clock: number;
+  weddingDate: string;
+}) {
+  const isToday = (() => {
+    if (!weddingDate) return false;
+    const d = new Date(weddingDate);
+    const t = new Date();
+    return d.getFullYear() === t.getFullYear() && d.getMonth() === t.getMonth() && d.getDate() === t.getDate();
+  })();
+
+  const current = phases.find((p) => clock >= p.startHour && clock < p.endHour) ?? null;
+  const next = phases.filter((p) => p.startHour > clock).sort((a, b) => a.startHour - b.startHour).slice(0, 3);
+  const inWords = (h: number) => {
+    const minutes = Math.round((h - clock) * 60);
+    if (minutes < 60) return `dans ${minutes} min`;
+    const hrs = Math.floor(minutes / 60);
+    const rem = minutes % 60;
+    return rem === 0 ? `dans ${hrs} h` : `dans ${hrs} h ${String(rem).padStart(2, '0')}`;
+  };
+
+  return (
+    <>
+      <div style={{ ...eyebrow, marginBottom: 12 }}>
+        {isToday ? `${PRODUCT_NAME} · aujourd’hui` : 'Mode Jour J · nous ne sommes pas encore le jour J'}
+      </div>
+      <div style={nowClock}>{formatHour(clock)}</div>
+      {current ? (
+        <div style={{ marginTop: 10 }}>
+          <div style={nowCurrent}>{current.name}</div>
+          <div style={{ ...eyebrow, marginTop: 6 }}>maintenant</div>
+        </div>
+      ) : (
+        <div style={{ marginTop: 10, color: 'var(--jourj-dim)', fontSize: typography.editorial.caption }}>
+          {phases.length === 0
+            ? 'Aucun moment n’est encore posé sur cette journée.'
+            : 'Aucun moment ne couvre cette heure-ci.'}
+        </div>
+      )}
+      {next.length > 0 && (
+        <ul style={{ listStyle: 'none', margin: '18px 0 0', padding: 0, display: 'grid', gap: 10 }}>
+          {next.map((p) => (
+            <li key={p.id} style={{ display: 'flex', gap: 12, alignItems: 'baseline' }}>
+              <span style={{ fontFamily: typography.family.mono, fontSize: 13, color: '#f6f5f3' }}>{formatHour(p.startHour)}</span>
+              <span style={{ fontSize: typography.editorial.caption, color: '#f6f5f3' }}>{p.name}</span>
+              <span style={{ fontSize: typography.editorial.micro, color: 'var(--jourj-dim)' }}>{inWords(p.startHour)}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </>
   );
 }
 
@@ -667,6 +802,26 @@ const templateChip: React.CSSProperties = {
   border: '1px solid var(--jourj-line)', borderRadius: 999,
   padding: '9px 16px', fontSize: typography.editorial.caption,
   fontFamily: typography.family.sans,
+};
+
+const nowBadge: React.CSSProperties = {
+  position: 'absolute', top: 12, left: 8, whiteSpace: 'nowrap',
+  background: '#e0736a', color: '#08090b', borderRadius: 999,
+  padding: '4px 10px', fontFamily: typography.family.mono, fontSize: 11, fontWeight: 700,
+};
+
+const nowPanel: React.CSSProperties = {
+  padding: 'clamp(22px, 4vw, 40px) clamp(18px, 5vw, 64px)',
+  borderBottom: '1px solid rgba(246,245,243,0.12)',
+};
+
+const nowClock: React.CSSProperties = {
+  fontFamily: typography.family.mono, fontSize: 'clamp(34px, 6vw, 68px)',
+  fontWeight: 700, letterSpacing: '-0.03em', lineHeight: 1, color: '#f6f5f3',
+};
+
+const nowCurrent: React.CSSProperties = {
+  fontSize: 'clamp(18px, 2.6vw, 30px)', fontWeight: 600, letterSpacing: '-0.02em', color: '#f6f5f3',
 };
 
 const rippleBar: React.CSSProperties = {

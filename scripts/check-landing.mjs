@@ -52,7 +52,9 @@ try {
     const { document: doc } = await render(LANDING_ENTRY, { width: 1440 });
     const text = doc.body.textContent.replace(/\s+/g, ' ');
 
-    r.check(/devient un monde/.test(text), 'the landing hero is shown');
+    // PRODUCT DECISION (Le Grand Jour pass): the page is named, and shows the
+    // film instead of describing three surfaces.
+    r.check(/LE GRAND JOUR/.test(text), 'the landing hero is shown, under the product name');
     r.check(doc.querySelectorAll('h1').length === 1, 'with a single h1');
 
     // No project data whatsoever — the demo must not be used as a fallback.
@@ -66,18 +68,24 @@ try {
       .filter((b) => /Clara & Alexandre/.test(b.textContent));
     r.check(list.length <= 1, 'existing weddings are offered as a list, once', String(list.length));
 
-    // The three surfaces are explained without jargon.
-    for (const word of ['World', 'Mirror', 'Canvas']) {
-      r.check(text.includes(word), `the landing explains ${word}`);
-    }
+    // PRODUCT DECISION (Le Grand Jour pass): the landing used to explain
+    // World / Mirror / Canvas in three long sections. It now SHOWS the
+    // timeline instead — the same guarantee (a visitor understands the
+    // product) obtained by demonstration rather than by copy.
+    r.check(!/World|Mirror|Canvas/.test(text),
+      'the landing no longer explains three surfaces');
+    r.check(/Une journée. Un seul fil/.test(text) || /pellicule/.test(text),
+      'it shows the film of the day instead');
+    r.check(/Démonstration/i.test(text),
+      'and the demonstration says that it is one');
     const jargon = ['store', 'localStorage', 'projection pure', 'World Model', 'MediaAsset']
       .filter((w) => text.includes(w));
     r.check(jargon.length === 0, 'and uses no technical vocabulary', jargon.join(', '));
 
     // One CTA, several places, one handler.
     const ctas = [...doc.querySelectorAll('button')]
-      .filter((b) => /Créer mon mariage/.test(b.textContent));
-    r.check(ctas.length >= 3, `the CTA appears in nav, hero and closing (${ctas.length})`);
+      .filter((b) => /Créer mon mariage|Entrer dans le grand jour/.test(b.textContent));
+    r.check(ctas.length >= 3, `the way in appears in the nav, the hero and the closing (${ctas.length})`);
     const landingSrc = readFileSync(path.join(SRC, 'components', 'mirror', 'MirrorLanding.tsx'), 'utf8');
     r.check((landingSrc.match(/onClick=\{create\}/g) || []).length >= 3,
       'and they all call the same single handler');
@@ -228,20 +236,23 @@ try {
   console.log('\n[4/4] Landing at 390px: nothing is cut off');
   // ---------------------------------------------------------------------------
   {
-    const css = readFileSync(path.join(SRC, 'components', 'mirror', 'mirror.css'), 'utf8');
+    // LOCATOR ADAPTED (Le Grand Jour pass): the phone problem the old checks
+    // guarded — brand + links + CTA fighting for one line — no longer exists,
+    // because the navigation is now the wordmark and one button. What still
+    // must hold: nothing is inline-sized, every size is fluid or in the
+    // stylesheet, and every way in survives at 390px.
+    const css = readFileSync(path.join(SRC, 'components', 'mirror', 'landing.css'), 'utf8');
     const landing = readFileSync(path.join(SRC, 'components', 'mirror', 'MirrorLanding.tsx'), 'utf8');
-    // MEASURED at 390px: brand + links + CTA did not fit and the CTA was cut.
-    r.check(/\.wc-landing-links \{\s*display: flex;/.test(css)
-      && !/display: 'flex', gap: fluid\(12, 28\)/.test(landing),
-      'the nav links declare display in CSS, so the phone rule can win');
-    r.check(/@media \(max-width: 680px\)[\s\S]{0,400}\.wc-landing-links \{\s*display: none;/.test(css),
-      'they step aside on a phone');
-    r.check(/\.wc-landing-brand-suffix \{\s*display: none;/.test(css),
-      'and the brand shortens so the CTA always fits');
+    r.check(/\.wc-gj-nav \{/.test(css) && /clamp\(/.test(css),
+      'the public page sizes itself in the stylesheet, fluidly');
+    r.check(!/@media/.test(landing), 'and no media query is hidden inline in the component');
+    r.check(/@media \(max-width: 900px\)|@media \(max-width: 560px\)/.test(css),
+      'the grid reflows on smaller screens');
 
     const { document: doc } = await render(LANDING_ENTRY, { width: 390 });
-    const ctas = [...doc.querySelectorAll('button')].filter((b) => /Créer mon mariage/.test(b.textContent));
-    r.check(ctas.length >= 3, 'every CTA is still rendered on a phone', String(ctas.length));
+    const ctas = [...doc.querySelectorAll('button')]
+      .filter((b) => /Créer mon mariage|Entrer dans le grand jour/.test(b.textContent));
+    r.check(ctas.length >= 3, 'every way in is still rendered on a phone', String(ctas.length));
   }
 } finally {
   for (const v of views) v.cleanup();

@@ -2219,6 +2219,24 @@ class WeddingStore {
     return task;
   }
 
+  /**
+   * The real length of a track, as written on the sleeve ("3:45").
+   *
+   * It matters temporally: the hub compares the music asked for to the length
+   * of the moment, and offers to lengthen the moment when the two disagree.
+   */
+  public setTrackDuration(trackId: string, duration: string): boolean {
+    const track = this.tracks.find((t) => t.id === trackId);
+    if (!track) return false;
+    const clean = duration.trim();
+    if (clean && !/^\d{1,2}:[0-5]\d$/.test(clean)) return false;
+    this.beginMutation('Durée du morceau');
+    track.duration = clean;
+    this.saveCurrentState();
+    this.notify();
+    return true;
+  }
+
   public toggleTaskDone(taskId: string): boolean {
     const task = this.tasks.find((t) => t.id === taskId);
     if (!task) return false;
@@ -2336,6 +2354,40 @@ class WeddingStore {
     const media = this.media.filter((m) => m.ownerKind === 'event' && m.ownerId === phase.id);
     const place = this.places.find((p) => p.id === phase.primaryPlaceId) ?? null;
     return { phase, persons, vendors, tracks, tasks, media, place };
+  }
+
+  /**
+   * What a re-ordering WOULD do, without doing it.
+   *
+   * The Canvas asks before it moves: the user sees « Dîner 19:30 → 20:00 » for
+   * every consequence, and validates. Pure read — same arithmetic as
+   * movePhaseToIndex, no mutation, no save, no notify.
+   */
+  public previewMoveToIndex(phaseId: string, targetIndex: number): {
+    id: string; name: string; from: number; to: number;
+  }[] | null {
+    const ordered = [...this.phases].sort((a, b) => a.startHour - b.startHour);
+    const from = ordered.findIndex((p) => p.id === phaseId);
+    if (from < 0) return null;
+    const to = Math.max(0, Math.min(ordered.length - 1, Math.trunc(targetIndex)));
+    if (to === from) return null;
+
+    const reordered = [...ordered];
+    const [moved] = reordered.splice(from, 1);
+    reordered.splice(to, 0, moved);
+
+    const durations = new Map(ordered.map((p) => [p.id, p.endHour - p.startHour]));
+    let cursor = ordered[0].startHour;
+    const out: { id: string; name: string; from: number; to: number }[] = [];
+    for (const p of reordered) {
+      const duration = durations.get(p.id) ?? 0;
+      if (!this.canPlacePhase(cursor, duration)) return null;
+      if (Math.abs(cursor - p.startHour) > 1e-6) {
+        out.push({ id: p.id, name: p.name, from: p.startHour, to: cursor });
+      }
+      cursor += duration;
+    }
+    return out;
   }
 
   /** Attach a moment to a place. `null` detaches. */

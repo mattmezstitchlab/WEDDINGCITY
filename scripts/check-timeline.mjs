@@ -163,7 +163,6 @@ try {
   // -------------------------------------------------------------------------
   console.log('\n[4/5] Pictures belong to the product, facts belong to the document');
   // -------------------------------------------------------------------------
-  const imagery = await harness.load('../design/momentImagery', 'img1').catch(() => null);
   const raw = storage.getItem(`wedding_city_state_${projectId}`) || '';
   r.check(!/\/editorial\//.test(raw),
     'no moment illustration is ever written into the wedding’s data');
@@ -237,6 +236,85 @@ try {
   r.check(/@media \(max-width: 680px\)/.test(css) && /--jourj-strip-h/.test(css),
     'every responsive value of the studio lives in the stylesheet');
   r.check(!/@media/.test(studio), 'and none of it is inline in the component');
+
+  // -------------------------------------------------------------------------
+  console.log('\n[6/7] LE GRAND JOUR® — the public page shows the film');
+  // -------------------------------------------------------------------------
+  const landing = read('components', 'mirror', 'MirrorLanding.tsx');
+  const landingCss = read('components', 'mirror', 'landing.css');
+  const film = read('components', 'mirror', 'timeline', 'LandingFilm.tsx');
+  const imagery = read('design', 'momentImagery.ts');
+  const identity = read('design', 'productIdentity.ts');
+
+  r.check(/PRODUCT_NAME/.test(landing) && /LE GRAND JOUR/.test(identity),
+    'the product is named once, and the page imports that name');
+  r.check(/<LandingFilm/.test(landing), 'the public page renders the film itself');
+  r.check(landing.indexOf('<LandingFilm') - landing.indexOf('wc-gj-hero') > 0
+    && !/wc-gj-cols[\s\S]{0,400}<LandingFilm/.test(landing),
+    'and it comes immediately after the hero, before any explanation');
+  // Only the component name still contains "Mirror"; no COPY does.
+  const landingCopy = landing.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '')
+    .replace(/MirrorLanding/g, '');
+  r.check(!/\bWorld\b|\bMirror\b|\bCanvas\b/.test(landingCopy),
+    'the three-surfaces copy is gone from the page');
+  r.check(/Démonstration/.test(film), 'the demonstration says it is one');
+  r.check(!/weddingStore/.test(film) && !/localStorage/.test(film),
+    'and it cannot write into any wedding: it does not even import the store');
+
+  const demoBlock = imagery.slice(imagery.indexOf('export const DEMO_DAY'));
+  const forbidden = ['Clara', 'Alexandre', 'invité', 'Château', '€', 'Paul', 'Emilie'];
+  r.check(!forbidden.some((w) => demoBlock.includes(w)),
+    'the demonstration day carries no couple, no guest, no venue and no price');
+  r.check(/GRAND_JOUR_HERO/.test(imagery) && /grandjour-hero\.jpg/.test(imagery),
+    'the cover of the page is a declared product asset');
+  r.check(/data-landing="hero-wedding"/.test(landing) && /projects\.find\(\(p\) => !p\.isDemo/.test(landing),
+    'the countdown belongs to a real wedding of this browser, or to nobody');
+  r.check(/@media \(max-width: 900px\)/.test(landingCss) && !/@media/.test(landing),
+    'every responsive value of the page lives in the stylesheet');
+
+  // -------------------------------------------------------------------------
+  console.log('\n[7/7] Two gestures, on purpose — and the day’s companion');
+  // -------------------------------------------------------------------------
+  const canvas = read('components', 'canvas', 'CanvasCore.tsx');
+  r.check(/data-canvas="drag-ghost"/.test(canvas),
+    'in the editing Canvas, only the handle travels with the pointer');
+  r.check(!/opacity: isDragging \? 0\.55/.test(canvas)
+    && /borderColor: isDragging \? K\.textPrimary/.test(canvas),
+    'the dragged block stays exactly in place, outlined rather than displaced');
+  r.check(/proposeMove\(/.test(canvas) && /data-canvas="move-validation"/.test(canvas),
+    'a drop PROPOSES the move instead of applying it');
+  r.check(/Modifications détectées/.test(canvas) && /data-canvas="move-apply"/.test(canvas),
+    'with the consequences written out, and an explicit Appliquer');
+  r.check(/previewMoveToIndex/.test(canvas), 'the preview is computed by the store, not re-implemented');
+
+  // previewMoveToIndex is arithmetic, so it is executed, not just read.
+  const p1 = store.phases[0];
+  const preview = store.previewMoveToIndex(p1.id, 1);
+  r.check(Array.isArray(preview) && preview.length > 0,
+    'the preview lists what would change', JSON.stringify(preview?.slice(0, 2)));
+  const untouched = store.phases.map((x) => x.startHour).join(',');
+  store.previewMoveToIndex(p1.id, 1);
+  r.check(store.phases.map((x) => x.startHour).join(',') === untouched,
+    'and it changes absolutely nothing on its own');
+
+  const studioSrc = read('components', 'mirror', 'timeline', 'TimelineStudio.tsx');
+  r.check(/data-jourj="now-mode"/.test(studioSrc) && /maintenant/.test(studioSrc),
+    'MODE JOUR J exists, with a NOW marker on the real scale');
+  r.check(/nous ne sommes pas encore le jour J/.test(studioSrc),
+    'and it says plainly when today is not the wedding day');
+  r.check(/normalizeNightHour/.test(studioSrc),
+    'an hour typed after midnight is read as the night of the wedding');
+  r.check(store.setTrackDuration('nope', '3:45') === false, 'a track duration needs a real track');
+
+  const hubSrc = read('components', 'mirror', 'timeline', 'MomentHub.tsx');
+  r.check(/TrackArt/.test(hubSrc) && /hub-track-noaudio/.test(hubSrc),
+    'a track shows real artwork, and says why there is no Play control');
+  r.check(/hub-music-fit/.test(hubSrc),
+    'music that overflows its moment offers to lengthen the moment');
+  r.check(/avatarInitials/.test(hubSrc) && /portraitMediaId/.test(hubSrc),
+    'a person shows a real portrait, or initials — never an invented face');
+  r.check(/hub-person-links/.test(hubSrc),
+    'and opening a person shows where they are in the day');
 
   un();
 } finally {

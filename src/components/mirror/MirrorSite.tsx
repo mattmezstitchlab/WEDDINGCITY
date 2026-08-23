@@ -10,6 +10,7 @@ import { MirrorPeople } from './MirrorPeople';
 import { MirrorVendors, MirrorPlaces, MirrorMusic, MirrorGallery } from './MirrorSections';
 import { MirrorLanding } from './MirrorLanding';
 import { TimelineStudio } from './timeline/TimelineStudio';
+import { PRODUCT_NAME, PRODUCT_MARK } from '../../design/productIdentity';
 import './mirror.css';
 
 // ---------------------------------------------------------------------------
@@ -72,7 +73,10 @@ function ProductNav() {
   };
   return (
     <nav style={productNavStyle} aria-label="Navigation">
-      <span style={{ fontWeight: 700, letterSpacing: '0.14em', fontSize: 12 }}>MIRROR</span>
+      <span style={{ fontWeight: 700, letterSpacing: '0.22em', fontSize: 12 }}>
+        {PRODUCT_NAME}
+        <span style={{ fontSize: '0.6em', verticalAlign: 'super', marginLeft: 2 }}>{PRODUCT_MARK}</span>
+      </span>
       <span style={{ flex: 1 }} />
       <button onClick={() => go('jour-j')} style={productNavBtn} data-jourj="nav-jourj">Jour J</button>
       <button onClick={() => store.returnToLanding()} style={productNavBtn} data-jourj="nav-weddings">Mes mariages</button>

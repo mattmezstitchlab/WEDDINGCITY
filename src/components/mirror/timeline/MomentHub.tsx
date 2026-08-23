@@ -3,7 +3,8 @@ import { weddingStore } from '../../../game/weddingStore';
 import { typography } from '../../../design/tokens';
 import { momentImage } from '../../../design/momentImagery';
 import { extractDocumentFacts, suggestMoments, describeFacts, type MomentCandidate } from '../../../game/documentIntelligence';
-import { formatHour } from './TimelineStudio';
+import { formatHour, formatHourWithDay, normalizeNightHour } from './TimelineStudio';
+import { TrackArt } from '../TrackArt';
 
 // ---------------------------------------------------------------------------
 // THE MOMENT IS A HUB.
@@ -48,7 +49,7 @@ export function MomentHub({ phaseId, onClose }: { phaseId: string; onClose: () =
         <button onClick={onClose} style={closeBtn} aria-label="Fermer le moment" data-jourj="hub-close">Fermer</button>
         <div style={coverText}>
           <div style={{ fontFamily: typography.family.mono, fontSize: 14, letterSpacing: '0.06em' }}>
-            {formatHour(phase.startHour)} → {formatHour(phase.endHour)}
+            {formatHourWithDay(phase.startHour)} → {formatHourWithDay(phase.endHour)}
           </div>
           <div style={{ fontSize: 26, fontWeight: 600, letterSpacing: '-0.02em', marginTop: 4, overflowWrap: 'anywhere' }}>
             {phase.name}
@@ -67,7 +68,7 @@ export function MomentHub({ phaseId, onClose }: { phaseId: string; onClose: () =
           <ClockField
             label="Début"
             value={formatHour(phase.startHour)}
-            onCommit={(h) => store.setPhaseTime(phase.id, h)}
+            onCommit={(h) => store.setPhaseTime(phase.id, normalizeNightHour(h, store.phases))}
             testId="hub-start"
           />
           <NumberField
@@ -98,8 +99,8 @@ export function MomentHub({ phaseId, onClose }: { phaseId: string; onClose: () =
 
       {/* ---- who ---- */}
       <Dimension title="Personnes" hint={persons.length === 0 ? 'Personne n’est encore attendu à ce moment.' : undefined}>
-        <Chips
-          items={persons.map((p) => ({ id: p!.id, label: p!.displayName }))}
+        <PeopleRow
+          persons={persons as { id: string; displayName: string; portraitMediaId?: string }[]}
           onRemove={(id) => store.detachPersonFromPhase(phase.id, id)}
         />
         <AddExisting
@@ -122,8 +123,8 @@ export function MomentHub({ phaseId, onClose }: { phaseId: string; onClose: () =
 
       {/* ---- with whom ---- */}
       <Dimension title="Prestataires" hint={vendors.length === 0 ? 'Aucun prestataire sur ce moment.' : undefined}>
-        <Chips
-          items={vendors.map((v) => ({ id: v!.id, label: `${v!.companyName} · ${v!.category}` }))}
+        <VendorRow
+          vendors={vendors as { id: string; companyName: string; category: string }[]}
           onRemove={(id) => store.detachVendorFromPhase(phase.id, id)}
         />
         <AddExisting
@@ -144,22 +145,8 @@ export function MomentHub({ phaseId, onClose }: { phaseId: string; onClose: () =
         />
       </Dimension>
 
-      {/* ---- music ---- */}
-      <Dimension title="Musique" hint={tracks.length === 0 ? 'Aucun morceau lancé à ce moment.' : undefined}>
-        <Chips
-          items={tracks.map((t) => ({ id: t.id, label: `${t.title}${t.artist && t.artist !== '—' ? ' · ' + t.artist : ''}` }))}
-          onRemove={(id) => store.detachTrackFromPhase(phase.id, id)}
-        />
-        <AddNew
-          placeholder="Ajouter un morceau : titre — artiste"
-          onSubmit={(value) => {
-            const [title, artist] = value.split('—').map((s) => s.trim());
-            const track = store.createTrack({ title: title || value, artist: artist || '—', phaseId: phase.id });
-            if (track) store.attachTrackToPhase(phase.id, track.id);
-          }}
-          testId="hub-track-new"
-        />
-      </Dimension>
+      {/* ---- music: a temporal layer of the moment ---- */}
+      <MusicDimension phaseId={phase.id} />
 
       {/* ---- shots ---- */}
       <Dimension title="Photo / Vidéo" hint={(phase.shots ?? []).length === 0 ? 'Aucun plan demandé pour l’instant.' : undefined}>
@@ -279,6 +266,218 @@ export function MomentHub({ phaseId, onClose }: { phaseId: string; onClose: () =
           Supprimer ce moment
         </button>
       </div>
+    </div>
+  );
+}
+
+
+// ---------------------------------------------------------------------------
+// MUSIC — a track is a temporal object, not a line in a list.
+// ---------------------------------------------------------------------------
+// Real artwork when a real image is attached, a real Play control only when a
+// real audio file exists (see TrackArt), and a real duration: if the music
+// asked for exceeds the moment itself, the hub says so and offers to lengthen
+// the moment — which then proposes to carry the rest of the day.
+function MusicDimension({ phaseId }: { phaseId: string }) {
+  const store = weddingStore;
+  const hub = store.getPhaseHub(phaseId);
+  if (!hub) return null;
+  const { phase, tracks } = hub;
+
+  const seconds = (d?: string) => {
+    const m = /^(\d{1,2}):(\d{2})$/.exec((d ?? '').trim());
+    return m ? Number(m[1]) * 60 + Number(m[2]) : 0;
+  };
+  const totalSeconds = tracks.reduce((acc, t) => acc + seconds(t.duration), 0);
+  const momentSeconds = Math.round((phase.endHour - phase.startHour) * 3600);
+  const overflow = totalSeconds > momentSeconds && totalSeconds > 0;
+
+  const mediaFor = (songId: string, kind: 'image' | 'audio') =>
+    store.media.find((m) => m.ownerKind === 'song' && m.ownerId === songId && m.kind === kind)?.source ?? null;
+
+  return (
+    <Dimension title="Musique" hint={tracks.length === 0 ? 'Aucun morceau lancé à ce moment.' : undefined}>
+      <div style={{ display: 'grid', gap: 12, marginBottom: 12 }}>
+        {tracks.map((t) => (
+          <div key={t.id} style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+            <TrackArt
+              songId={t.id}
+              title={t.title}
+              artist={t.artist}
+              coverSource={mediaFor(t.id, 'image')}
+              audioSource={mediaFor(t.id, 'audio')}
+              size={56}
+            />
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: typography.editorial.caption, fontWeight: 600 }}>{t.title}</div>
+              <div style={muted}>{t.artist && t.artist !== '—' ? t.artist : 'Artiste non renseigné'}</div>
+              {/* No audio ⇒ no Play control, and the reason is written rather
+                  than left as a missing button. */}
+              {!mediaFor(t.id, 'audio') && (
+                <div style={{ ...muted, marginTop: 2 }} data-jourj="hub-track-noaudio">
+                  Aucun extrait audio : le bouton Écouter apparaîtra dès qu’un fichier sera importé.
+                </div>
+              )}
+            </div>
+            <div style={{ width: 78 }}>
+              <Inline
+                value={t.duration || ''}
+                placeholder="3:45"
+                onCommit={(v) => store.setTrackDuration(t.id, v)}
+                testId="hub-track-duration"
+              />
+            </div>
+            <button onClick={() => store.detachTrackFromPhase(phase.id, t.id)} style={linkBtn}>retirer</button>
+          </div>
+        ))}
+      </div>
+
+      {overflow && (
+        <div style={analysisBox} data-jourj="hub-music-overflow">
+          La bande-son de ce moment dure {Math.round(totalSeconds / 60)} minutes,
+          le moment en dure {Math.round(momentSeconds / 60)}.
+          <button
+            onClick={() => store.setPhaseDuration(phase.id, totalSeconds / 3600)}
+            style={{ ...smallBtn, marginTop: 10 }}
+            data-jourj="hub-music-fit"
+          >
+            Allonger le moment à {Math.round(totalSeconds / 60)} min
+          </button>
+        </div>
+      )}
+
+      <AddNew
+        placeholder="Ajouter un morceau : titre — artiste"
+        onSubmit={(value) => {
+          const [title, artist] = value.split('—').map((x) => x.trim());
+          const track = store.createTrack({ title: title || value, artist: artist || '—', phaseId: phase.id });
+          if (track) store.attachTrackToPhase(phase.id, track.id);
+        }}
+        testId="hub-track-new"
+      />
+    </Dimension>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// PEOPLE — a face when there is a face, initials when there is not.
+// ---------------------------------------------------------------------------
+// A person is never an isolated card: opening one shows where they are in the
+// day, who they work with and what is attached to them — all read from the
+// same store, nothing invented.
+function PeopleRow({ persons, onRemove }: {
+  persons: { id: string; displayName: string; portraitMediaId?: string }[];
+  onRemove: (id: string) => void;
+}) {
+  const store = weddingStore;
+  const [open, setOpen] = useState<string | null>(null);
+  if (persons.length === 0) return null;
+
+  const portrait = (p: { portraitMediaId?: string }) =>
+    p.portraitMediaId ? store.media.find((m) => m.id === p.portraitMediaId)?.source ?? null : null;
+  const initials = (name: string) => name.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]).join('').toUpperCase();
+
+  const openPerson = open ? persons.find((p) => p.id === open) : null;
+  const connections = openPerson ? {
+    moments: store.phases.filter((ph) => (ph.personIds ?? []).includes(openPerson.id)),
+    guest: store.guests.find((g) => g.personId === openPerson.id) ?? null,
+    media: store.media.filter((m) => m.ownerKind === 'person' && m.ownerId === openPerson.id),
+    relationships: store.relationships.filter((r) => r.fromPersonId === openPerson.id || r.toPersonId === openPerson.id),
+  } : null;
+
+  return (
+    <>
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
+        {persons.map((p) => {
+          const src = portrait(p);
+          return (
+            <button
+              key={p.id}
+              onClick={() => setOpen(open === p.id ? null : p.id)}
+              style={personChip}
+              data-jourj="hub-person-chip"
+              title={`Voir les liens de ${p.displayName}`}
+            >
+              {src
+                ? <img src={src} alt="" width={28} height={28} style={avatarImg} />
+                : <span style={avatarInitials} aria-hidden>{initials(p.displayName)}</span>}
+              <span>{p.displayName}</span>
+              <span
+                role="button"
+                tabIndex={0}
+                onClick={(e) => { e.stopPropagation(); onRemove(p.id); }}
+                onKeyDown={(e) => { if (e.key === 'Enter') { e.stopPropagation(); onRemove(p.id); } }}
+                style={chipX}
+                aria-label={`Retirer ${p.displayName}`}
+              >
+                ×
+              </span>
+            </button>
+          );
+        })}
+      </div>
+
+      {openPerson && connections && (
+        <div style={analysisBox} data-jourj="hub-person-links">
+          <div style={{ fontWeight: 600 }}>{openPerson.displayName}</div>
+          <div style={{ ...muted, marginTop: 8 }}>
+            {connections.moments.length > 0
+              ? `Présent·e à ${connections.moments.length} moment${connections.moments.length > 1 ? 's' : ''} : `
+                + connections.moments.map((m) => `${formatHour(m.startHour)} ${m.name}`).join(' · ')
+              : 'Rattaché·e à aucun autre moment pour l’instant.'}
+          </div>
+          <div style={{ ...muted, marginTop: 6 }}>
+            {connections.guest?.seating?.tableId
+              ? `Table : ${store.seatingTables.find((t) => t.id === connections.guest!.seating.tableId)?.label ?? '—'}`
+              : 'Aucune table attribuée.'}
+          </div>
+          <div style={{ ...muted, marginTop: 6 }}>
+            {connections.media.length > 0
+              ? `${connections.media.length} média rattaché${connections.media.length > 1 ? 's' : ''}.`
+              : 'Aucune photo rattachée à cette personne.'}
+          </div>
+          <div style={{ ...muted, marginTop: 6 }}>
+            {connections.relationships.length > 0
+              ? `${connections.relationships.length} relation${connections.relationships.length > 1 ? 's' : ''} déclarée${connections.relationships.length > 1 ? 's' : ''}.`
+              : 'Aucune relation déclarée.'}
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
+/** A vendor shows the moments they really cover, so they are never a card. */
+function VendorRow({ vendors, onRemove }: {
+  vendors: { id: string; companyName: string; category: string }[];
+  onRemove: (id: string) => void;
+}) {
+  const store = weddingStore;
+  if (vendors.length === 0) return null;
+  return (
+    <div style={{ display: 'grid', gap: 10, marginBottom: 12 }}>
+      {vendors.map((v) => {
+        const covers = store.phases
+          .filter((p) => (p.vendorIds ?? []).includes(v.id))
+          .sort((a, b) => a.startHour - b.startHour);
+        return (
+          <div key={v.id} style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+            <span style={avatarInitials} aria-hidden>{v.companyName.slice(0, 2).toUpperCase()}</span>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: typography.editorial.caption, fontWeight: 600 }}>
+                {v.companyName} <span style={{ ...muted, fontWeight: 400 }}>· {v.category}</span>
+              </div>
+              <div style={muted}>
+                {covers.length > 0
+                  ? `${formatHour(covers[0].startHour)} — ${formatHour(covers[covers.length - 1].endHour)} · `
+                    + covers.map((c) => c.name).join(', ')
+                  : 'Aucun moment couvert.'}
+              </div>
+            </div>
+            <button onClick={() => onRemove(v.id)} style={linkBtn}>retirer</button>
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -598,6 +797,26 @@ const list: React.CSSProperties = { listStyle: 'none', margin: '0 0 10px', paddi
 const listItem: React.CSSProperties = {
   display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center',
   fontSize: typography.editorial.caption, color: '#f6f5f3',
+};
+
+const personChip: React.CSSProperties = {
+  display: 'inline-flex', alignItems: 'center', gap: 8,
+  border: '1px solid rgba(246,245,243,0.2)', borderRadius: 999,
+  padding: '4px 8px 4px 4px', fontSize: typography.editorial.micro,
+  color: '#f6f5f3', background: 'transparent', cursor: 'pointer',
+  fontFamily: typography.family.sans,
+};
+
+const avatarImg: React.CSSProperties = {
+  width: 28, height: 28, borderRadius: '50%', objectFit: 'cover', display: 'block',
+};
+
+/** No photograph is invented: initials, drawn as a real object. */
+const avatarInitials: React.CSSProperties = {
+  width: 28, height: 28, borderRadius: '50%', flex: 'none',
+  display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+  background: 'rgba(246,245,243,0.12)', color: '#f6f5f3',
+  fontSize: 10, fontWeight: 700, letterSpacing: '0.04em',
 };
 
 const chip: React.CSSProperties = {
