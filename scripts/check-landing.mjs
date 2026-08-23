@@ -191,8 +191,12 @@ try {
 
     r.check(/if \(!store\.projectChosen\) return <MirrorLanding \/>;/.test(site),
       'the Mirror switches state on projectChosen, not on data');
-    r.check(/\{weddingStore\.projectChosen && <ProjectionSwitcher \/>\}/.test(app),
-      'the projection capsule is hidden until a wedding is open');
+    // PRODUCT DECISION (Jour J pass): the capsule used to be hidden on the
+    // landing so the World was never offered before a wedding existed. The
+    // World is now never offered at all — the capsule was removed from the
+    // product surface entirely, which is a strictly stronger guarantee.
+    r.check(!/<ProjectionSwitcher \/>/.test(app),
+      'no projection capsule is rendered: the World is not a destination');
     r.check(/!weddingStore\.projectChosen\) weddingStore\.startWeddingCreation\(\)/.test(app),
       'and the Canvas shortcut asks for a wedding instead of opening the demo');
 
@@ -214,8 +218,10 @@ try {
       'the state comes from storage, not from a guess');
     r.check((store.match(/this\.markProjectChosen\(\);/g) || []).length >= 3,
       'creating a wedding, generating a world and opening a project all set it');
-    r.check(/if \(!this\.projectChosen\) this\.projection = 'mirror'/.test(store),
-      'and a first-time visitor boots on the Mirror');
+    // Same decision: the boot no longer chooses between two surfaces, it
+    // always opens the Mirror — the public site, then the Jour J timeline.
+    r.check(/this\.projectChosen = hasChosenProject\(\);[\s\S]{0,220}this\.projection = 'mirror';/.test(store),
+      'and every visitor boots on the Mirror');
   }
 
   // ---------------------------------------------------------------------------

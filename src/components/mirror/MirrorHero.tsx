@@ -65,7 +65,10 @@ export function MirrorHero({ hero }: { hero: HeroProjection }) {
         </div>
 
         {/* The names set as a monumental two-line lockup. */}
-        <h1 className="wc-hero-title" style={heroTitleStyle}>
+        {/* One page, one h1. Since the Jour J timeline opens the product and
+            already carries the couple's names, the story cover is the second
+            level — measured in the render harness, which found two h1. */}
+        <h2 className="wc-hero-title" style={heroTitleStyle}>
           {names.length > 1 ? (
             <>
               <span style={{ display: 'block' }}>{names[0]}</span>
@@ -75,7 +78,7 @@ export function MirrorHero({ hero }: { hero: HeroProjection }) {
           ) : (
             names[0]
           )}
-        </h1>
+        </h2>
 
         <div style={metaRowStyle}>
           {hero.formattedDate && <span style={metaItemStyle}>{hero.formattedDate}</span>}

@@ -9,6 +9,7 @@ import { MirrorTimeline } from './MirrorTimeline';
 import { MirrorPeople } from './MirrorPeople';
 import { MirrorVendors, MirrorPlaces, MirrorMusic, MirrorGallery } from './MirrorSections';
 import { MirrorLanding } from './MirrorLanding';
+import { TimelineStudio } from './timeline/TimelineStudio';
 import './mirror.css';
 
 // ---------------------------------------------------------------------------
@@ -36,10 +37,51 @@ export function MirrorSite() {
   // demo (see MirrorLanding).
   if (!store.projectChosen) return <MirrorLanding />;
 
-  return <MirrorProjection />;
+  // ---------------------------------------------------------------------
+  // THE PRODUCT IS THE DAY.
+  //
+  // Until this pass the Mirror opened on a magazine cover and the day was a
+  // section inside it — and, before that, the way in was the 3D World. Both
+  // are the wrong priority: what a couple builds, day after day, is the
+  // timeline of the Jour J. So the Jour J now owns the first screen, and the
+  // editorial story stays right below it, in the same scroll: it is the same
+  // data seen as a site, not another destination.
+  // ---------------------------------------------------------------------
+  return (
+    <div id="wc-mirror" style={productPageStyle} className="wc-jourj">
+      <ProductNav />
+      <TimelineStudio />
+      <div style={storyDividerStyle}>
+        <span>Le récit</span>
+        <span style={{ opacity: 0.62 }}>ce que vos invités verront de cette journée</span>
+      </div>
+      <MirrorProjection embedded />
+    </div>
+  );
 }
 
-function MirrorProjection() {
+/**
+ * The whole navigation of the product: where I am, my weddings, a new one.
+ * Three words. No sidebar, no menu, no 3D entrance.
+ */
+function ProductNav() {
+  const store = weddingStore;
+  const go = (id: string) => {
+    const el = document.getElementById(id);
+    el?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+  return (
+    <nav style={productNavStyle} aria-label="Navigation">
+      <span style={{ fontWeight: 700, letterSpacing: '0.14em', fontSize: 12 }}>MIRROR</span>
+      <span style={{ flex: 1 }} />
+      <button onClick={() => go('jour-j')} style={productNavBtn} data-jourj="nav-jourj">Jour J</button>
+      <button onClick={() => store.returnToLanding()} style={productNavBtn} data-jourj="nav-weddings">Mes mariages</button>
+      <button onClick={() => store.startWeddingCreation()} style={productNavCta} data-jourj="nav-create">Créer</button>
+    </nav>
+  );
+}
+
+function MirrorProjection({ embedded }: { embedded?: boolean }) {
   const store = weddingStore;
   const model = useMemo(() => projectWorldModel(), [store.version]);
   const { hero, programme, guests, vendors, places, music, gallery, availability } = model;
@@ -88,7 +130,7 @@ function MirrorProjection() {
   );
 
   return (
-    <div id="wc-mirror" style={pageStyle}>
+    <div id={embedded ? 'wc-mirror-story' : 'wc-mirror'} style={embedded ? storyPageStyle : pageStyle}>
       {/* Keyboard users land here first: one key to reach the content. */}
       <a className="wc-skip" href="#mirror-programme">Aller au programme</a>
 
@@ -245,13 +287,6 @@ function MirrorProjection() {
               <span style={{ color: M.textMuted }}>
                 Projection éditoriale du monde · données en direct
               </span>
-              <button
-                className="wc-action"
-                onClick={() => store.setProjection('world')}
-                style={{ ...editBtnStyle, textTransform: 'none' }}
-              >
-                Explorer le Monde 3D
-              </button>
               {/* The site is a wedding's site, but the product has several
                   weddings. Without this link the public landing — and the
                   list of every wedding in this browser — was unreachable
@@ -274,6 +309,51 @@ function MirrorProjection() {
 const otherMediaStyle: React.CSSProperties = {
   margin: `${fluid(18, 26)} 0 0`, maxWidth: 520,
   fontSize: typography.editorial.caption, color: M.textMuted, lineHeight: 1.6,
+};
+
+const productPageStyle: React.CSSProperties = {
+  position: 'fixed', inset: 0, zIndex: 800, overflowY: 'auto',
+  background: '#08090b', color: '#f6f5f3',
+  fontFamily: typography.family.sans,
+  WebkitFontSmoothing: 'antialiased',
+};
+
+/** Embedded in the product page: the story scrolls with the day, it is not a
+    second fixed surface stacked on top of the first. */
+const storyPageStyle: React.CSSProperties = {
+  position: 'relative', background: M.bg, color: M.textPrimary,
+  fontFamily: typography.family.sans,
+  WebkitFontSmoothing: 'antialiased',
+};
+
+const productNavStyle: React.CSSProperties = {
+  position: 'sticky', top: 0, zIndex: 900,
+  display: 'flex', alignItems: 'center', gap: 8,
+  padding: '14px clamp(18px, 5vw, 64px)',
+  background: '#08090b', borderBottom: '1px solid rgba(246,245,243,0.12)',
+  color: '#f6f5f3',
+};
+
+const productNavBtn: React.CSSProperties = {
+  appearance: 'none', background: 'transparent', border: 'none', cursor: 'pointer',
+  color: 'rgba(246,245,243,0.78)', fontSize: typography.editorial.caption,
+  fontFamily: typography.family.sans, padding: '8px 10px',
+};
+
+const productNavCta: React.CSSProperties = {
+  appearance: 'none', border: 'none', cursor: 'pointer',
+  background: '#f6f5f3', color: '#08090b', borderRadius: 999,
+  padding: '8px 16px', fontSize: typography.editorial.caption,
+  fontWeight: typography.weight.semibold, fontFamily: typography.family.sans,
+};
+
+const storyDividerStyle: React.CSSProperties = {
+  display: 'flex', gap: 14, flexWrap: 'wrap', alignItems: 'baseline',
+  padding: 'clamp(30px, 6vw, 64px) clamp(18px, 5vw, 64px)',
+  background: '#08090b', color: '#f6f5f3',
+  fontSize: typography.editorial.caption,
+  letterSpacing: '0.16em', textTransform: 'uppercase',
+  borderTop: '1px solid rgba(246,245,243,0.12)',
 };
 
 const pageStyle: React.CSSProperties = {

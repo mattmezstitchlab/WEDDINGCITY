@@ -1542,6 +1542,16 @@ function createDefaultDomainState(): PersistedDomainState {
  * empty states across World, Mirror and Canvas already explain what is missing
  * and how to add it, so an empty project is legible rather than broken.
  */
+/** The light at that hour of the day. Derived, never asked. */
+function atmosphereForHour(hour: number): TimelinePhase['bgAtmosphere'] {
+  const h = ((hour % 24) + 24) % 24;
+  if (h < 12) return 'morning';
+  if (h < 17) return 'afternoon';
+  if (h < 19.5) return 'golden';
+  if (h < 21.5) return 'dusk';
+  return 'night';
+}
+
 function createEmptyDomainState(): PersistedDomainState {
   return clone({
     time: 15.0,
@@ -1748,9 +1758,9 @@ class WeddingStore {
     try {
       this.activeAccount = getActiveAccount();
       this.projectChosen = hasChosenProject();
-      // A visitor who has never opened a wedding arrives on the editorial
-      // surface, not in somebody else's 3D venue.
-      if (!this.projectChosen) this.projection = 'mirror';
+      // The product opens on the Mirror, always: the public site when no
+      // wedding has been chosen, the Jour J timeline when one has.
+      this.projection = 'mirror';
       const activeProjId = getActiveProjectId();
       const projects = getStoredProjects();
       const proj = projects.find((p) => p.id === activeProjId) || projects[0];
@@ -1979,6 +1989,353 @@ class WeddingStore {
     this.saveCurrentState();
     this.notify();
     return true;
+  }
+
+  // =========================================================================
+  // THE MOMENT IS THE PRODUCT
+  //
+  // A wedding is built one moment at a time, from an empty day. Everything
+  // below writes to the SAME phases array the World and the Mirror already
+  // read, so a moment created here exists everywhere at once. Nothing is ever
+  // pre-filled: a new moment carries only what the couple typed.
+  // =========================================================================
+
+  /**
+   * Create a moment on the day.
+   *
+   * `startHour` and `durationHours` are real numbers of hours (14.5 = 14:30).
+   * The moment is placed exactly where it is asked to be; it is NOT chained
+   * after the previous one, because two moments can legitimately overlap
+   * (the photographer shoots while the room is being set up).
+   */
+  public createPhase(input: {
+    name: string;
+    startHour: number;
+    durationHours?: number;
+    subtitle?: string;
+    placeId?: string | null;
+  }): TimelinePhase | null {
+    const name = input.name?.trim();
+    if (!name) return null;
+    const duration = input.durationHours && input.durationHours > 0 ? input.durationHours : 1;
+    if (!this.canPlacePhase(input.startHour, duration)) return null;
+
+    this.beginMutation('Ajouter un moment');
+    const phase: TimelinePhase = {
+      id: freshId('phase'),
+      startHour: input.startHour,
+      endHour: input.startHour + duration,
+      name,
+      subtitle: input.subtitle?.trim() || '',
+      icon: 'moment',
+      primaryPlaceId: input.placeId && this.places.some((p) => p.id === input.placeId) ? input.placeId : '',
+      highlightAction: '',
+      bgAtmosphere: atmosphereForHour(input.startHour),
+      keyAgentIds: [],
+      keyDocIds: [],
+      keyTaskIds: [],
+      ambientTrack: 'prep',
+    };
+    this.phases.push(phase);
+    this.phases.sort((a, b) => a.startHour - b.startHour);
+    this.saveCurrentState();
+    this.notify();
+    return phase;
+  }
+
+  /** Remove a moment. What was attached to it survives; only the link goes. */
+  public deletePhase(phaseId: string): boolean {
+    const idx = this.phases.findIndex((p) => p.id === phaseId);
+    if (idx < 0) return false;
+    this.beginMutation('Supprimer le moment');
+    this.phases.splice(idx, 1);
+    for (const t of this.tracks) if (t.linkedPhaseId === phaseId) t.linkedPhaseId = undefined;
+    for (const t of this.tasks) if (t.phaseId === phaseId) t.phaseId = undefined;
+    this.saveCurrentState();
+    this.notify();
+    return true;
+  }
+
+  /**
+   * Move a moment in time AND carry everything that follows it.
+   *
+   * This is the chain the day really has: pushing the dinner back pushes the
+   * speeches, the cake and the first dance with it. The shift is computed from
+   * the moment's own displacement and applied to every LATER moment, in one
+   * undo step. Returns the ids that moved with it, so the interface can say
+   * exactly what happened instead of guessing.
+   */
+  public shiftPhaseAndFollowing(phaseId: string, newStartHour: number): { moved: string[] } | null {
+    const phase = this.phases.find((p) => p.id === phaseId);
+    if (!phase) return null;
+    const delta = newStartHour - phase.startHour;
+    if (!Number.isFinite(delta) || Math.abs(delta) < 1e-6) return null;
+
+    const followers = this.phases.filter((p) => p.id !== phaseId && p.startHour >= phase.startHour);
+    const plan = [phase, ...followers];
+    for (const p of plan) {
+      if (!this.canPlacePhase(p.startHour + delta, p.endHour - p.startHour)) return null;
+    }
+
+    this.beginMutation('Décaler le moment et la suite');
+    for (const p of plan) this.applyPhaseTime(p, p.startHour + delta, p.endHour - p.startHour);
+    this.phases.sort((a, b) => a.startHour - b.startHour);
+    this.saveCurrentState();
+    this.notify();
+    return { moved: followers.map((p) => p.id) };
+  }
+
+  /**
+   * Carry the moments that come AFTER one, by the same delta.
+   *
+   * Called when the couple accepts the proposal shown after a move ("décaler
+   * aussi les 3 moments suivants ?"). The consequence is never applied
+   * silently — the timeline asks first, this executes the answer.
+   */
+  public shiftPhasesAfter(phaseId: string, delta: number): { moved: string[] } | null {
+    const phase = this.phases.find((p) => p.id === phaseId);
+    if (!phase || !Number.isFinite(delta) || Math.abs(delta) < 1e-6) return null;
+    // "After" is judged on where the moved moment came FROM, so a moment
+    // dragged later still carries the ones that used to follow it.
+    const origin = phase.startHour - delta;
+    const followers = this.phases.filter((p) => p.id !== phaseId && p.startHour >= origin);
+    if (followers.length === 0) return null;
+    for (const p of followers) {
+      if (!this.canPlacePhase(p.startHour + delta, p.endHour - p.startHour)) return null;
+    }
+    this.beginMutation('Décaler la suite de la journée');
+    for (const p of followers) this.applyPhaseTime(p, p.startHour + delta, p.endHour - p.startHour);
+    this.phases.sort((a, b) => a.startHour - b.startHour);
+    this.saveCurrentState();
+    this.notify();
+    return { moved: followers.map((p) => p.id) };
+  }
+
+  /** Which moments a move would carry, without moving anything. */
+  public phasesAfter(phaseId: string): TimelinePhase[] {
+    const phase = this.phases.find((p) => p.id === phaseId);
+    if (!phase) return [];
+    return this.phases
+      .filter((p) => p.id !== phaseId && p.startHour >= phase.startHour)
+      .sort((a, b) => a.startHour - b.startHour);
+  }
+
+  /** Change only the length of a moment. */
+  public setPhaseDuration(phaseId: string, durationHours: number): boolean {
+    const phase = this.phases.find((p) => p.id === phaseId);
+    if (!phase) return false;
+    if (!this.canPlacePhase(phase.startHour, durationHours)) return false;
+    this.beginMutation('Durée du moment');
+    this.applyPhaseTime(phase, phase.startHour, durationHours);
+    this.saveCurrentState();
+    this.notify();
+    return true;
+  }
+
+  public setPhaseSubtitle(phaseId: string, subtitle: string): boolean {
+    const phase = this.phases.find((p) => p.id === phaseId);
+    if (!phase) return false;
+    this.beginMutation('Description du moment');
+    phase.subtitle = subtitle.trim();
+    this.saveCurrentState();
+    this.notify();
+    return true;
+  }
+
+  // --- the moment's dimensions --------------------------------------------
+
+  public attachPersonToPhase(phaseId: string, personId: string): boolean {
+    const phase = this.phases.find((p) => p.id === phaseId);
+    if (!phase || !this.persons.some((p) => p.id === personId)) return false;
+    const current = phase.personIds ?? [];
+    if (current.includes(personId)) return true;
+    this.beginMutation('Ajouter une personne au moment');
+    phase.personIds = [...current, personId];
+    this.saveCurrentState();
+    this.notify();
+    return true;
+  }
+
+  public detachPersonFromPhase(phaseId: string, personId: string): boolean {
+    const phase = this.phases.find((p) => p.id === phaseId);
+    if (!phase?.personIds?.includes(personId)) return false;
+    this.beginMutation('Retirer une personne du moment');
+    phase.personIds = phase.personIds.filter((id) => id !== personId);
+    this.saveCurrentState();
+    this.notify();
+    return true;
+  }
+
+  public attachTrackToPhase(phaseId: string, trackId: string): boolean {
+    const phase = this.phases.find((p) => p.id === phaseId);
+    const track = this.tracks.find((t) => t.id === trackId);
+    if (!phase || !track) return false;
+    const current = phase.trackIds ?? [];
+    this.beginMutation('Musique du moment');
+    if (!current.includes(trackId)) phase.trackIds = [...current, trackId];
+    // One truth: the track also knows which moment it belongs to.
+    track.linkedPhaseId = phaseId;
+    this.saveCurrentState();
+    this.notify();
+    return true;
+  }
+
+  public detachTrackFromPhase(phaseId: string, trackId: string): boolean {
+    const phase = this.phases.find((p) => p.id === phaseId);
+    if (!phase) return false;
+    this.beginMutation('Retirer le morceau du moment');
+    phase.trackIds = (phase.trackIds ?? []).filter((id) => id !== trackId);
+    const track = this.tracks.find((t) => t.id === trackId);
+    if (track?.linkedPhaseId === phaseId) track.linkedPhaseId = undefined;
+    this.saveCurrentState();
+    this.notify();
+    return true;
+  }
+
+  /** A task written on a moment. `dueHour` defaults to the moment's start. */
+  public createTaskForPhase(phaseId: string, title: string, cost?: number): TaskEntity | null {
+    const phase = this.phases.find((p) => p.id === phaseId);
+    const clean = title?.trim();
+    if (!phase || !clean) return null;
+    this.beginMutation('Ajouter une tâche');
+    const task: TaskEntity = {
+      id: freshId('task'),
+      title: clean,
+      category: 'logistique',
+      phaseId,
+      dueHour: phase.startHour,
+      isDone: false,
+      urgent: false,
+      cost: Number.isFinite(cost) && (cost as number) > 0 ? cost : undefined,
+      sourceOrigin: 'USER',
+      connectedDocIds: [],
+      connectedAgentIds: [],
+    };
+    this.tasks.push(task);
+    phase.taskIds = [...(phase.taskIds ?? []), task.id];
+    phase.keyTaskIds = [...(phase.keyTaskIds ?? []), task.id];
+    this.saveCurrentState();
+    this.notify();
+    return task;
+  }
+
+  public toggleTaskDone(taskId: string): boolean {
+    const task = this.tasks.find((t) => t.id === taskId);
+    if (!task) return false;
+    this.beginMutation('Tâche faite');
+    task.isDone = !task.isDone;
+    this.saveCurrentState();
+    this.notify();
+    return true;
+  }
+
+  /** Free lines: the shots the couple really asked for. */
+  public addPhaseShot(phaseId: string, shot: string): boolean {
+    const phase = this.phases.find((p) => p.id === phaseId);
+    const clean = shot?.trim();
+    if (!phase || !clean) return false;
+    this.beginMutation('Ajouter un plan à photographier');
+    phase.shots = [...(phase.shots ?? []), clean];
+    this.saveCurrentState();
+    this.notify();
+    return true;
+  }
+
+  public removePhaseShot(phaseId: string, index: number): boolean {
+    const phase = this.phases.find((p) => p.id === phaseId);
+    if (!phase?.shots || index < 0 || index >= phase.shots.length) return false;
+    this.beginMutation('Retirer un plan');
+    phase.shots = phase.shots.filter((_, i) => i !== index);
+    if (phase.shots.length === 0) phase.shots = undefined;
+    this.saveCurrentState();
+    this.notify();
+    return true;
+  }
+
+  public setPhaseMeal(phaseId: string, meal: { menu?: string; allergies?: string; headcount?: number }): boolean {
+    const phase = this.phases.find((p) => p.id === phaseId);
+    if (!phase) return false;
+    this.beginMutation('Repas du moment');
+    const next = { ...(phase.meal ?? {}), ...meal };
+    const cleaned = {
+      menu: next.menu?.trim() || undefined,
+      allergies: next.allergies?.trim() || undefined,
+      headcount: Number.isFinite(next.headcount) && (next.headcount as number) > 0 ? next.headcount : undefined,
+    };
+    phase.meal = cleaned.menu || cleaned.allergies || cleaned.headcount ? cleaned : undefined;
+    this.saveCurrentState();
+    this.notify();
+    return true;
+  }
+
+  public setPhaseLogistics(phaseId: string, logistics: string): boolean {
+    const phase = this.phases.find((p) => p.id === phaseId);
+    if (!phase) return false;
+    this.beginMutation('Logistique du moment');
+    phase.logistics = logistics.trim() || undefined;
+    this.saveCurrentState();
+    this.notify();
+    return true;
+  }
+
+  public setPhaseBudget(phaseId: string, budget: { amount?: number; deposit?: number; paid?: boolean }): boolean {
+    const phase = this.phases.find((p) => p.id === phaseId);
+    if (!phase) return false;
+    this.beginMutation('Budget du moment');
+    const next = { ...(phase.budget ?? {}), ...budget };
+    const amount = Number.isFinite(next.amount) && (next.amount as number) >= 0 ? next.amount : undefined;
+    const deposit = Number.isFinite(next.deposit) && (next.deposit as number) >= 0 ? next.deposit : undefined;
+    phase.budget = amount !== undefined || deposit !== undefined || next.paid
+      ? { amount, deposit, paid: next.paid }
+      : undefined;
+    this.saveCurrentState();
+    this.notify();
+    return true;
+  }
+
+  /** What the day costs, summed from what was really entered on the moments. */
+  public getTimelineBudget(): { committed: number; deposits: number; paid: number; withBudget: number } {
+    let committed = 0; let deposits = 0; let paid = 0; let withBudget = 0;
+    for (const p of this.phases) {
+      if (!p.budget) continue;
+      withBudget++;
+      committed += p.budget.amount ?? 0;
+      deposits += p.budget.deposit ?? 0;
+      if (p.budget.paid) paid += p.budget.amount ?? 0;
+    }
+    return { committed, deposits, paid, withBudget };
+  }
+
+  /** Attach a media already in the project to a moment (re-owning it). */
+  public attachMediaToPhase(mediaId: string, phaseId: string): boolean {
+    const asset = this.media.find((m) => m.id === mediaId);
+    if (!asset || !this.phases.some((p) => p.id === phaseId)) return false;
+    this.beginMutation('Rattacher le document au moment');
+    asset.ownerKind = 'event';
+    asset.ownerId = phaseId;
+    asset.updatedAt = new Date().toISOString();
+    this.saveCurrentState();
+    this.notify();
+    return true;
+  }
+
+  /** Everything hanging on a moment, resolved. Pure read, no invention. */
+  public getPhaseHub(phaseId: string) {
+    const phase = this.phases.find((p) => p.id === phaseId) ?? null;
+    if (!phase) return null;
+    const persons = (phase.personIds ?? [])
+      .map((id) => this.persons.find((p) => p.id === id))
+      .filter(Boolean);
+    const vendors = (phase.vendorIds ?? [])
+      .map((id) => this.vendors.find((v) => v.id === id))
+      .filter(Boolean);
+    const tracks = this.tracks.filter(
+      (t) => (phase.trackIds ?? []).includes(t.id) || t.linkedPhaseId === phase.id,
+    );
+    const tasks = this.tasks.filter((t) => t.phaseId === phase.id);
+    const media = this.media.filter((m) => m.ownerKind === 'event' && m.ownerId === phase.id);
+    const place = this.places.find((p) => p.id === phase.primaryPlaceId) ?? null;
+    return { phase, persons, vendors, tracks, tasks, media, place };
   }
 
   /** Attach a moment to a place. `null` detaches. */
@@ -3355,8 +3712,10 @@ class WeddingStore {
     setActiveProjectId(newId);
     this.currentProject = newProject;
     this.markProjectChosen();
-    // The new world is where the couple lands.
-    this.projection = 'world';
+    // PRODUCT DECISION (Jour J pass): a new wedding lands on ITS DAY — the
+    // empty timeline — not inside a 3D world. The World stays in the code and
+    // keeps working; it is simply no longer the door.
+    this.projection = 'mirror';
 
     this.userIdentity = {
       role: params.userRole,
@@ -3486,6 +3845,8 @@ class WeddingStore {
     setActiveProjectId(projectId);
     this.currentProject = proj;
     this.markProjectChosen();
+    // Opening a wedding means opening its day.
+    this.projection = 'mirror';
     const saved = loadPersistedState(projectId);
     // Same single restore path as boot. With no snapshot, the fallback depends
     // on WHICH project this is: the demo falls back to the demo, any real

@@ -406,6 +406,8 @@ export interface DocumentEntity {
 export interface TaskEntity {
   id: string;
   title: string;
+  /** The moment this task belongs to, when it was created from one. */
+  phaseId?: string;
   category: 'logistique' | 'paiement' | 'prestataire' | 'ceremonie' | 'animation';
   dueHour: number;
   isDone: boolean;
@@ -452,6 +454,26 @@ export interface TimelinePhase {
   vendorIds?: string[];
   /** Free note written on the moment. */
   notes?: string;
+
+  // -------------------------------------------------------------------------
+  // A moment is a HUB: everything the day needs at that hour hangs here.
+  // Every field below is optional and additive — an existing programme keeps
+  // working untouched, and nothing is ever populated automatically.
+  // -------------------------------------------------------------------------
+  /** People explicitly expected at this moment (Person ids, never names). */
+  personIds?: string[];
+  /** Music attached to this moment (Track ids). */
+  trackIds?: string[];
+  /** Tasks attached to this moment (Task ids). */
+  taskIds?: string[];
+  /** Shots the couple asks for — photo/video. Free lines written by a human. */
+  shots?: string[];
+  /** Catering, as typed. No default menu, no invented headcount. */
+  meal?: { menu?: string; allergies?: string; headcount?: number };
+  /** Setup, delivery, transport — a written paragraph, not a schema. */
+  logistics?: string;
+  /** What this moment costs, as entered. Absent until someone types it. */
+  budget?: { amount?: number; deposit?: number; paid?: boolean };
 }
 
 export interface NeuralPulse {

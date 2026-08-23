@@ -1,7 +1,8 @@
 import { useState, useEffect, useSyncExternalStore, lazy, Suspense } from 'react';
 import { weddingStore } from './game/weddingStore';
 import { isTypingTarget } from './game/input';
-import { ProjectionSwitcher } from './components/ui/ProjectionSwitcher';
+// The projection capsule is retired from the product surface (Jour J pass);
+// the component stays in the codebase for the World's own tooling.
 import { WeddingWorld } from './components/3d/WeddingWorld';
 import { TopNavigation } from './components/ui/TopNavigation';
 import { BottomOrchestrator } from './components/ui/BottomOrchestrator';
@@ -120,10 +121,11 @@ export default function App() {
              WeddingWorld) rather than drawing behind an opaque page. */}
       <WeddingWorld />
 
-      {/* Dimension selector: one World Model, several projections.
-          Hidden until a wedding is open — with none chosen there is nothing to
-          switch between, and offering WORLD would show the demo. */}
-      {weddingStore.projectChosen && <ProjectionSwitcher />}
+      {/* PRODUCT DECISION (Jour J pass): there is no dimension selector any
+          more. The product is the Mirror — the public site, then the timeline
+          of the day. The 3D World stays mounted and functional (⇧M for the
+          people who know it), but it is not offered as a destination, so no
+          navigation leads a couple into it. */}
 
       {/* The crossing itself: a short fade in the colour of the destination.
           The 3D scene is never remounted, so nothing is rebuilt or lost. */}

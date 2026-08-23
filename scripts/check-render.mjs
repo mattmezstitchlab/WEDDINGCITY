@@ -178,8 +178,20 @@ try {
   {
     for (const [label, view, width] of [['desktop', desktop, 1440], ['mobile', mobile, 390]]) {
       const doc = view.document;
-      const h1 = resolveLength(doc.querySelector('h1').style.fontSize, width);
-      const h2 = [...doc.querySelectorAll('h2')].map((h) => resolveLength(h.style.fontSize, width));
+      // LOCATOR ADAPTED (Jour J pass): the page now opens on the timeline,
+      // whose h1 carries the couple's names, and the editorial cover — same
+      // names, larger type — became the h2 that follows it. The guarantee is
+      // unchanged: the couple's name is the biggest type on the page, and no
+      // SECTION title ever out-shouts it. So the couple's type is measured
+      // wherever it is written, and section titles exclude the cover.
+      const coverTitle = doc.querySelector('.wc-hero-title');
+      const h1 = Math.max(
+        resolveLength(doc.querySelector('h1').style.fontSize, width),
+        coverTitle ? resolveLength(coverTitle.style.fontSize, width) : 0,
+      );
+      const h2 = [...doc.querySelectorAll('h2')]
+        .filter((h) => !h.classList.contains('wc-hero-title'))
+        .map((h) => resolveLength(h.style.fontSize, width));
       const h3 = [...doc.querySelectorAll('h3')].map((h) => resolveLength(h.style.fontSize, width));
 
       r.check(h1 > Math.max(...h2), `${label}: the couple dominates every section title`,

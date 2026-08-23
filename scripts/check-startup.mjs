@@ -208,7 +208,12 @@ function checkDeadModules() {
   }
 
   const dead = allFiles.filter((f) => !reached.has(f)).map((f) => path.relative(SRC, f)).sort();
-  const KNOWN_DEAD = ['SceneShell.tsx', 'game/ChaseCamera.tsx', 'game/GameFlow.tsx', 'game/loop.ts', 'game/mouseLook.ts'];
+  // PRODUCT DECISION (Jour J pass): the projection capsule was retired from
+  // the product — the Mirror is the product and the 3D World is no longer
+  // offered as a destination. The component is kept, unreferenced, rather than
+  // deleted, because the World tooling still uses that vocabulary.
+  const KNOWN_DEAD = ['SceneShell.tsx', 'game/ChaseCamera.tsx', 'game/GameFlow.tsx', 'game/loop.ts', 'game/mouseLook.ts',
+    'components/ui/ProjectionSwitcher.tsx'];
   const unexpected = dead.filter((f) => !KNOWN_DEAD.includes(f));
   const revived = KNOWN_DEAD.filter((f) => !dead.includes(f));
 

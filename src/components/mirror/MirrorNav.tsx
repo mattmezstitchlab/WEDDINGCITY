@@ -95,15 +95,9 @@ export function MirrorNav({ sections }: { sections: NavSection[] }) {
 
         <span style={{ flex: 1, minWidth: 8 }} />
 
-        {/* The other way of understanding the same wedding. Same data, same
-            ids: only the surface changes. */}
-        <button
-          onClick={() => weddingStore.setProjection('world')}
-          style={{ ...itemStyle(false), color: M.textMuted }}
-          title="Basculer vers le monde 3D"
-        >
-          Monde 3D ↗
-        </button>
+        {/* PRODUCT DECISION (Jour J pass): the 3D World is no longer offered
+            as a destination. It stays in the codebase, but nothing in the
+            product sends a couple into it. */}
       </div>
     </nav>
   );

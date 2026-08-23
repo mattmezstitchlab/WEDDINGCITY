@@ -1,0 +1,177 @@
+/* ---------------------------------------------------------------------------
+   JOUR J — the timeline studio.
+   ---------------------------------------------------------------------------
+   Every property that must CHANGE with the viewport lives here, never inline:
+   an inline style always beats a media query, and that lesson was paid for
+   four times on this project.
+   --------------------------------------------------------------------------- */
+
+.wc-jourj {
+  --jourj-bg: #08090b;
+  --jourj-ink: #f6f5f3;
+  --jourj-dim: #a7a49e;
+  --jourj-faint: #6f6c67;
+  --jourj-line: rgba(246, 245, 243, 0.14);
+  --jourj-strip-h: 460px;
+  --jourj-head-pad: 40px;
+  background: var(--jourj-bg);
+  color: var(--jourj-ink);
+}
+
+/* --- the head of the day ---------------------------------------------------- */
+.wc-jourj-head {
+  padding: var(--jourj-head-pad) clamp(18px, 5vw, 64px) 18px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 18px;
+  flex-wrap: wrap;
+}
+
+.wc-jourj-title {
+  /* Size, leading and tracking are set inline (a clamp, not a media query) so
+     any tool that computes styles can read them. Only what does not need to be
+     measured lives here. */
+  margin: 6px 0 0;
+  overflow-wrap: anywhere;
+}
+
+.wc-jourj-tools {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* --- the strip -------------------------------------------------------------- */
+.wc-jourj-strip {
+  position: relative;
+  height: var(--jourj-strip-h);
+  overflow-x: auto;
+  overflow-y: hidden;
+  /* The film is dragged and swiped; the browser must not steal the gesture. */
+  touch-action: pan-x;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(246, 245, 243, 0.28) transparent;
+  border-top: 1px solid var(--jourj-line);
+  border-bottom: 1px solid var(--jourj-line);
+  cursor: grab;
+}
+
+.wc-jourj-strip.is-panning { cursor: grabbing; }
+
+.wc-jourj-strip::-webkit-scrollbar { height: 8px; }
+.wc-jourj-strip::-webkit-scrollbar-thumb {
+  background: rgba(246, 245, 243, 0.22);
+  border-radius: 8px;
+}
+
+/* A moment: the whole card is the drag surface, so nothing can move alone. */
+.wc-jourj-moment {
+  position: absolute;
+  top: 56px;
+  bottom: 18px;
+  border-radius: 4px;
+  overflow: hidden;
+  background: #101114;
+  border: 1px solid var(--jourj-line);
+  cursor: grab;
+  user-select: none;
+  touch-action: none;
+  transition: box-shadow 180ms ease, border-color 180ms ease;
+}
+
+.wc-jourj-moment.is-dragging {
+  cursor: grabbing;
+  z-index: 30;
+  box-shadow: 0 30px 60px rgba(0, 0, 0, 0.65);
+  border-color: rgba(246, 245, 243, 0.5);
+  transition: none;
+}
+
+.wc-jourj-moment.is-ghosted { opacity: 0.5; }
+
+.wc-jourj-moment img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  pointer-events: none;
+}
+
+/* --- responsive ------------------------------------------------------------- */
+@media (max-width: 900px) {
+  .wc-jourj { --jourj-strip-h: 400px; --jourj-head-pad: 28px; }
+}
+
+@media (max-width: 680px) {
+  .wc-jourj { --jourj-strip-h: 340px; --jourj-head-pad: 22px; }
+  .wc-jourj-head { align-items: flex-start; flex-direction: column; }
+  .wc-jourj-tools { width: 100%; }
+}
+
+/* --- the hub ---------------------------------------------------------------- */
+.wc-hub {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: min(560px, 100vw);
+  z-index: 1200;
+  display: flex;
+  flex-direction: column;
+  background: #0b0c0e;
+  border-left: 1px solid var(--jourj-line, rgba(246, 245, 243, 0.14));
+  color: #f6f5f3;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+@media (max-width: 680px) {
+  .wc-hub { width: 100vw; border-left: none; }
+}
+
+.wc-hub-cover {
+  position: relative;
+  height: 210px;
+  flex: none;
+  overflow: hidden;
+}
+
+.wc-hub-cover img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+@media (max-width: 680px) {
+  .wc-hub-cover { height: 160px; }
+}
+
+.wc-hub-dim {
+  border-top: 1px solid rgba(246, 245, 243, 0.1);
+  padding: 18px clamp(16px, 5vw, 28px);
+}
+
+.wc-hub-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+@media (max-width: 520px) {
+  .wc-hub-grid { grid-template-columns: 1fr; }
+}
+
+/* Focus is visible on a dark surface too. */
+.wc-jourj :focus-visible,
+.wc-hub :focus-visible {
+  outline: 2px solid #f6f5f3;
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wc-jourj-moment { transition: none; }
+}
