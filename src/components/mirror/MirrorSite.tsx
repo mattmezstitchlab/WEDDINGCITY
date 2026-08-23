@@ -7,6 +7,7 @@ import { radius, typography, shadowFor, dmcTint } from '../../design/tokens';
 import {
   M, fluid, SectionShell, EmptyState, BigFigure, DmcMark, editorialCard, quietLink, Eyebrow,
 } from './MirrorPrimitives';
+import { MirrorNav, editBtnStyle } from './MirrorNav';
 
 // ---------------------------------------------------------------------------
 // MIRROR — the editorial projection of the World Model.
@@ -53,6 +54,20 @@ export function MirrorSite() {
   const storySection = availability.find((a) => a.id === 'story');
   const gallerySection = availability.find((a) => a.id === 'gallery');
 
+  // The nav mirrors exactly the sections that really render.
+  const navSections = [
+    { id: 'programme', index: '01', label: 'Programme', available: programme.hasData },
+    { id: 'guests', index: '02', label: 'Personnes', available: guests.hasData },
+    { id: 'vendors', index: '03', label: 'Prestataires', available: vendors.hasData },
+    { id: 'places', index: '04', label: 'Lieux', available: places.hasData },
+    { id: 'music', index: '05', label: 'Musique', available: music.hasData },
+    { id: 'gallery', index: '06', label: 'Médias', available: true },
+  ];
+
+  /** Opens the editorial Canvas without leaving Mirror. */
+  const edit = (focus?: { kind: 'event' | 'person' | 'vendor' | 'place' | 'song'; id: string }) =>
+    store.openCanvas(focus);
+
   return (
     <div style={pageStyle}>
       {/* ---------------------------------------------------------------- HERO */}
@@ -87,13 +102,17 @@ export function MirrorSite() {
         </div>
       </header>
 
+      <MirrorNav sections={navSections} />
+
       {/* ----------------------------------------------------------- PROGRAMME */}
       {programme.hasData ? (
         <SectionShell
           id="programme"
+          index="01"
           eyebrow="Le déroulé"
           title="Programme"
-          lead="Le fil de la journée, tel qu’il est orchestré dans le monde."
+          lead="Le fil de la journée, tel qu’il est orchestré dans le monde. Chaque moment porte son lieu, ses prestataires et sa musique."
+          action={<button style={editBtnStyle} onClick={() => edit()}>Composer</button>}
         >
           <ol style={timelineStyle}>
             {programme.moments.map((m) => (
@@ -112,6 +131,13 @@ export function MirrorSite() {
                   <h3 style={momentTitleStyle}>
                     {m.title}
                     {m.isCurrent && <span style={nowBadgeStyle}>en cours</span>}
+                    <button
+                      onClick={() => store.openCanvas({ kind: 'event', id: m.phaseId })}
+                      style={editMomentStyle}
+                      title="Composer ce moment"
+                    >
+                      modifier
+                    </button>
                   </h3>
                   {m.subtitle && <p style={momentSubStyle}>{m.subtitle}</p>}
                   <div style={momentMetaStyle}>
@@ -142,9 +168,14 @@ export function MirrorSite() {
                         </button>
                       ))}
                       {m.songs.map((sg) => (
-                        <span key={sg.songId} style={{ ...tagStyle, borderStyle: 'dashed' }}>
+                        <button
+                          key={sg.songId}
+                          style={{ ...quietLink, ...tagStyle, borderStyle: 'dashed' }}
+                          onClick={() => store.openCanvas({ kind: 'song', id: sg.songId })}
+                          title="Composer ce morceau"
+                        >
                           ♪ {sg.title} — {sg.artist}
-                        </span>
+                        </button>
                       ))}
                     </div>
                   )}
@@ -154,7 +185,8 @@ export function MirrorSite() {
           </ol>
         </SectionShell>
       ) : (
-        <SectionShell id="programme" eyebrow="Le déroulé" title="Programme">
+        <SectionShell id="programme" index="01" eyebrow="Le déroulé" title="Programme"
+          action={<button style={editBtnStyle} onClick={() => edit()}>Composer</button>}>
           <EmptyState
             title="Le programme n’est pas encore composé"
             body="Les moments de la journée apparaîtront ici dès qu’une timeline sera définie dans le monde."
@@ -166,10 +198,12 @@ export function MirrorSite() {
       {guests.hasData ? (
         <SectionShell
           id="guests"
+          index="02"
           eyebrow="Les personnes"
           title="Invités"
           lead={`${guests.counts.headcount} convives attendus, répartis sur ${guests.counts.tables} tables.`}
           tone="surface"
+          action={<button style={editBtnStyle} onClick={() => edit()}>Composer</button>}
         >
           {/* Only statuses actually present in the data. */}
           <div style={statusRowStyle}>
@@ -238,7 +272,7 @@ export function MirrorSite() {
           )}
         </SectionShell>
       ) : (
-        <SectionShell id="guests" eyebrow="Les personnes" title="Invités" tone="surface">
+        <SectionShell id="guests" index="02" eyebrow="Les personnes" title="Invités" tone="surface">
           <EmptyState
             title="Aucun invité pour l’instant"
             body="Les personnes invitées apparaîtront ici, avec leur réponse et leur table."
@@ -250,9 +284,11 @@ export function MirrorSite() {
       {vendors.hasData && (
         <SectionShell
           id="vendors"
+          index="03"
           eyebrow="Celles et ceux qui font"
           title="Les prestataires"
           lead={`${vendors.counts.total} intervenants, dont ${vendors.counts.contracted} contractualisés.`}
+          action={<button style={editBtnStyle} onClick={() => edit()}>Composer</button>}
         >
           <div style={{ display: 'grid', gap: fluid(28, 44) }}>
             {vendors.byCategory.map((group) => (
@@ -271,10 +307,12 @@ export function MirrorSite() {
       {places.hasData && (
         <SectionShell
           id="places"
+          index="04"
           eyebrow="Les espaces"
           title="Le lieu"
           lead={`${places.counts.withMoments} espaces accueillent un moment du programme, sur ${places.counts.total} référencés.`}
           tone="surface"
+          action={<button style={editBtnStyle} onClick={() => edit()}>Composer</button>}
         >
           <div style={{ display: 'grid', gap: fluid(16, 22) }}>
             {(places.keyPlaces.length > 0 ? places.keyPlaces : places.places).map((p) => (
@@ -295,9 +333,11 @@ export function MirrorSite() {
       {music.hasData && (
         <SectionShell
           id="music"
+          index="05"
           eyebrow="La bande-son"
           title="Musique"
           lead={`${music.counts.total} titres, ${music.counts.scheduled} rattachés à un moment du programme.`}
+          action={<button style={editBtnStyle} onClick={() => edit()}>Composer</button>}
         >
           <div style={{ display: 'grid', gap: fluid(24, 38) }}>
             {music.byMoment.map((group) => (
@@ -346,7 +386,8 @@ export function MirrorSite() {
       )}
 
       {gallerySection && (
-        <SectionShell id="gallery" eyebrow="Les images" title="Galerie" tone="surface">
+        <SectionShell id="gallery" index="06" eyebrow="Les images" title="Médias" tone="surface"
+          action={<button style={editBtnStyle} onClick={() => edit()}>Ajouter</button>}>
           {gallery.length > 0 ? (
             <div style={galleryGridStyle}>
               {gallery.filter((g) => g.kind === 'image').map((g) => (
@@ -539,9 +580,14 @@ function PlaceRow({ place }: { place: PlaceProjection }) {
             {place.name}
           </h3>
         </div>
-        <button style={{ ...quietLink, ...momentPlaceStyle }} onClick={() => store.showPlaceInWorld(place.placeId)}>
-          Explorer dans le Monde →
-        </button>
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+          <button style={{ ...quietLink, ...momentPlaceStyle }} onClick={() => store.showPlaceInWorld(place.placeId)}>
+            Explorer dans le Monde →
+          </button>
+          <button style={{ ...quietLink, ...momentPlaceStyle }} onClick={() => store.openCanvas({ kind: 'place', id: place.placeId })}>
+            Modifier
+          </button>
+        </div>
       </div>
 
       {place.description && (
@@ -843,4 +889,12 @@ const galleryGridStyle: React.CSSProperties = {
 
 const captionStyle: React.CSSProperties = {
   marginTop: 8, fontSize: typography.size.caption, color: M.textSecondary,
+};
+
+const editMomentStyle: React.CSSProperties = {
+  marginLeft: 12, font: 'inherit', fontSize: 10,
+  letterSpacing: '0.1em', textTransform: 'uppercase', fontWeight: 600,
+  color: M.textMuted, background: 'transparent', border: 'none',
+  borderBottom: `1px solid ${M.line}`, cursor: 'pointer', padding: 0,
+  verticalAlign: 'middle',
 };

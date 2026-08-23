@@ -1709,11 +1709,24 @@ class WeddingStore {
   // structured outcome, and persists. A projection never writes its own copy.
   // =========================================================================
 
+  /**
+   * Open the composition surface WITHOUT changing projection.
+   *
+   * Phase D forced `projection = 'world'`, which threw an editorial user back
+   * into the 3D scene the moment they clicked "Modifier". The Canvas is a mode,
+   * not a place: it now composes on top of whichever projection is open, and
+   * the shell adapts (side panel over World, editorial surface inside Mirror).
+   */
   public openCanvas(focus?: { kind: 'event' | 'person' | 'vendor' | 'place' | 'song'; id: string }): void {
     this.canvasOpen = true;
-    this.projection = 'world';
+    this.showIdentityModal = false;
     if (focus) this.canvasFocus = focus;
     this.notify();
+  }
+
+  /** Which shell should wrap the Canvas core, derived from the active projection. */
+  public getCanvasShell(): 'world' | 'mirror' {
+    return this.projection === 'mirror' ? 'mirror' : 'world';
   }
 
   public closeCanvas(): void {

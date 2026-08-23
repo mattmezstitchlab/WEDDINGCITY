@@ -32,34 +32,51 @@ export function Eyebrow({ children }: { children: React.ReactNode }) {
 }
 
 export function SectionShell({
-  id, eyebrow, title, lead, children, tone = 'bg',
+  id, index, eyebrow, title, lead, children, tone = 'bg', action,
 }: {
   id: string;
+  /** Editorial section number, e.g. "01". Gives the page a real spine. */
+  index?: string;
   eyebrow?: string;
   title?: string;
   lead?: string;
   children?: React.ReactNode;
   tone?: 'bg' | 'surface';
+  action?: React.ReactNode;
 }) {
   return (
     <section
       id={`mirror-${id}`}
       style={{
         background: tone === 'surface' ? M.surface : 'transparent',
-        padding: `${fluid(56, 104)} ${fluid(20, 72)}`,
+        padding: `${fluid(64, 128)} ${fluid(20, 72)}`,
         borderTop: `1px solid ${M.line}`,
+        scrollMarginTop: 72,
       }}
     >
       <div style={{ maxWidth: 1080, margin: '0 auto' }}>
+        {/* Section number + rule: the editorial signature of the page. */}
+        {index && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: fluid(18, 26) }}>
+            <span style={{
+              fontFamily: typography.family.mono, fontSize: fluid(11, 13),
+              color: M.textMuted, letterSpacing: '0.06em',
+            }}>
+              {index}
+            </span>
+            <span style={{ flex: 1, height: 1, background: M.line }} />
+            {action}
+          </div>
+        )}
         {eyebrow && <Eyebrow>{eyebrow}</Eyebrow>}
         {title && (
           <h2
             style={{
               margin: '14px 0 0',
-              fontSize: fluid(28, 52),
-              lineHeight: 1.06,
+              fontSize: fluid(34, 72),
+              lineHeight: 0.98,
               fontWeight: typography.weight.semibold,
-              letterSpacing: '-0.022em',
+              letterSpacing: '-0.03em',
               color: M.textPrimary,
             }}
           >

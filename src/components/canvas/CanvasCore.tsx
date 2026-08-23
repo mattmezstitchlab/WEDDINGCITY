@@ -7,27 +7,32 @@ import {
 } from './CanvasPrimitives';
 
 // ---------------------------------------------------------------------------
-// CANVAS — the composition surface of the World Model.
+// CANVAS CORE — the composition logic, with NO layout of its own.
 // ---------------------------------------------------------------------------
-// Not a page, not a dashboard, not a settings screen: the place where the
-// World Model is edited directly, in context.
+// Phase E splits the Canvas in two:
 //
-// Every control calls a validated store mutation. There is no local copy of
-// any entity here — the surface re-derives from projectWorldModel() after each
-// change, exactly like World and Mirror do.
+//   CanvasCore          business surfaces (this file): mutations, validation,
+//                       inline editing, context, pickers
+//   WorldCanvasShell    side panel over the dark 3D world
+//   MirrorCanvasShell   editorial surface inside the ivory Mirror
 //
-// D2 (moments) is the primary surface, because a moment already joins time,
-// place, vendors, songs, people and media.
+// The shells own layout, navigation and presentation. NOTHING business lives
+// in them, so the two never diverge: same mutations, same validation, same
+// save state, same undo/redo, same ids, same World Model.
+//
+// There is no local copy of any domain entity here — every surface re-derives
+// from projectWorldModel() after each mutation.
 // ---------------------------------------------------------------------------
 
-type Tab = 'programme' | 'people' | 'vendors' | 'places' | 'music';
+export type CanvasTab = 'programme' | 'people' | 'vendors' | 'places' | 'music' | 'media';
 
-const TABS: { id: Tab; label: string }[] = [
-  { id: 'programme', label: 'Programme' },
-  { id: 'people', label: 'Personnes' },
-  { id: 'vendors', label: 'Prestataires' },
-  { id: 'places', label: 'Lieux' },
-  { id: 'music', label: 'Musique' },
+export const CANVAS_TABS: { id: CanvasTab; label: string; index: string }[] = [
+  { id: 'programme', label: 'Programme', index: '01' },
+  { id: 'people', label: 'Personnes', index: '02' },
+  { id: 'vendors', label: 'Prestataires', index: '03' },
+  { id: 'places', label: 'Lieux', index: '04' },
+  { id: 'music', label: 'Musique', index: '05' },
+  { id: 'media', label: 'Médias', index: '06' },
 ];
 
 const VENDOR_CATEGORIES = [
@@ -35,85 +40,18 @@ const VENDOR_CATEGORIES = [
   'robe', 'transport', 'musique', 'voyage', 'autre',
 ] as const;
 
-export function CanvasSurface() {
-  const store = weddingStore;
-  const model = useMemo(() => projectWorldModel(), [store.version]);
-
-  // Tab follows the focus the user arrived with (Mirror/World → Canvas).
-  const focusTab: Tab =
-    store.canvasFocus?.kind === 'person' ? 'people'
-      : store.canvasFocus?.kind === 'vendor' ? 'vendors'
-        : store.canvasFocus?.kind === 'place' ? 'places'
-          : store.canvasFocus?.kind === 'song' ? 'music'
-            : 'programme';
-  const [tab, setTab] = useState<Tab>(focusTab);
-  const [lastTouchedFocus, setLastTouchedFocus] = useState(store.canvasFocus?.id ?? null);
-
-  // Arriving with a new focus switches the surface to it, without losing context.
-  if (store.canvasFocus && store.canvasFocus.id !== lastTouchedFocus) {
-    setLastTouchedFocus(store.canvasFocus.id);
-    setTab(focusTab);
+/** Which tab a cross-navigation focus should land on. */
+export function tabForFocus(focus: { kind: string } | null): CanvasTab {
+  switch (focus?.kind) {
+    case 'person': return 'people';
+    case 'vendor': return 'vendors';
+    case 'place': return 'places';
+    case 'song': return 'music';
+    default: return 'programme';
   }
-
-  return (
-    <div style={shellStyle}>
-      {/* ---- header: context + real save state + history ---- */}
-      <header style={headerStyle}>
-        <div style={{ minWidth: 0 }}>
-          <div style={eyebrowStyle}>Canvas · Composition</div>
-          <div style={breadcrumbStyle}>
-            {TABS.find((t) => t.id === tab)?.label}
-            {store.canvasFocus && <span style={{ color: K.textMuted }}> → {focusLabel(store.canvasFocus)}</span>}
-          </div>
-        </div>
-
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <SaveIndicator />
-          <button
-            onClick={() => store.undo()}
-            disabled={!store.canUndo()}
-            title={store.undoLabel() ? `Annuler : ${store.undoLabel()}` : 'Rien à annuler'}
-            style={historyBtnStyle(!store.canUndo())}
-          >
-            ↶
-          </button>
-          <button
-            onClick={() => store.redo()}
-            disabled={!store.canRedo()}
-            title={store.redoLabel() ? `Rétablir : ${store.redoLabel()}` : 'Rien à rétablir'}
-            style={historyBtnStyle(!store.canRedo())}
-          >
-            ↷
-          </button>
-          <button onClick={() => store.closeCanvas()} style={closeBtnStyle} aria-label="Fermer">✕</button>
-        </div>
-      </header>
-
-      {/* ---- surface selector ---- */}
-      <nav style={tabsStyle}>
-        {TABS.map((t) => (
-          <button
-            key={t.id}
-            onClick={() => { setTab(t.id); store.setCanvasFocus(null); }}
-            style={tabStyle(tab === t.id)}
-          >
-            {t.label}
-          </button>
-        ))}
-      </nav>
-
-      <div style={bodyStyle}>
-        {tab === 'programme' && <ProgrammeSurface model={model} />}
-        {tab === 'people' && <PeopleSurface model={model} />}
-        {tab === 'vendors' && <VendorsSurface model={model} />}
-        {tab === 'places' && <PlacesSurface model={model} />}
-        {tab === 'music' && <MusicSurface model={model} />}
-      </div>
-    </div>
-  );
 }
 
-function focusLabel(focus: { kind: string; id: string }): string {
+export function focusLabel(focus: { kind: string; id: string }): string {
   const s = weddingStore;
   switch (focus.kind) {
     case 'person': return s.getPerson(focus.id)?.displayName ?? focus.id;
@@ -126,7 +64,7 @@ function focusLabel(focus: { kind: string; id: string }): string {
 }
 
 /** Reflects the REAL persistence outcome. Never optimistic. */
-function SaveIndicator() {
+export function SaveIndicator() {
   const state = weddingStore.saveState;
   const map = {
     idle: { text: 'Prêt', color: K.textMuted },
@@ -139,6 +77,43 @@ function SaveIndicator() {
     <span style={{ fontSize: typography.size.caption, color: s.color, whiteSpace: 'nowrap' }}>
       {state === 'error' ? '⚠ ' : ''}{s.text}
     </span>
+  );
+}
+
+export function UndoRedo({ compact }: { compact?: boolean }) {
+  const store = weddingStore;
+  const btn = (disabled: boolean): React.CSSProperties => ({
+    border: `1px solid ${K.line}`, background: K.surface,
+    color: disabled ? K.textMuted : K.textPrimary,
+    width: compact ? 28 : 32, height: compact ? 28 : 32, borderRadius: radius.pill,
+    cursor: disabled ? 'not-allowed' : 'pointer', fontSize: 13, opacity: disabled ? 0.45 : 1,
+  });
+  return (
+    <>
+      <button onClick={() => store.undo()} disabled={!store.canUndo()}
+        title={store.undoLabel() ? `Annuler : ${store.undoLabel()}` : 'Rien à annuler'}
+        style={btn(!store.canUndo())}>↶</button>
+      <button onClick={() => store.redo()} disabled={!store.canRedo()}
+        title={store.redoLabel() ? `Rétablir : ${store.redoLabel()}` : 'Rien à rétablir'}
+        style={btn(!store.canRedo())}>↷</button>
+    </>
+  );
+}
+
+/** Renders the business surface for a tab. Layout is the shell's job. */
+export function CanvasCore({ tab }: { tab: CanvasTab }) {
+  const store = weddingStore;
+  const model = useMemo(() => projectWorldModel(), [store.version]);
+
+  return (
+    <>
+      {tab === 'programme' && <ProgrammeSurface model={model} />}
+      {tab === 'people' && <PeopleSurface model={model} />}
+      {tab === 'vendors' && <VendorsSurface model={model} />}
+      {tab === 'places' && <PlacesSurface model={model} />}
+      {tab === 'music' && <MusicSurface model={model} />}
+      {tab === 'media' && <MediaSurface model={model} />}
+    </>
   );
 }
 
@@ -479,7 +454,7 @@ const RELATION_LABEL: Record<string, string> = {
 // ===========================================================================
 
 function MediaField({ ownerKind, ownerId, existing }: {
-  ownerKind: 'person' | 'place' | 'vendor' | 'event' | 'song';
+  ownerKind: 'person' | 'place' | 'vendor' | 'event' | 'song' | 'wedding';
   ownerId: string;
   existing: number;
 }) {
@@ -720,6 +695,71 @@ function MusicSurface({ model }: { model: ReturnType<typeof projectWorldModel> }
   );
 }
 
+
+// ===========================================================================
+// MEDIA surface — project-wide, real upload (Phase D mechanism, unchanged)
+// ===========================================================================
+
+function MediaSurface({ model }: { model: ReturnType<typeof projectWorldModel> }) {
+  const store = weddingStore;
+  const owners = [
+    { kind: 'wedding' as const, id: store.currentProject.id, label: 'Le mariage' },
+    ...store.persons.slice(0, 40).map((p) => ({ kind: 'person' as const, id: p.id, label: p.displayName })),
+    ...store.places.map((p) => ({ kind: 'place' as const, id: p.id, label: p.name })),
+    ...store.vendors.map((v) => ({ kind: 'vendor' as const, id: v.id, label: v.companyName })),
+  ];
+  const [ownerIdx, setOwnerIdx] = useState(0);
+  const owner = owners[Math.min(ownerIdx, owners.length - 1)];
+
+  return (
+    <div style={{ display: 'grid', gap: 14 }}>
+      <div style={{ ...canvasCard, padding: '16px 18px' }}>
+        <div style={fieldLabelStyle}>Rattacher un média à</div>
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center', marginTop: 8 }}>
+          <select
+            value={ownerIdx}
+            onChange={(e) => setOwnerIdx(Number(e.target.value))}
+            style={{
+              font: 'inherit', fontSize: typography.size.body, color: K.textPrimary,
+              background: K.bg, border: `1px solid ${K.line}`, borderRadius: radius.xs,
+              padding: '6px 9px', outline: 'none', maxWidth: 280,
+            }}
+          >
+            {owners.map((o, i) => <option key={`${o.kind}_${o.id}`} value={i}>{o.label}</option>)}
+          </select>
+          <MediaField ownerKind={owner.kind} ownerId={owner.id} existing={store.getMediaFor(owner.kind, owner.id).length} />
+        </div>
+      </div>
+
+      {model.gallery.length === 0 ? (
+        <div style={{ ...canvasCard, padding: '28px 20px', textAlign: 'center' }}>
+          <div style={{ fontSize: typography.size.bodyLg, color: K.textPrimary }}>Aucun média</div>
+          <p style={{ margin: '8px auto 0', maxWidth: 380, fontSize: typography.size.caption, color: K.textSecondary, lineHeight: 1.6 }}>
+            Rien n’est affiché à la place : ces images n’existent pas. Le premier fichier ajouté
+            apparaîtra immédiatement dans le Mirror.
+          </p>
+        </div>
+      ) : (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: 12 }}>
+          {model.gallery.map((m) => (
+            <figure key={m.mediaId} style={{ ...canvasCard, margin: 0, padding: 8 }}>
+              {m.kind === 'image' && (
+                <img src={m.source} alt={m.title ?? ''} style={{ width: '100%', height: 110, objectFit: 'cover', borderRadius: radius.xs, display: 'block' }} />
+              )}
+              <figcaption style={{ display: 'flex', justifyContent: 'space-between', gap: 8, alignItems: 'center', marginTop: 8 }}>
+                <span style={{ fontSize: 10.5, color: K.textSecondary, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {m.title ?? m.kind}
+                </span>
+                <button onClick={() => store.removeMedia(m.mediaId)} style={{ ...addBtnStyle, border: 'none', color: '#b4536b', padding: '2px 6px' }}>×</button>
+              </figcaption>
+            </figure>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // --- helpers / styles -------------------------------------------------------
 
 function parseHour(text: string): number | null {
@@ -730,60 +770,6 @@ function parseHour(text: string): number | null {
   if (Number.isNaN(h) || min > 59) return null;
   return h + min / 60;
 }
-
-const shellStyle: React.CSSProperties = {
-  position: 'fixed', top: 0, right: 0, bottom: 0,
-  width: 'min(560px, 100vw)', zIndex: 850,
-  background: K.bg, color: K.textPrimary,
-  borderLeft: `1px solid ${K.lineStrong}`,
-  boxShadow: shadowFor(4, 'world'),
-  display: 'flex', flexDirection: 'column',
-  fontFamily: typography.family.sans,
-};
-
-const headerStyle: React.CSSProperties = {
-  display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12,
-  padding: '16px 18px 12px', borderBottom: `1px solid ${K.line}`,
-};
-
-const eyebrowStyle: React.CSSProperties = {
-  fontSize: 9, letterSpacing: '0.16em', textTransform: 'uppercase',
-  color: K.textMuted, fontWeight: 700,
-};
-
-const breadcrumbStyle: React.CSSProperties = {
-  marginTop: 5, fontSize: typography.size.bodyLg, color: K.textPrimary,
-  overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-};
-
-const tabsStyle: React.CSSProperties = {
-  display: 'flex', gap: 4, padding: '10px 14px', borderBottom: `1px solid ${K.line}`,
-  overflowX: 'auto',
-};
-
-const tabStyle = (active: boolean): React.CSSProperties => ({
-  font: 'inherit', fontSize: typography.size.caption, fontWeight: 600,
-  border: 'none', borderRadius: radius.pill, padding: '6px 13px', cursor: 'pointer',
-  whiteSpace: 'nowrap',
-  background: active ? K.textPrimary : 'transparent',
-  color: active ? K.surface : K.textSecondary,
-});
-
-const bodyStyle: React.CSSProperties = {
-  flex: 1, overflowY: 'auto', padding: '16px 18px 40px',
-};
-
-const closeBtnStyle: React.CSSProperties = {
-  border: `1px solid ${K.line}`, background: K.surface, color: K.textSecondary,
-  width: 28, height: 28, borderRadius: radius.pill, cursor: 'pointer', fontSize: 12,
-};
-
-const historyBtnStyle = (disabled: boolean): React.CSSProperties => ({
-  border: `1px solid ${K.line}`, background: K.surface,
-  color: disabled ? K.textMuted : K.textPrimary,
-  width: 28, height: 28, borderRadius: radius.pill,
-  cursor: disabled ? 'not-allowed' : 'pointer', fontSize: 13, opacity: disabled ? 0.45 : 1,
-});
 
 const linkBtnStyle: React.CSSProperties = {
   font: 'inherit', fontSize: typography.size.caption, color: K.textPrimary,

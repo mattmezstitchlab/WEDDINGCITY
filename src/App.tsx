@@ -14,7 +14,8 @@ import { InteriorHUD } from './components/ui/InteriorHUD';
 // Heavy, on-demand surfaces are code-split: they are only fetched when the
 // user actually opens them. Each is rendered conditionally so the chunk is not
 // requested at startup.
-const CanvasSurface = lazy(() => import('./components/canvas/CanvasSurface').then((m) => ({ default: m.CanvasSurface })));
+const WorldCanvasShell = lazy(() => import('./components/canvas/WorldCanvasShell').then((m) => ({ default: m.WorldCanvasShell })));
+const MirrorCanvasShell = lazy(() => import('./components/canvas/MirrorCanvasShell').then((m) => ({ default: m.MirrorCanvasShell })));
 const MirrorSite = lazy(() => import('./components/mirror/MirrorSite').then((m) => ({ default: m.MirrorSite })));
 const GuestConstellation = lazy(() => import('./components/ui/GuestConstellation').then((m) => ({ default: m.GuestConstellation })));
 const SystemNerveCenterModal = lazy(() => import('./components/ui/SystemNerveCenterModal').then((m) => ({ default: m.SystemNerveCenterModal })));
@@ -117,7 +118,9 @@ export default function App() {
           page: the World stays visible behind it so context is never lost. */}
       {weddingStore.canvasOpen && (
         <Suspense fallback={null}>
-          <CanvasSurface />
+          {/* Same CanvasCore, two shells: a side panel over the 3D world, an
+              editorial surface inside the Mirror. The projection decides. */}
+          {weddingStore.getCanvasShell() === 'mirror' ? <MirrorCanvasShell /> : <WorldCanvasShell />}
         </Suspense>
       )}
 
