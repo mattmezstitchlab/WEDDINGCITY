@@ -108,7 +108,10 @@ export interface ProgrammeMoment {
   /** `explicit` = attached by the user, vs derived from the place. */
   vendors: { vendorId: string; companyName: string; category: string; explicit: boolean }[];
   /** Tracks whose moment resolves to this phase. */
-  songs: { songId: string; title: string; artist: string; duration: string }[];
+  songs: {
+    songId: string; title: string; artist: string; duration: string;
+    coverSource: string | null; audioSource: string | null;
+  }[];
   media: MediaProjection[];
 }
 
@@ -153,9 +156,14 @@ export function projectProgramme(): ProgrammeProjection {
           .map((v) => ({ vendorId: v.id, companyName: v.companyName, category: v.category, explicit: true })),
         ...derived.map((v) => ({ vendorId: v.id, companyName: v.companyName, category: v.category, explicit: false })),
       ].filter((v) => (seen.has(v.vendorId) ? false : (seen.add(v.vendorId), true)));
-      const songs = weddingStore.getTracksForPhase(ph.id).map((t) => ({
-        songId: t.id, title: t.title, artist: t.artist, duration: t.duration,
-      }));
+      const songs = weddingStore.getTracksForPhase(ph.id).map((t) => {
+        const media = projectMedia('song', t.id);
+        return {
+          songId: t.id, title: t.title, artist: t.artist, duration: t.duration,
+          coverSource: media.find((m) => m.kind === 'image')?.source ?? null,
+          audioSource: media.find((m) => m.kind === 'audio')?.source ?? null,
+        };
+      });
 
       return {
         phaseId: ph.id,
@@ -496,13 +504,19 @@ export interface SongProjection {
   media: MediaProjection[];
   /** Cover art only when a real media exists. Never a generated placeholder. */
   coverSource: string | null;
+  /**
+   * Playable source, present ONLY when a real MediaAsset of kind 'audio' is
+   * attached to this track. There is no streaming lookup: if this is null the
+   * UI must not offer a Play control at all.
+   */
+  audioSource: string | null;
 }
 
 export interface MusicProjection {
   songs: SongProjection[];
   /** Songs grouped under the timeline moment they belong to. */
   byMoment: { phaseId: string | null; phaseTitle: string; phaseTime: string | null; songs: SongProjection[] }[];
-  counts: { total: number; scheduled: number; validated: number };
+  counts: { total: number; scheduled: number; validated: number; playable: number; withCover: number };
   hasData: boolean;
 }
 
@@ -524,6 +538,7 @@ export function projectMusic(): MusicProjection {
       phaseTime: phase ? formatHour(phase.startHour) : null,
       media,
       coverSource: media.find((m) => m.kind === 'image')?.source ?? null,
+      audioSource: media.find((m) => m.kind === 'audio')?.source ?? null,
     };
   });
 
@@ -554,6 +569,9 @@ export function projectMusic(): MusicProjection {
       total: songs.length,
       scheduled: songs.filter((s) => s.phaseId).length,
       validated: songs.filter((s) => s.status === 'verified').length,
+      // Measured, never assumed: how many tracks can genuinely be listened to.
+      playable: songs.filter((s) => s.audioSource !== null).length,
+      withCover: songs.filter((s) => s.coverSource !== null).length,
     },
     hasData: songs.length > 0,
   };

@@ -2,6 +2,7 @@ import { weddingStore } from '../../game/weddingStore';
 import { ProgrammeMoment } from '../../projections/worldModel';
 import { typography, radius } from '../../design/tokens';
 import { M, fluid, Reveal, MetaLine } from './MirrorPrimitives';
+import { TrackArt } from './TrackArt';
 
 // ---------------------------------------------------------------------------
 // MIRROR TIMELINE — the spine of the site.
@@ -87,17 +88,27 @@ export function MirrorTimeline({ moments }: { moments: ProgrammeMoment[] }) {
                     {m.songs.length > 0 && (
                       <div style={contextBlockStyle}>
                         <div style={contextLabelStyle}>Bande-son</div>
-                        <div style={contextItemsStyle}>
+                        <div style={soundtrackStyle}>
                           {m.songs.map((sg) => (
-                            <button
-                              key={sg.songId}
-                              onClick={() => store.openCanvas({ kind: 'song', id: sg.songId })}
-                              style={contextLinkStyle}
-                              title={`${sg.artist}${sg.duration ? ` · ${sg.duration}` : ''}`}
-                            >
-                              {sg.title}
-                              <span style={{ color: M.textMuted }}> — {sg.artist}</span>
-                            </button>
+                            <div key={sg.songId} style={soundtrackRowStyle}>
+                              {/* Small cover + the SAME global player as 05. */}
+                              <TrackArt
+                                songId={sg.songId}
+                                title={sg.title}
+                                artist={sg.artist}
+                                coverSource={sg.coverSource}
+                                audioSource={sg.audioSource}
+                                size={38}
+                              />
+                              <button
+                                onClick={() => store.openCanvas({ kind: 'song', id: sg.songId })}
+                                style={contextLinkStyle}
+                                title={`${sg.artist}${sg.duration ? ` · ${sg.duration}` : ''}`}
+                              >
+                                {sg.title}
+                                <span style={{ color: M.textMuted }}> — {sg.artist}</span>
+                              </button>
+                            </div>
                           ))}
                         </div>
                       </div>
@@ -203,6 +214,14 @@ const contextBlockStyle: React.CSSProperties = {
 const contextLabelStyle: React.CSSProperties = {
   fontSize: 9, letterSpacing: '0.15em', textTransform: 'uppercase',
   color: M.textMuted, fontWeight: 700,
+};
+
+const soundtrackStyle: React.CSSProperties = {
+  display: 'flex', flexDirection: 'column', gap: 10, minWidth: 0,
+};
+
+const soundtrackRowStyle: React.CSSProperties = {
+  display: 'flex', alignItems: 'center', gap: 12, minWidth: 0,
 };
 
 const contextItemsStyle: React.CSSProperties = {

@@ -2,6 +2,7 @@ import { weddingStore } from '../../game/weddingStore';
 import { VendorsProjection, PlacesProjection, MusicProjection, MediaProjection } from '../../projections/worldModel';
 import { typography, radius } from '../../design/tokens';
 import { M, fluid, Reveal, Rule, MetaLine } from './MirrorPrimitives';
+import { TrackArt, NoAudioNote } from './TrackArt';
 
 // ---------------------------------------------------------------------------
 // 03 PRESTATAIRES · 04 LIEUX · 05 MUSIQUE · 06 MÉDIAS
@@ -208,19 +209,33 @@ export function MirrorMusic({ music }: { music: MusicProjection }) {
             <ol style={songListStyle}>
               {group.songs.map((sg) => (
                 <li key={sg.songId} style={songRowStyle}>
-                  <button
-                    onClick={() => store.openCanvas({ kind: 'song', id: sg.songId })}
-                    style={songBtnStyle}
-                  >
-                    <span style={{ minWidth: 0 }}>
-                      <span style={songTitleStyle}>{sg.title}</span>
-                      <span style={songArtistStyle}>{sg.artist}</span>
-                    </span>
-                    <span style={songMetaStyle}>
-                      {sg.duration || ''}
-                      {sg.status === 'verified' ? ' · validé' : ''}
-                    </span>
-                  </button>
+                  <div style={songInnerStyle}>
+                    {/* Same artwork + player used by the Timeline. */}
+                    <TrackArt
+                      songId={sg.songId}
+                      title={sg.title}
+                      artist={sg.artist}
+                      coverSource={sg.coverSource}
+                      audioSource={sg.audioSource}
+                      size={64}
+                    />
+
+                    <button
+                      onClick={() => store.openCanvas({ kind: 'song', id: sg.songId })}
+                      style={songBtnStyle}
+                    >
+                      <span style={{ minWidth: 0 }}>
+                        <span style={songTitleStyle}>{sg.title}</span>
+                        <span style={songArtistStyle}>{sg.artist}</span>
+                      </span>
+                      <span style={songMetaStyle}>
+                        {sg.duration || ''}
+                        {sg.status === 'verified' ? ' · validé' : ''}
+                      </span>
+                    </button>
+
+                    {!sg.audioSource && <NoAudioNote />}
+                  </div>
                 </li>
               ))}
             </ol>
@@ -359,11 +374,15 @@ const songRowStyle: React.CSSProperties = {
   borderBottom: `1px solid ${M.line}`,
 };
 
+const songInnerStyle: React.CSSProperties = {
+  display: 'flex', alignItems: 'center', gap: 16, padding: '14px 0',
+};
+
 const songBtnStyle: React.CSSProperties = {
   appearance: 'none', background: 'transparent', border: 'none', cursor: 'pointer',
-  width: '100%', textAlign: 'left', font: 'inherit',
+  flex: 1, minWidth: 0, textAlign: 'left', font: 'inherit',
   display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 16,
-  padding: '13px 0',
+  padding: 0,
 };
 
 const songTitleStyle: React.CSSProperties = {

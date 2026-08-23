@@ -469,15 +469,19 @@ function MediaField({ ownerKind, ownerId, existing }: {
     // localStorage is the only storage this app really has. A large image
     // would blow the quota, so the limit is enforced and explained rather
     // than failing silently later.
-    if (file.size > 600 * 1024) {
-      setError('Fichier trop lourd (max 600 Ko) : le stockage local est limité.');
+    // localStorage is the only storage this app really has. Limits are enforced
+    // and EXPLAINED rather than failing silently at save time.
+    const limit = file.type.startsWith('audio/') ? 1200 * 1024 : 600 * 1024;
+    if (file.size > limit) {
+      setError(`Fichier trop lourd (max ${Math.round(limit / 1024)} Ko) : le stockage local est limité.`);
       return;
     }
     setBusy(true);
     const reader = new FileReader();
     reader.onload = () => {
       const asset = store.addMedia({
-        kind: file.type.startsWith('image/') ? 'image' : 'document',
+        kind: file.type.startsWith('image/') ? 'image'
+          : file.type.startsWith('audio/') ? 'audio' : 'document',
         source: String(reader.result),
         ownerKind, ownerId,
         title: file.name, fileName: file.name, byteSize: file.size,
@@ -502,8 +506,13 @@ function MediaField({ ownerKind, ownerId, existing }: {
       ))}
       <label style={{ ...addBtnStyle, display: 'inline-block' }}>
         {busy ? 'Lecture…' : existing > 0 ? '+ Ajouter' : '+ Ajouter un média'}
-        <input type="file" accept="image/*" style={{ display: 'none' }}
-          onChange={(e) => onFile(e.target.files?.[0])} />
+        <input
+          type="file"
+          // Songs also accept an audio file, which is what makes Play real.
+          accept={ownerKind === 'song' ? 'image/*,audio/*' : 'image/*'}
+          style={{ display: 'none' }}
+          onChange={(e) => onFile(e.target.files?.[0])}
+        />
       </label>
       {error && <span style={{ fontSize: 10.5, color: '#b4536b' }}>{error}</span>}
     </div>
@@ -675,8 +684,22 @@ function MusicSurface({ model }: { model: ReturnType<typeof projectWorldModel> }
       {model.music.songs.map((sg) => {
         const track = store.tracks.find((t) => t.id === sg.songId);
         if (!track) return null;
+        const isFocus = store.canvasFocus?.kind === 'song' && store.canvasFocus.id === sg.songId;
         return (
-          <article key={sg.songId} style={{ ...canvasCard, padding: '14px 18px' }}>
+          <article key={sg.songId} style={{
+            ...canvasCard, padding: '14px 18px',
+            boxShadow: isFocus ? shadowFor(4, 'composition') : shadowFor(1, 'composition'),
+          }}>
+            {/* Real artwork when one exists; otherwise nothing is invented. */}
+            {sg.coverSource && (
+              <img
+                src={sg.coverSource}
+                alt=""
+                loading="lazy"
+                decoding="async"
+                style={{ width: 56, height: 56, objectFit: 'cover', borderRadius: radius.xs, display: 'block', marginBottom: 10 }}
+              />
+            )}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12, alignItems: 'center' }}>
               <InlineText value={track.title} bold onCommit={(next) => { track.title = next.trim() || track.title; store.saveCurrentState(); store.notify(); }} />
               <InlineText value={track.artist} onCommit={(next) => { track.artist = next.trim() || track.artist; store.saveCurrentState(); store.notify(); }} />
@@ -687,6 +710,21 @@ function MusicSurface({ model }: { model: ReturnType<typeof projectWorldModel> }
               <button onClick={() => store.removeTrack(sg.songId)} style={{ ...addBtnStyle, border: 'none', color: '#b4536b', justifySelf: 'end' }}>
                 Retirer
               </button>
+            </div>
+
+            {/* Artwork and audio are ordinary MediaAssets: the SAME upload
+                mutation as everywhere else, no parallel media handling. */}
+            <div style={{ marginTop: 10, borderTop: `1px solid ${K.line}`, paddingTop: 6 }}>
+              <FieldRow label="Pochette / audio">
+                <div style={{ display: 'grid', gap: 6 }}>
+                  <MediaField ownerKind="song" ownerId={sg.songId} existing={sg.media.length} />
+                  <span style={{ fontSize: 10, color: K.textMuted }}>
+                    {sg.audioSource
+                      ? 'Écoutable : une source audio réelle est rattachée.'
+                      : 'Aucune source audio : le bouton Écouter n’apparaît pas dans le site.'}
+                  </span>
+                </div>
+              </FieldRow>
             </div>
           </article>
         );

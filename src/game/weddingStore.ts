@@ -2133,12 +2133,24 @@ class WeddingStore {
     return this.media.filter((m) => m.ownerKind === kind && m.ownerId === id);
   }
 
+  /**
+   * Deterministic portrait resolution:
+   *   1. `portraitMediaId` when it points at a VALID image;
+   *   2. otherwise the first image attached to that person.
+   *
+   * The validity check matters: a dangling or non-image portraitMediaId used
+   * to return null, which hid a perfectly good photo behind a stale pointer.
+   */
   public getPortraitFor(personId: string): MediaAsset | null {
     const person = this.getPerson(personId);
+    const images = this.media.filter(
+      (m) => m.ownerKind === 'person' && m.ownerId === personId && m.kind === 'image',
+    );
     if (person?.portraitMediaId) {
-      return this.media.find((m) => m.id === person.portraitMediaId) ?? null;
+      const explicit = images.find((m) => m.id === person.portraitMediaId);
+      if (explicit) return explicit;
     }
-    return this.media.find((m) => m.ownerKind === 'person' && m.ownerId === personId && m.kind === 'image') ?? null;
+    return images[0] ?? null;
   }
 
   // -------------------------------------------------------------------------

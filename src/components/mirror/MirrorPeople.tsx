@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { weddingStore } from '../../game/weddingStore';
 import { GuestsProjection, GuestProjection } from '../../projections/worldModel';
 import { typography, radius, dmcTint } from '../../design/tokens';
@@ -31,6 +31,8 @@ export function MirrorPeople({ guests }: { guests: GuestsProjection }) {
 
   return (
     <div>
+      {/* Keyframe kept local to the people composition. */}
+      <style>{'@keyframes wcPortraitIn{from{opacity:0}to{opacity:1}}'}</style>
       {/* Counts read as an editorial line, not as stat cards. */}
       <Reveal>
         <div style={summaryStyle}>
@@ -111,8 +113,15 @@ function PersonName({ guest, open, onToggle }: {
   guest: GuestProjection; open: boolean; onToggle: () => void;
 }) {
   const store = weddingStore;
-  // Real portrait only. No generated avatar, no placeholder face.
+  // Real portrait only, resolved from the MediaAsset registry — never copied
+  // into this component. Deterministic order: `portraitMediaId` when valid,
+  // otherwise the first image attached to that person (store.getPortraitFor).
   const portrait = store.getPortraitFor(guest.personId);
+
+  const [reduced, setReduced] = useState(false);
+  useEffect(() => {
+    setReduced(Boolean(window.matchMedia?.('(prefers-reduced-motion: reduce)').matches));
+  }, []);
 
   return (
     <li style={{ minWidth: 0 }}>
@@ -125,9 +134,21 @@ function PersonName({ guest, open, onToggle }: {
             background: portrait ? 'transparent' : dmcTint(guest.dmcColor ?? '#8a8f99', 0.1),
           }}
         >
-          {portrait
-            ? <img src={portrait.source} alt="" style={portraitStyle} />
-            : <span style={initialsStyle}>{initialsOf(guest.displayName)}</span>}
+          {portrait ? (
+            <img
+              src={portrait.source}
+              alt=""
+              loading="lazy"
+              decoding="async"
+              style={{
+                ...portraitStyle,
+                // Soft swap when a photo appears or disappears.
+                animation: reduced ? undefined : 'wcPortraitIn 420ms ease both',
+              }}
+            />
+          ) : (
+            <span style={initialsStyle}>{initialsOf(guest.displayName)}</span>
+          )}
         </span>
 
         <span style={{ minWidth: 0 }}>
