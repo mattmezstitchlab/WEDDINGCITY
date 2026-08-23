@@ -1546,6 +1546,16 @@ class WeddingStore {
   /** Composition-mode surface: guest constellation (Phase B prototype). */
   public constellationOpen: boolean = false;
 
+  // -------------------------------------------------------------------------
+  // PROJECTIONS (Phase C)
+  //
+  // One World Model, several renderers. This is only WHICH projection is on
+  // screen — never a second copy of the data.
+  // -------------------------------------------------------------------------
+  public projection: 'world' | 'mirror' = 'world';
+  /** Entity the user arrived on when crossing from another projection. */
+  public mirrorFocusPersonId: string | null = null;
+
   // Real World -> 3D World / Interior State
   public interiorMode: boolean = false;
   public activeVenueId: string | null = null;
@@ -1672,6 +1682,57 @@ class WeddingStore {
     } catch (error) {
       reportDiagnostic({ source: 'store', severity: 'error', code: 'store_persist_failed', error });
     }
+  }
+
+  // -------------------------------------------------------------------------
+  // CROSS-PROJECTION NAVIGATION
+  //
+  // Every hop travels by STABLE ENTITY ID (personId), never by visual index.
+  // That is what guarantees "click Paul in Mirror → find exactly Paul in
+  // World", and back, without duplicating anything.
+  // -------------------------------------------------------------------------
+
+  public setProjection(projection: 'world' | 'mirror'): void {
+    if (this.projection === projection) return;
+    this.projection = projection;
+    weddingAudio.playClick();
+    this.notify();
+  }
+
+  /**
+   * Mirror → World. Focuses the 3D camera on the agent that projects this
+   * person, and selects it so the inspector and neural links follow.
+   * Returns false when the person has no spatial projection, so the UI can
+   * say so instead of silently doing nothing.
+   */
+  public showPersonInWorld(personId: string): boolean {
+    const agent = this.getAgentForPerson(personId);
+    if (!agent) return false;
+
+    this.projection = 'world';
+    this.constellationOpen = false;
+    this.showIdentityModal = false;
+    this.interiorMode = false;
+    this.selectEntity('agent', agent.id);
+    this.cameraTargetPos = [agent.currentPos[0], agent.currentPos[1] + 1.5, agent.currentPos[2]];
+    this.spawnGridWave(agent.currentPos, BRAND_ACCENT);
+    this.notify();
+    return true;
+  }
+
+  /** World → Mirror, landing on that person's editorial representation. */
+  public showPersonInMirror(personId: string): boolean {
+    if (!this.getPerson(personId)) return false;
+    this.projection = 'mirror';
+    this.mirrorFocusPersonId = personId;
+    this.notify();
+    return true;
+  }
+
+  public clearMirrorFocus(): void {
+    if (this.mirrorFocusPersonId === null) return;
+    this.mirrorFocusPersonId = null;
+    this.notify();
   }
 
   // -------------------------------------------------------------------------

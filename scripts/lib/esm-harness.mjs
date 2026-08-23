@@ -28,7 +28,7 @@ export async function compileGameModules() {
   const out = mkdtempSync(path.join(holder, 'run-'));
 
   const inputs = [];
-  for (const dir of ['game', 'types']) {
+  for (const dir of ['game', 'types', 'projections', 'design/tokens']) {
     const abs = path.join(SRC, dir);
     if (!existsSync(abs)) continue;
     for (const f of readdirSync(abs)) if (f.endsWith('.ts')) inputs.push(path.join(abs, f));
@@ -46,7 +46,7 @@ export async function compileGameModules() {
   });
 
   // Node requires explicit extensions on relative specifiers.
-  for (const dir of ['game', 'types']) {
+  for (const dir of ['game', 'types', 'projections', 'design/tokens']) {
     const abs = path.join(out, dir);
     if (!existsSync(abs)) continue;
     for (const f of readdirSync(abs)) {
@@ -61,6 +61,11 @@ export async function compileGameModules() {
     /** Import a game module. `cacheBust` forces a fresh evaluation (simulates a page reload). */
     load: (name, cacheBust) => {
       const href = pathToFileURL(path.join(out, 'game', `${name}.mjs`)).href;
+      return import(cacheBust ? `${href}?v=${cacheBust}` : href);
+    },
+    /** Import any compiled module by path relative to src/, e.g. 'projections/worldModel'. */
+    loadPath: (rel, cacheBust) => {
+      const href = pathToFileURL(path.join(out, `${rel}.mjs`)).href;
       return import(cacheBust ? `${href}?v=${cacheBust}` : href);
     },
     cleanup: () => rmSync(out, { recursive: true, force: true }),

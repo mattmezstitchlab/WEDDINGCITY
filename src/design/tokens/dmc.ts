@@ -50,7 +50,7 @@ export const DMC_NEUTRAL = '#6b7280';
  * Routing every legitimate case through these helpers keeps the rule
  * enforceable while making the intent explicit at the call site.
  */
-export function dmcDotStyle(color: string, size = dmcSignal.dot.size) {
+export function dmcDotStyle(color: string, size: number = dmcSignal.dot.size) {
   return {
     width: size,
     height: size,

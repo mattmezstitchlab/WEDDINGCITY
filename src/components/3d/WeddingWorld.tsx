@@ -65,6 +65,10 @@ function WeddingWorldCanvas() {
     <div style={{ width: '100vw', height: '100vh', position: 'fixed', inset: 0, overflow: 'hidden', zIndex: 0 }}>
       <Canvas
         id="wedding-canvas"
+        // Paused while another projection is on screen: the scene keeps its
+        // WebGL context (instant switch back) but stops consuming GPU behind
+        // an opaque editorial page.
+        frameloop={store.projection === 'mirror' ? 'never' : 'always'}
         // Percentage-closer soft shadows: the penumbra spreads with distance
         // instead of the previous hard-edged stencil.
         shadows={{ type: THREE.PCFSoftShadowMap }}

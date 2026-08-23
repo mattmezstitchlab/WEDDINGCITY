@@ -372,6 +372,17 @@ export function EntityInspector() {
           </div>
         )}
 
+        {/* WORLD → MIRROR. Travels by personId, so the editorial page lands on
+            exactly this person — no index, no name matching. */}
+        {person && (
+          <button
+            onClick={() => store.showPersonInMirror(person.id)}
+            style={{ ...actionMainBtnStyle, background: 'transparent', color: BRAND_ACCENT, border: `1px solid ${BRAND_BORDER}`, marginBottom: 6 }}
+          >
+            Voir dans Mirror →
+          </button>
+        )}
+
         {/* Track Agent in World */}
         <button
           onClick={() => {
