@@ -24,6 +24,8 @@ import {
 import { generateWorldFromDescription } from './worldEngine';
 import { DEFAULT_DMC_IDENTITY } from './dmcPalette';
 import { INITIAL_AD_SLOTS } from './advertisingEngine';
+export { BRAND_ACCENT } from './brand';
+import { BRAND_ACCENT } from './brand';
 import { weddingAudio } from './audio';
 import {
   getStoredProjects,
@@ -39,7 +41,6 @@ import {
 } from './persistence';
 
 // Apple Vision Pro & Spatial Design System Constants
-export const BRAND_ACCENT = '#e2b448'; // Refined Champagne Titanium / Warm Light
 export const BRAND_BG = '#08090d';
 export const BRAND_SURFACE = '#12151e';
 export const BRAND_SURFACE_HOVER = '#181c28';
