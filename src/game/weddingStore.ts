@@ -1846,6 +1846,82 @@ class WeddingStore {
     return table;
   }
 
+  public setGuestDietary(guestId: string, dietary: string): boolean {
+    const guest = this.guests.find((g) => g.id === guestId);
+    if (!guest) return false;
+    guest.dietary = dietary.trim() || undefined;
+    guest.updatedAt = new Date().toISOString();
+    // Keep the legacy agent field in sync so existing views stay correct.
+    const agent = this.getAgentForPerson(guest.personId);
+    if (agent) agent.dietary = guest.dietary;
+    this.saveCurrentState();
+    this.notify();
+    return true;
+  }
+
+  public setGuestSide(guestId: string, side: Guest['side']): boolean {
+    const guest = this.guests.find((g) => g.id === guestId);
+    if (!guest) return false;
+    guest.side = side;
+    guest.updatedAt = new Date().toISOString();
+    this.saveCurrentState();
+    this.notify();
+    return true;
+  }
+
+  public setVendorStatus(vendorId: string, status: Vendor['status']): boolean {
+    const vendor = this.vendors.find((v) => v.id === vendorId);
+    if (!vendor) return false;
+    vendor.status = status;
+    vendor.updatedAt = new Date().toISOString();
+    this.saveCurrentState();
+    this.notify();
+    return true;
+  }
+
+  public setPersonContact(personId: string, patch: { email?: string; phone?: string }): boolean {
+    const person = this.persons.find((p) => p.id === personId);
+    if (!person) return false;
+    if (patch.email !== undefined) person.email = patch.email.trim() || undefined;
+    if (patch.phone !== undefined) person.phone = patch.phone.trim() || undefined;
+    person.updatedAt = new Date().toISOString();
+    const agent = this.getAgentForPerson(personId);
+    if (agent && patch.phone !== undefined) agent.phone = person.phone;
+    this.saveCurrentState();
+    this.notify();
+    return true;
+  }
+
+  /** Timeline phases this agent is explicitly mobilised by. */
+  public getPhasesForAgent(agentId: string): TimelinePhase[] {
+    return this.phases.filter((p) => (p.keyAgentIds ?? []).includes(agentId));
+  }
+
+  /** The place whose activity window currently contains the simulated hour. */
+  public getCurrentPlaceForAgent(agentId: string): Place | null {
+    const agent = this.agents.find((a) => a.id === agentId);
+    if (!agent) return null;
+    // Nearest place to the agent's live position: this is the zone it is
+    // actually standing in, not the one it was statically assigned to.
+    let best: Place | null = null;
+    let bestDist = Infinity;
+    for (const place of this.places) {
+      const dx = place.pos[0] - agent.currentPos[0];
+      const dz = place.pos[2] - agent.currentPos[2];
+      const d = dx * dx + dz * dz;
+      if (d < bestDist) { bestDist = d; best = place; }
+    }
+    return best;
+  }
+
+  /** Documents attached to a vendor OR to its agent projection. */
+  public getDocumentsForVendor(vendorId: string): DocumentEntity[] {
+    const vendor = this.vendors.find((v) => v.id === vendorId);
+    if (!vendor) return [];
+    const ids = new Set(vendor.documentIds);
+    return this.docs.filter((d) => ids.has(d.id));
+  }
+
   public getRsvpSummary(): Record<RsvpStatus, number> & { total: number; expectedHeads: number } {
     const summary = { pending: 0, accepted: 0, declined: 0, tentative: 0, total: 0, expectedHeads: 0 };
     for (const g of this.guests) {
@@ -1970,6 +2046,24 @@ class WeddingStore {
     this.userIdentity.outfitColor = dmc.dmcColor;
     this.userIdentity.accessory = dmc.symbolGlyph;
     this.userIdentity.avatarIcon = dmc.symbolGlyph;
+
+    // Write through to the OWNED DMCIdentity record so the signature is
+    // coherent everywhere: avatar colour, chest badge, inspector card and
+    // neural graph all read the same entity instead of a loose global field.
+    if (this.currentPersonId) {
+      const existing = this.dmcIdentities.find((d) => d.ownerPersonId === this.currentPersonId);
+      if (existing) {
+        Object.assign(existing, dmc, { updatedAt: new Date().toISOString() });
+      } else {
+        this.dmcIdentities.push(createDmcRecord(this.currentPersonId, dmc));
+      }
+      const person = this.persons.find((p) => p.id === this.currentPersonId);
+      if (person) {
+        person.dmcIdentityId = dmcIdForPerson(this.currentPersonId);
+        person.updatedAt = new Date().toISOString();
+      }
+    }
+
     weddingAudio.playResolveSuccess();
     this.saveCurrentState();
     this.notify();

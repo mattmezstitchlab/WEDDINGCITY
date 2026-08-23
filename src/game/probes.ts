@@ -1011,7 +1011,205 @@ export const migrationProbe: HealthProbe = {
   },
 };
 
+
+// ---------------------------------------------------------------------------
+// PROJECTIONS — is the identity model actually WIRED to what is on screen?
+// ---------------------------------------------------------------------------
+// A solid model that nothing reads is still dead weight. This probe checks the
+// couplings between entities and their visible projections, and reports the
+// exact leaks the migration was meant to remove.
+export const projectionsProbe: HealthProbe = {
+  id: 'PROJECTIONS',
+  name: 'Projections du modèle (entités ↔ monde visible)',
+  category: 'core',
+  dependencies: ['IDENTITY', 'PEOPLE', 'GUESTS', 'VENDORS'],
+  run: () => {
+    const agents = weddingStore.agents;
+    const persons = weddingStore.persons;
+    const guests = weddingStore.guests;
+    const vendors = weddingStore.vendors;
+
+    // 1. Agent without Person (a body with no identity).
+    const agentsWithoutPerson = agents.filter((a) => !a.personId);
+
+    // 2. Person expected to be visible but with no agent projection.
+    //    "Expected" = the person is a guest who accepted, or a vendor contact.
+    const expectVisible = new Set<string>([
+      ...guests.filter((g) => g.rsvp.status === 'accepted').map((g) => g.personId),
+      ...vendors.map((v) => v.contactPersonId).filter(Boolean) as string[],
+    ]);
+    const personsWithoutProjection = [...expectVisible].filter((pid) => {
+      const person = persons.find((p) => p.id === pid);
+      if (!person) return true;
+      return !agents.some((a) => a.id === person.agentId || a.personId === pid);
+    });
+
+    // 3. Guest without a resolvable Person.
+    const guestsWithoutPerson = guests.filter((g) => !persons.some((p) => p.id === g.personId));
+
+    // 4. Vendor with dead relations.
+    const vendorsWithDeadRefs = vendors.filter((v) =>
+      v.documentIds.some((id) => !weddingStore.docs.some((d) => d.id === id)) ||
+      v.taskIds.some((id) => !weddingStore.tasks.some((t) => t.id === id)) ||
+      v.placeIds.some((id) => !weddingStore.places.some((p) => p.id === id)) ||
+      (v.agentId ? !agents.some((a) => a.id === v.agentId) : false));
+
+    // 5. Tables over capacity.
+    const overfullTables = weddingStore.seatingTables.filter((t) => {
+      const occ = weddingStore.getTableOccupancy(t.id);
+      return occ.seated > occ.capacity;
+    });
+
+    // 6. DMCIdentity not linked to an existing person.
+    const orphanDmc = weddingStore.dmcIdentities.filter(
+      (d) => !persons.some((p) => p.id === d.ownerPersonId));
+    const personsClaimingMissingDmc = persons.filter(
+      (p) => p.dmcIdentityId && !weddingStore.dmcIdentities.some((d) => d.id === p.dmcIdentityId));
+
+    // 7. Session identity resolvable by ID (not by role).
+    const sessionBound = weddingStore.currentPersonId !== null
+      && weddingStore.getCurrentPerson() !== null;
+    const sessionAgent = weddingStore.currentPersonId
+      ? weddingStore.getAgentForPerson(weddingStore.currentPersonId) : null;
+    // The old bug: several agents matching the user because of a shared role.
+    const roleAmbiguity = sessionAgent
+      ? agents.filter((a) => a.role === sessionAgent.role).length : 0;
+    const userAgents = agents.filter((a) => weddingStore.isCurrentUserAgent(a.id)).length;
+
+    const evidence = [
+      { label: 'Agents sans personne', value: String(agentsWithoutPerson.length) },
+      { label: 'Personnes attendues sans projection 3D', value: String(personsWithoutProjection.length) },
+      { label: 'Invités sans personne', value: String(guestsWithoutPerson.length) },
+      { label: 'Prestataires à relations mortes', value: String(vendorsWithDeadRefs.length) },
+      { label: 'Tables en surcapacité', value: String(overfullTables.length) },
+      { label: 'DMC orphelines', value: String(orphanDmc.length + personsClaimingMissingDmc.length) },
+      { label: 'Identité de session', value: sessionBound ? 'résolue par identifiant' : 'non résolue' },
+      { label: 'Agents reconnus comme l’utilisateur', value: `${userAgents} (rôle partagé par ${roleAmbiguity})` },
+      { label: 'Invités placés à une table', value: `${guests.filter((g) => g.seating.tableId).length} / ${guests.length}` },
+    ];
+
+    const errors = [] as { code: string; message: string; cause: string; impact: string; solution: string }[];
+
+    if (agentsWithoutPerson.length > 0) {
+      errors.push({
+        code: 'agent_without_person',
+        message: `${agentsWithoutPerson.length} agent(s) sans identité : ${agentsWithoutPerson.slice(0, 4).map((a) => a.id).join(', ')}.`,
+        cause: 'Agents créés après la migration d’identité.',
+        impact: 'Cliquer sur eux n’ouvre aucune fiche réelle ; ni RSVP, ni permissions, ni relations.',
+        solution: 'Relancer la migration d’identité (idempotente et additive).',
+      });
+    }
+    if (guestsWithoutPerson.length > 0) {
+      errors.push({
+        code: 'guest_without_person',
+        message: `${guestsWithoutPerson.length} invité(s) référencent une personne inexistante.`,
+        cause: 'Personne supprimée sans nettoyer l’invité correspondant.',
+        impact: 'Fiche invité incomplète et graphe nerveux rompu.',
+        solution: 'Recréer la personne, ou supprimer l’invité orphelin.',
+      });
+    }
+    if (vendorsWithDeadRefs.length > 0) {
+      errors.push({
+        code: 'vendor_dead_relations',
+        message: `${vendorsWithDeadRefs.length} prestataire(s) pointent vers des documents, tâches, zones ou agents disparus.`,
+        cause: 'Entités supprimées sans mise à jour des relations du prestataire.',
+        impact: 'Documents et zones affichés sur la fiche prestataire ne mènent nulle part.',
+        solution: 'Nettoyer les relations mortes du prestataire.',
+      });
+    }
+    if (overfullTables.length > 0) {
+      errors.push({
+        code: 'table_overcapacity',
+        message: `${overfullTables.length} table(s) au-delà de leur capacité.`,
+        cause: 'Accompagnants ajoutés après le placement, ou capacité réduite.',
+        impact: 'Plan de table irréalisable le jour J.',
+        solution: 'Déplacer des invités ou augmenter la capacité.',
+      });
+    }
+    if (orphanDmc.length + personsClaimingMissingDmc.length > 0) {
+      errors.push({
+        code: 'dmc_not_linked',
+        message: `${orphanDmc.length} identité(s) DMC sans propriétaire, ${personsClaimingMissingDmc.length} personne(s) pointant vers une DMC absente.`,
+        cause: 'Identité DMC créée ou supprimée sans mettre à jour la personne.',
+        impact: 'La signature visuelle (couleur, symbole, badge) ne s’applique pas.',
+        solution: 'Reconstruire le lien personne ↔ DMC.',
+      });
+    }
+    if (userAgents > 1) {
+      errors.push({
+        code: 'identity_read_by_role',
+        message: `${userAgents} agents sont reconnus comme l’utilisateur.`,
+        cause: 'Une lecture d’identité par rôle subsiste au lieu d’une comparaison par identifiant.',
+        impact: 'Plusieurs personnages portent la signature de l’utilisateur.',
+        solution: 'Utiliser isCurrentUserAgent(agentId), qui compare des personId.',
+      });
+    }
+
+    const warnings = [] as typeof errors;
+    if (personsWithoutProjection.length > 0) {
+      warnings.push({
+        code: 'person_without_projection',
+        message: `${personsWithoutProjection.length} personne(s) attendues dans le monde n’ont pas d’agent.`,
+        cause: 'Invité accepté ou contact prestataire sans projection spatiale.',
+        impact: 'Ces personnes sont invisibles dans la scène 3D et dans le graphe.',
+        solution: 'Créer un agent pour ces personnes, ou revoir l’attente de visibilité.',
+      });
+    }
+
+    const meta = { id: 'PROJECTIONS', name: projectionsProbe.name, category: 'core' as const,
+                   dependencies: ['IDENTITY', 'PEOPLE', 'GUESTS', 'VENDORS'] };
+
+    if (errors.length > 0) {
+      return mk('PROJECTIONS', projectionsProbe.name, 'core', meta.dependencies, {
+        status: 'ERROR',
+        summary: `${errors.length} rupture(s) entre le modèle et ses projections.`,
+        evidence, errors, warnings,
+        repairable: true,
+        repairAction: {
+          id: 'repair_projections',
+          label: 'Réparer les projections',
+          description: 'Relance la migration et nettoie les relations mortes. Aucune entité n’est supprimée.',
+        },
+      });
+    }
+
+    if (warnings.length > 0) {
+      return mk('PROJECTIONS', projectionsProbe.name, 'core', meta.dependencies, {
+        status: 'PARTIAL',
+        summary: 'Modèle et projections cohérents, avec des personnes non représentées dans le monde.',
+        evidence, warnings,
+      });
+    }
+
+    return mk('PROJECTIONS', projectionsProbe.name, 'core', meta.dependencies, {
+      status: 'VERIFIED',
+      summary: `${agents.length} agents reliés à une personne, ${guests.length} invités et ${vendors.length} prestataires projetés sans rupture.`,
+      evidence,
+    });
+  },
+  repair: (actionId) => {
+    if (actionId !== 'repair_projections') return false;
+    weddingStore.ensureIdentityModel();
+    // Prune only DEAD ids from vendor relations; never delete an entity.
+    for (const v of weddingStore.vendors) {
+      v.documentIds = v.documentIds.filter((id) => weddingStore.docs.some((d) => d.id === id));
+      v.taskIds = v.taskIds.filter((id) => weddingStore.tasks.some((t) => t.id === id));
+      v.placeIds = v.placeIds.filter((id) => weddingStore.places.some((p) => p.id === id));
+      if (v.agentId && !weddingStore.agents.some((a) => a.id === v.agentId)) v.agentId = undefined;
+    }
+    for (const p of weddingStore.persons) {
+      if (p.dmcIdentityId && !weddingStore.dmcIdentities.some((d) => d.id === p.dmcIdentityId)) {
+        p.dmcIdentityId = undefined;
+      }
+    }
+    weddingStore.saveCurrentState();
+    weddingStore.notify();
+    return true;
+  },
+};
+
 export const extraProbes: HealthProbe[] = [
+  projectionsProbe,
   identityProbe,
   guestsProbe,
   vendorsProbe,

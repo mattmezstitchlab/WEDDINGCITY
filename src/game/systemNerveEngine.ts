@@ -380,6 +380,7 @@ class SystemNerveEngine {
     AUTH: ['AUTH'],
     PERMISSIONS: [],
     IDENTITY: [],
+    PROJECTIONS: [],
     GUESTS: [],
     VENDORS: [],
     MIGRATION: [],

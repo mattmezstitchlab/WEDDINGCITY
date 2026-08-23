@@ -170,6 +170,26 @@ function SingleVoxelAgent({
         </mesh>
       )}
 
+      {/* RSVP state, projected onto the character itself.
+          A guest is no longer just a row in a list: pending and declined
+          answers are visible in the world. Uses the existing voxel vocabulary
+          (a small emissive marker), not a new visual language. */}
+      {(() => {
+        const person = weddingStore.getPersonForAgent(agent.id);
+        const guest = person ? weddingStore.getGuestForPerson(person.id) : null;
+        if (!guest || guest.rsvp.status === 'accepted') return null;
+        const color =
+          guest.rsvp.status === 'declined' ? '#f43f5e'
+            : guest.rsvp.status === 'tentative' ? '#38bdf8'
+              : '#eab308';
+        return (
+          <mesh position={[0, 1.72, 0]}>
+            <octahedronGeometry args={[0.07, 0]} />
+            <meshStandardMaterial color={color} emissive={color} emissiveIntensity={0.7} />
+          </mesh>
+        );
+      })()}
+
       {/* Head & Hair */}
       <group ref={headRef} position={[0, 1.22, 0]}>
         <RoundedBox args={[0.36, 0.36, 0.34]} radius={0.05} smoothness={2} castShadow>

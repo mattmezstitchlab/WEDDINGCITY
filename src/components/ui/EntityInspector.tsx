@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import {
   weddingStore,
   BRAND_ACCENT,
@@ -26,6 +27,8 @@ import {
 export function EntityInspector() {
   const store = weddingStore;
   const selected = store.selectedEntity;
+  // Surfaces a refused seating attempt instead of failing silently.
+  const [seatError, setSeatError] = useState<string | null>(null);
 
   if (!selected) return null;
 
@@ -50,6 +53,20 @@ export function EntityInspector() {
   if (selected.type === 'agent') {
     const agent = store.agents.find((a) => a.id === selected.id);
     if (!agent) return null;
+
+    // The card is now a PROJECTION OF THE DOMAIN MODEL, resolved by id.
+    // Previously it read agent fields directly and — worse — displayed the
+    // CURRENT USER's DMC identity on every single person's card.
+    const person = store.getPersonForAgent(agent.id);
+    const guest = person ? store.getGuestForPerson(person.id) : null;
+    const vendor = store.getVendorForAgent(agent.id);
+    const dmc = person ? store.getDmcForPerson(person.id) : null;
+    const isMe = store.isCurrentUserAgent(agent.id);
+    const table = guest?.seating.tableId
+      ? store.seatingTables.find((t) => t.id === guest.seating.tableId)
+      : null;
+    const phases = store.getPhasesForAgent(agent.id);
+    const zone = store.getCurrentPlaceForAgent(agent.id);
 
     return (
       <div style={inspectorCardStyle}>
@@ -95,13 +112,47 @@ export function EntityInspector() {
               <span style={dataKeyStyle}>Rôle :</span> <span style={dataValStyle}>{agent.role.toUpperCase()}</span>
             </div>
             <div>
-              <span style={dataKeyStyle}>DMC ID :</span> <span style={{ ...dataValStyle, color: BRAND_ACCENT }}>
-                {store.userDmcIdentity.symbolGlyph} {store.userDmcIdentity.dmcCode}
+              <span style={dataKeyStyle}>Identifiant :</span>{' '}
+              <span style={{ ...dataValStyle, fontSize: 9.5, opacity: 0.75 }}>
+                {person ? person.id : 'aucune personne rattachée'}
               </span>
             </div>
-            <div>
-              <span style={dataKeyStyle}>Nuance Textile :</span> <span style={dataValStyle}>{store.userDmcIdentity.dmcName}</span>
-            </div>
+            {/* The DMC shown is the one OWNED BY THIS PERSON. */}
+            {dmc ? (
+              <>
+                <div>
+                  <span style={dataKeyStyle}>DMC ID :</span>{' '}
+                  <span style={{ ...dataValStyle, color: dmc.dmcColor }}>
+                    {dmc.symbolGlyph} {dmc.dmcCode}
+                  </span>
+                </div>
+                <div>
+                  <span style={dataKeyStyle}>Nuance Textile :</span> <span style={dataValStyle}>{dmc.dmcName}</span>
+                </div>
+              </>
+            ) : (
+              <div>
+                <span style={dataKeyStyle}>DMC ID :</span>{' '}
+                <span style={{ ...dataValStyle, opacity: 0.6 }}>aucune identité DMC</span>
+              </div>
+            )}
+            {isMe && (
+              <div>
+                <span style={dataKeyStyle}>Statut :</span>{' '}
+                <span style={{ ...dataValStyle, color: BRAND_ACCENT }}>C’EST VOUS</span>
+              </div>
+            )}
+            {vendor && (
+              <div>
+                <span style={dataKeyStyle}>Prestataire :</span>{' '}
+                <span style={dataValStyle}>{vendor.companyName} · {vendor.category}</span>
+              </div>
+            )}
+            {zone && (
+              <div>
+                <span style={dataKeyStyle}>Zone actuelle :</span> <span style={dataValStyle}>{zone.name}</span>
+              </div>
+            )}
             <div>
               <span style={dataKeyStyle}>Présence :</span> <span style={dataValStyle}>{Math.floor(agent.arrivalHour)}h - {Math.floor(agent.departureHour)}h</span>
             </div>
@@ -110,18 +161,142 @@ export function EntityInspector() {
                 <span style={dataKeyStyle}>Contact :</span> <span style={dataValStyle}>{agent.phone}</span>
               </div>
             )}
-            {agent.assignedTable && (
+          </div>
+        </div>
+
+        {/* ---- GUEST FACET: real, editable, persisted ---- */}
+        {guest && (
+          <div style={sectionStyle}>
+            <div style={labelStyle}>INVITÉ · RSVP & PLACEMENT</div>
+
+            <div style={{ display: 'flex', gap: 4, marginTop: 6, flexWrap: 'wrap' }}>
+              {(['accepted', 'pending', 'tentative', 'declined'] as const).map((status) => (
+                <button
+                  key={status}
+                  onClick={() => store.setGuestRsvp(guest.id, status)}
+                  style={{
+                    ...badgeBtnStyle,
+                    flex: '0 0 auto',
+                    borderColor: guest.rsvp.status === status ? BRAND_ACCENT : undefined,
+                    background: guest.rsvp.status === status ? 'rgba(226,180,72,0.15)' : undefined,
+                    color: guest.rsvp.status === status ? BRAND_ACCENT : '#ffffff',
+                  }}
+                >
+                  {status === 'accepted' ? 'Présent' : status === 'pending' ? 'En attente'
+                    : status === 'tentative' ? 'Incertain' : 'Absent'}
+                </button>
+              ))}
+            </div>
+
+            <div style={{ ...gridDataStyle, marginTop: 8 }}>
               <div>
-                <span style={dataKeyStyle}>Table :</span> <span style={dataValStyle}>Table {agent.assignedTable}</span>
+                <span style={dataKeyStyle}>Côté :</span>{' '}
+                <select
+                  value={guest.side}
+                  onChange={(e) => store.setGuestSide(guest.id, e.target.value as typeof guest.side)}
+                  style={inlineSelectStyle}
+                >
+                  <option value="bride">Mariée</option>
+                  <option value="groom">Marié</option>
+                  <option value="both">Les deux</option>
+                  <option value="unknown">Non précisé</option>
+                </select>
               </div>
-            )}
-            {agent.dietary && (
               <div>
-                <span style={dataKeyStyle}>Régime :</span> <span style={dataValStyle}>{agent.dietary}</span>
+                <span style={dataKeyStyle}>Accompagnants :</span>{' '}
+                <span style={dataValStyle}>{guest.rsvp.plusOnes}</span>
+                <button onClick={() => store.setGuestPlusOnes(guest.id, guest.rsvp.plusOnes + 1)} style={miniBtnStyle}>+</button>
+                <button onClick={() => store.setGuestPlusOnes(guest.id, guest.rsvp.plusOnes - 1)} style={miniBtnStyle}>−</button>
+              </div>
+              <div>
+                <span style={dataKeyStyle}>Table :</span>{' '}
+                <select
+                  value={guest.seating.tableId ?? ''}
+                  onChange={(e) => {
+                    const ok = store.assignGuestToTable(guest.id, e.target.value || null);
+                    if (!ok) setSeatError('Table complète ou introuvable.');
+                    else setSeatError(null);
+                  }}
+                  style={inlineSelectStyle}
+                >
+                  <option value="">Non placé</option>
+                  {store.seatingTables.map((t) => {
+                    const occ = store.getTableOccupancy(t.id);
+                    return (
+                      <option key={t.id} value={t.id}>
+                        {t.label} ({occ.seated}/{occ.capacity})
+                      </option>
+                    );
+                  })}
+                </select>
+              </div>
+              <div>
+                <span style={dataKeyStyle}>Régime :</span>{' '}
+                <input
+                  defaultValue={guest.dietary ?? ''}
+                  onBlur={(e) => store.setGuestDietary(guest.id, e.target.value)}
+                  placeholder="Standard"
+                  style={inlineInputStyle}
+                />
+              </div>
+            </div>
+
+            {seatError && (
+              <div style={{ marginTop: 6, fontSize: 10, color: '#fda4af' }}>{seatError}</div>
+            )}
+            {table && (
+              <button
+                onClick={() => { if (table.placeId) store.focusPlace(table.placeId); }}
+                style={{ ...badgeBtnStyle, marginTop: 6 }}
+              >
+                Voir {table.label} dans le monde →
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* ---- VENDOR FACET ---- */}
+        {vendor && (
+          <div style={sectionStyle}>
+            <div style={labelStyle}>PRESTATAIRE · ENGAGEMENT</div>
+            <div style={{ display: 'flex', gap: 4, marginTop: 6, flexWrap: 'wrap' }}>
+              {(['prospect', 'quoted', 'contracted', 'cancelled'] as const).map((st) => (
+                <button
+                  key={st}
+                  onClick={() => store.setVendorStatus(vendor.id, st)}
+                  style={{
+                    ...badgeBtnStyle,
+                    flex: '0 0 auto',
+                    borderColor: vendor.status === st ? BRAND_ACCENT : undefined,
+                    background: vendor.status === st ? 'rgba(226,180,72,0.15)' : undefined,
+                    color: vendor.status === st ? BRAND_ACCENT : '#ffffff',
+                  }}
+                >
+                  {st === 'prospect' ? 'Prospect' : st === 'quoted' ? 'Devis'
+                    : st === 'contracted' ? 'Contractualisé' : 'Annulé'}
+                </button>
+              ))}
+            </div>
+            {vendor.placeIds.length > 0 && (
+              <div style={{ marginTop: 8 }}>
+                <div style={subLabelStyle}>ZONES D’INTERVENTION :</div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 4 }}>
+                  {vendor.placeIds.map((placeId) => {
+                    const place = store.places.find((pl) => pl.id === placeId);
+                    if (!place) return null;
+                    return (
+                      <button key={placeId} onClick={() => store.focusPlace(place.id)} style={badgeBtnStyle}>
+                        <span style={{ textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
+                          {place.name}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
             )}
           </div>
-        </div>
+        )}
 
         {/* Interconnected Network */}
         <div style={sectionStyle}>
@@ -179,6 +354,23 @@ export function EntityInspector() {
             </div>
           )}
         </div>
+
+        {/* ---- TIMELINE MOMENTS ---- */}
+        {phases.length > 0 && (
+          <div style={sectionStyle}>
+            <div style={labelStyle}>MOMENTS DE TIMELINE</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 4 }}>
+              {phases.map((ph) => (
+                <button key={ph.id} onClick={() => store.setTime(ph.startHour + 0.1)} style={badgeBtnStyle}>
+                  <span style={{ color: BRAND_ACCENT }}>{Math.floor(ph.startHour)}h</span>
+                  <span style={{ textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
+                    {ph.name}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Track Agent in World */}
         <button
@@ -512,5 +704,36 @@ const resolveBtnStyle: React.CSSProperties = {
   padding: '5px 8px',
   fontSize: 10,
   fontWeight: 700,
+  cursor: 'pointer',
+};
+
+// Inline editing controls. Deliberately reuse the existing tokens and the same
+// visual weight as the read-only rows they replace, so the card looks
+// unchanged while becoming genuinely editable.
+const inlineSelectStyle: React.CSSProperties = {
+  background: 'rgba(255, 255, 255, 0.04)',
+  border: `1px solid ${BRAND_BORDER}`,
+  borderRadius: 5,
+  color: BRAND_TEXT_PRIMARY,
+  fontSize: 11,
+  padding: '2px 4px',
+  outline: 'none',
+  maxWidth: 150,
+};
+
+const inlineInputStyle: React.CSSProperties = {
+  ...inlineSelectStyle,
+  width: 110,
+};
+
+const miniBtnStyle: React.CSSProperties = {
+  background: 'rgba(255, 255, 255, 0.05)',
+  border: `1px solid ${BRAND_BORDER}`,
+  borderRadius: 4,
+  color: BRAND_TEXT_PRIMARY,
+  fontSize: 10,
+  lineHeight: 1,
+  padding: '2px 5px',
+  marginLeft: 4,
   cursor: 'pointer',
 };

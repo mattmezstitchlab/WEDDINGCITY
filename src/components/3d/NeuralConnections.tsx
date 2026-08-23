@@ -55,6 +55,43 @@ export function NeuralConnections({ selectedEntity, gridWaves, neuralPulses }: N
             });
           }
         });
+
+        // --- Identity-model relations, resolved by ID ---
+        const person = weddingStore.getPersonForAgent(agent.id);
+
+        // GUEST → TABLE → PLACE. Seating becomes visible in the world itself,
+        // not just in a list.
+        const guest = person ? weddingStore.getGuestForPerson(person.id) : null;
+        if (guest?.seating.tableId) {
+          const table = weddingStore.seatingTables.find((t) => t.id === guest.seating.tableId);
+          const tablePlace = table?.placeId
+            ? weddingStore.places.find((p) => p.id === table.placeId)
+            : null;
+          if (tablePlace) {
+            lines.push({
+              from: originPos,
+              to: tablePlace.pos,
+              color: '#34d399',
+              label: `${table!.label} · ${tablePlace.name}`,
+            });
+          }
+        }
+
+        // VENDOR → ZONES of intervention, from the Vendor entity.
+        const vendor = weddingStore.getVendorForAgent(agent.id);
+        if (vendor) {
+          vendor.placeIds.forEach((pid) => {
+            const p = weddingStore.places.find((x) => x.id === pid);
+            if (p && !agent.connectedPlaceIds.includes(pid)) {
+              lines.push({
+                from: originPos,
+                to: p.pos,
+                color: '#e2b448',
+                label: `${vendor.companyName} · ${p.name}`,
+              });
+            }
+          });
+        }
       }
     } else if (selectedEntity.type === 'place') {
       const place = weddingStore.places.find((p) => p.id === selectedEntity.id);
