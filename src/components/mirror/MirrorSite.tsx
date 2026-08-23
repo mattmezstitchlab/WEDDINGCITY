@@ -1,5 +1,5 @@
 import { useEffect, useMemo } from 'react';
-import { weddingStore } from '../../game/weddingStore';
+import { weddingStore, CanvasSection } from '../../game/weddingStore';
 import { projectWorldModel } from '../../projections/worldModel';
 import { typography } from '../../design/tokens';
 import { M, fluid, SectionShell, EmptyState, Reveal } from './MirrorPrimitives';
@@ -8,6 +8,7 @@ import { MirrorHero } from './MirrorHero';
 import { MirrorTimeline } from './MirrorTimeline';
 import { MirrorPeople } from './MirrorPeople';
 import { MirrorVendors, MirrorPlaces, MirrorMusic, MirrorGallery } from './MirrorSections';
+import './mirror.css';
 
 // ---------------------------------------------------------------------------
 // MIRROR — the editorial projection of the World Model.
@@ -38,6 +39,12 @@ export function MirrorSite() {
     });
   }, [store.mirrorFocusPersonId]);
 
+  // 06 MÉDIAS renders IMAGES. A song preview is a real media too, but it is
+  // not something to hang on a wall — counting it as a photograph would make
+  // the section claim a gallery it cannot show.
+  const galleryImages = gallery.filter((m) => m.kind === 'image');
+  const otherMedia = gallery.length - galleryImages.length;
+
   const storySection = availability.find((a) => a.id === 'story');
   const gallerySection = availability.find((a) => a.id === 'gallery');
 
@@ -51,15 +58,29 @@ export function MirrorSite() {
     { id: 'gallery', index: '06', label: 'Médias', available: true },
   ];
 
-  const compose = (focus?: { kind: 'event' | 'person' | 'vendor' | 'place' | 'song'; id: string }) =>
-    store.openCanvas(focus);
+  // "Composer" opens the Canvas ALREADY on the matching surface: 04 LIEUX →
+  // Canvas 04 Lieux. No intermediate navigation, no lost context.
+  const SECTION_LABEL: Record<CanvasSection, string> = {
+    programme: 'le programme', people: 'les personnes', vendors: 'les prestataires',
+    places: 'les lieux', music: 'la musique', media: 'les médias',
+  };
 
-  const ComposeBtn = ({ label = 'Composer' }: { label?: string }) => (
-    <button style={editBtnStyle} onClick={() => compose()}>{label}</button>
+  const ComposeBtn = ({ section, label = 'Composer' }: { section: CanvasSection; label?: string }) => (
+    <button
+      className="wc-action"
+      style={editBtnStyle}
+      onClick={() => store.openCanvas(undefined, section)}
+      aria-label={`${label} ${SECTION_LABEL[section]}`}
+    >
+      {label}
+    </button>
   );
 
   return (
-    <div style={pageStyle}>
+    <div id="wc-mirror" style={pageStyle}>
+      {/* Keyboard users land here first: one key to reach the content. */}
+      <a className="wc-skip" href="#mirror-programme">Aller au programme</a>
+
       <MirrorHero hero={hero} />
 
       <MirrorNav sections={navSections} />
@@ -73,14 +94,14 @@ export function MirrorSite() {
           eyebrow="Le déroulé"
           title="Programme"
           lead="Le fil de la journée. Chaque moment porte son lieu, celles et ceux qui le font, et sa bande-son."
-          action={<ComposeBtn />}
+          action={<ComposeBtn section="programme" />}
         >
           <MirrorTimeline moments={programme.moments} />
         </SectionShell>
       ) : (
         <SectionShell
           id="programme" index="01" eyebrow="Le déroulé" title="Programme"
-          action={<ComposeBtn />}
+          action={<ComposeBtn section="programme" />}
         >
           <EmptyState
             title="Le programme n’est pas encore composé"
@@ -98,7 +119,7 @@ export function MirrorSite() {
           eyebrow="Les personnes"
           title="Invités"
           lead={`${guests.counts.headcount} convives attendus, répartis sur ${guests.counts.tables} tables.`}
-          action={<ComposeBtn />}
+          action={<ComposeBtn section="people" />}
         >
           <MirrorPeople guests={guests} />
         </SectionShell>
@@ -119,7 +140,7 @@ export function MirrorSite() {
           eyebrow="Celles et ceux qui font"
           title="Prestataires"
           lead={`${vendors.counts.total} intervenants, dont ${vendors.counts.contracted} contractualisés.`}
-          action={<ComposeBtn />}
+          action={<ComposeBtn section="vendors" />}
         >
           <MirrorVendors vendors={vendors} />
         </SectionShell>
@@ -134,7 +155,7 @@ export function MirrorSite() {
           eyebrow="Les espaces"
           title="Le lieu"
           lead={`${places.counts.withMoments} espaces accueillent un moment du programme, sur ${places.counts.total} référencés.`}
-          action={<ComposeBtn />}
+          action={<ComposeBtn section="places" />}
         >
           <MirrorPlaces places={places} />
         </SectionShell>
@@ -148,7 +169,7 @@ export function MirrorSite() {
           eyebrow="La bande-son"
           title="Musique"
           lead={`${music.counts.total} titres, ${music.counts.scheduled} rattachés à un moment du programme.`}
-          action={<ComposeBtn />}
+          action={<ComposeBtn section="music" />}
         >
           <MirrorMusic music={music} />
         </SectionShell>
@@ -159,17 +180,30 @@ export function MirrorSite() {
         id="gallery"
         index="06"
         tone="surface"
-        scale={gallery.length > 0 ? 'normal' : 'quiet'}
+        scale={galleryImages.length > 0 ? 'normal' : 'quiet'}
         eyebrow="Les images"
         title="Médias"
-        action={<button style={editBtnStyle} onClick={() => compose()}>Ajouter</button>}
+        lead={galleryImages.length > 0
+          ? `${galleryImages.length} image(s) rattachée(s) au projet.`
+          : undefined}
+        action={<ComposeBtn section="media" label="Ajouter" />}
       >
-        {gallery.length > 0 ? (
-          <MirrorGallery gallery={gallery} />
+        {galleryImages.length > 0 ? (
+          <>
+            <MirrorGallery gallery={galleryImages} />
+            {otherMedia > 0 && (
+              <p style={otherMediaStyle}>
+                {otherMedia} autre(s) fichier(s) — extraits audio et documents — sont
+                rattachés au projet sans être des images.
+              </p>
+            )}
+          </>
         ) : (
           <EmptyState
             title="Votre histoire visuelle commencera ici"
-            body="Aucun média n’est encore rattaché au projet. Rien n’est affiché à la place : ces images n’existent pas. Le premier fichier ajouté apparaîtra ici, et pourra devenir la couverture du site."
+            body={otherMedia > 0
+              ? `Aucune image pour l’instant : les ${otherMedia} fichier(s) rattaché(s) au projet sont des extraits audio ou des documents. La première photographie ajoutée apparaîtra ici, et pourra devenir la couverture du site.`
+              : 'Aucun média n’est encore rattaché au projet. Rien n’est affiché à la place : ces images n’existent pas. Le premier fichier ajouté apparaîtra ici, et pourra devenir la couverture du site.'}
             note={gallerySection?.reason}
           />
         )}
@@ -192,8 +226,17 @@ export function MirrorSite() {
             <span style={{ fontSize: fluid(16, 22), color: M.textPrimary, letterSpacing: '-0.02em' }}>
               {hero.title}
             </span>
-            <span style={{ color: M.textMuted }}>
-              Projection éditoriale du monde · données en direct
+            <span style={{ display: 'flex', gap: 18, alignItems: 'baseline', flexWrap: 'wrap' }}>
+              <span style={{ color: M.textMuted }}>
+                Projection éditoriale du monde · données en direct
+              </span>
+              <button
+                className="wc-action"
+                onClick={() => store.setProjection('world')}
+                style={{ ...editBtnStyle, textTransform: 'none' }}
+              >
+                Explorer le Monde 3D
+              </button>
             </span>
           </div>
         </Reveal>
@@ -201,6 +244,11 @@ export function MirrorSite() {
     </div>
   );
 }
+
+const otherMediaStyle: React.CSSProperties = {
+  margin: `${fluid(18, 26)} 0 0`, maxWidth: 520,
+  fontSize: typography.size.caption, color: M.textMuted, lineHeight: 1.6,
+};
 
 const pageStyle: React.CSSProperties = {
   position: 'fixed', inset: 0, zIndex: 800, overflowY: 'auto',

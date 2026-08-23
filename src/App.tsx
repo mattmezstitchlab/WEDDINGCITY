@@ -16,6 +16,8 @@ import { InteriorHUD } from './components/ui/InteriorHUD';
 // requested at startup.
 const WorldCanvasShell = lazy(() => import('./components/canvas/WorldCanvasShell').then((m) => ({ default: m.WorldCanvasShell })));
 const MirrorCanvasShell = lazy(() => import('./components/canvas/MirrorCanvasShell').then((m) => ({ default: m.MirrorCanvasShell })));
+import { ProjectionVeil } from './components/ui/ProjectionVeil';
+
 const MirrorSite = lazy(() => import('./components/mirror/MirrorSite').then((m) => ({ default: m.MirrorSite })));
 const GuestConstellation = lazy(() => import('./components/ui/GuestConstellation').then((m) => ({ default: m.GuestConstellation })));
 const SystemNerveCenterModal = lazy(() => import('./components/ui/SystemNerveCenterModal').then((m) => ({ default: m.SystemNerveCenterModal })));
@@ -113,6 +115,10 @@ export default function App() {
 
       {/* Dimension selector: one World Model, several projections. */}
       <ProjectionSwitcher />
+
+      {/* The crossing itself: a short fade in the colour of the destination.
+          The 3D scene is never remounted, so nothing is rebuilt or lost. */}
+      <ProjectionVeil projection={weddingStore.projection} />
 
       {/* CANVAS — the composition projection. A contextual side surface, not a
           page: the World stays visible behind it so context is never lost. */}

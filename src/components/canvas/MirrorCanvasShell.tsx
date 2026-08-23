@@ -6,6 +6,8 @@ import {
   CanvasCore, CanvasTab, CANVAS_TABS, tabForFocus, focusLabel, SaveIndicator, UndoRedo,
 } from './CanvasCore';
 import { M, fluid, Eyebrow } from '../mirror/MirrorPrimitives';
+// Same responsive + accessibility rules as the site it is embedded in.
+import '../mirror/mirror.css';
 
 // ---------------------------------------------------------------------------
 // MIRROR CANVAS SHELL — the editorial site becomes editable.
@@ -23,16 +25,25 @@ export function MirrorCanvasShell() {
   const focusTab = tabForFocus(store.canvasFocus);
   const [tab, setTab] = useState<CanvasTab>(focusTab);
   const [lastFocus, setLastFocus] = useState(store.canvasFocus?.id ?? null);
+  const [lastIntent, setLastIntent] = useState(store.canvasIntent);
 
+  // Arriving with a new focus switches the surface, without losing context.
   if (store.canvasFocus && store.canvasFocus.id !== lastFocus) {
     setLastFocus(store.canvasFocus.id);
     setTab(focusTab);
+  }
+  // A section request from the Mirror ("Composer" in 04 LIEUX) lands directly
+  // on that surface. The intent counter makes a repeated request work too.
+  if (store.canvasIntent !== lastIntent) {
+    setLastIntent(store.canvasIntent);
+    if (store.canvasSection) setTab(store.canvasSection);
+    else if (store.canvasFocus) setTab(tabForFocus(store.canvasFocus));
   }
 
   const active = CANVAS_TABS.find((t) => t.id === tab);
 
   return (
-    <div style={pageStyle}>
+    <div id="wc-mirror-canvas" style={pageStyle}>
       {/* --- editorial masthead, not a toolbar --- */}
       <header style={mastheadStyle}>
         <div style={{ maxWidth: 1080, margin: '0 auto', width: '100%' }}>
@@ -54,7 +65,9 @@ export function MirrorCanvasShell() {
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
               <SaveIndicator />
               <UndoRedo />
-              <button onClick={() => store.closeCanvas()} style={doneBtnStyle}>Terminer</button>
+              <button className="wc-action" onClick={() => store.closeCanvas()} style={doneBtnStyle}>
+                Terminer
+              </button>
             </div>
           </div>
 
@@ -67,6 +80,7 @@ export function MirrorCanvasShell() {
                   key={t.id}
                   onClick={() => { setTab(t.id); store.setCanvasFocus(null); }}
                   style={railItemStyle(isActive)}
+                  aria-current={isActive ? 'true' : undefined}
                 >
                   <span style={{ ...railIndexStyle, color: isActive ? M.textPrimary : M.textMuted }}>{t.index}</span>
                   <span>{t.label}</span>

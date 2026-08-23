@@ -1,9 +1,10 @@
 import { useMemo, useState } from 'react';
-import { weddingStore } from '../../game/weddingStore';
+import { weddingStore, CanvasSection } from '../../game/weddingStore';
 import { projectWorldModel } from '../../projections/worldModel';
 import { radius, typography, shadowFor } from '../../design/tokens';
 import {
-  K, InlineText, InlineSelect, Chip, InlinePicker, FieldRow, canvasCard, addBtnStyle, fieldLabelStyle,
+  K, InlineText, InlineSelect, Chip, InlinePicker, FieldRow, CanvasEmpty,
+  canvasCard, addBtnStyle, fieldLabelStyle,
 } from './CanvasPrimitives';
 import {
   searchEnrichment, confirmEnrichment, removeEnrichment, getEnrichmentState,
@@ -29,7 +30,8 @@ import {
 // from projectWorldModel() after each mutation.
 // ---------------------------------------------------------------------------
 
-export type CanvasTab = 'programme' | 'people' | 'vendors' | 'places' | 'music' | 'media';
+/** Same six ids as the store's CanvasSection — one vocabulary, not two. */
+export type CanvasTab = CanvasSection;
 
 export const CANVAS_TABS: { id: CanvasTab; label: string; index: string }[] = [
   { id: 'programme', label: 'Programme', index: '01' },
@@ -130,20 +132,107 @@ function ProgrammeSurface({ model }: { model: ReturnType<typeof projectWorldMode
   const store = weddingStore;
   const places = store.places.map((p) => ({ id: p.id, label: p.name, sub: p.code }));
 
+  // ---- TEMPORAL DRAG & DROP -------------------------------------------------
+  // Dragging a moment re-chains the programme from its earliest start, each
+  // moment keeping its own duration (store.movePhaseToIndex). One undo step,
+  // persisted, and no invented hour.
+  //
+  // Pointer drag is a desktop affordance, so the SAME move is also available
+  // from the keyboard and from two touch-sized buttons — the feature is never
+  // reachable by mouse only.
+  const [dragId, setDragId] = useState<string | null>(null);
+  const [overIndex, setOverIndex] = useState<number | null>(null);
+  const [moveNote, setMoveNote] = useState<string | null>(null);
+
+  const moments = model.programme.moments;
+
+  const move = (phaseId: string, targetIndex: number) => {
+    const done = store.movePhaseToIndex(phaseId, targetIndex);
+    setMoveNote(done
+      ? 'Programme réordonné — chaque durée est conservée, les heures suivent.'
+      : 'Déplacement impossible : la journée ne peut pas accueillir ce moment ici.');
+  };
+
   return (
     <div style={{ display: 'grid', gap: 14 }}>
-      {model.programme.moments.map((m) => {
+      <div style={{ display: 'flex', gap: 10, alignItems: 'baseline', flexWrap: 'wrap' }}>
+        <span style={{ fontSize: 10.5, color: K.textMuted }}>
+          Glissez un moment par sa poignée pour le déplacer dans la journée, ou
+          utilisez les flèches. Chaque moment conserve sa durée.
+        </span>
+        {moveNote && <span style={{ fontSize: 10.5, color: K.textSecondary }}>{moveNote}</span>}
+      </div>
+
+      {moments.length === 0 && (
+        <CanvasEmpty
+          title="Aucun moment dans le programme"
+          body="La journée n’a pas encore de déroulé. Le premier moment créé apparaîtra immédiatement dans la timeline du site et dans le Monde."
+        />
+      )}
+
+      {moments.map((m, index) => {
         const isFocus = store.canvasFocus?.kind === 'event' && store.canvasFocus.id === m.phaseId;
+        const isDragging = dragId === m.phaseId;
+        const isTarget = overIndex === index && dragId !== null && !isDragging;
         return (
           <article
             key={m.phaseId}
+            onDragOver={(e) => { if (dragId) { e.preventDefault(); setOverIndex(index); } }}
+            onDrop={(e) => {
+              if (!dragId) return;
+              e.preventDefault();
+              move(dragId, index);
+              setDragId(null); setOverIndex(null);
+            }}
             style={{
               ...canvasCard,
               padding: '18px 20px',
               boxShadow: isFocus ? shadowFor(4, 'composition') : shadowFor(2, 'composition'),
               borderColor: isFocus ? K.lineStrong : K.line,
+              opacity: isDragging ? 0.55 : 1,
+              borderTop: isTarget ? `2px solid ${K.textPrimary}` : undefined,
+              transition: 'opacity 160ms ease',
             }}
           >
+            {/* ---- move controls: pointer, keyboard and touch ---- */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+              <span
+                draggable
+                onDragStart={() => { setDragId(m.phaseId); setMoveNote(null); }}
+                onDragEnd={() => { setDragId(null); setOverIndex(null); }}
+                role="button"
+                tabIndex={0}
+                aria-label={`Déplacer ${m.title} dans le programme. Flèches haut et bas pour changer sa position.`}
+                onKeyDown={(e) => {
+                  if (e.key === 'ArrowUp') { e.preventDefault(); move(m.phaseId, index - 1); }
+                  if (e.key === 'ArrowDown') { e.preventDefault(); move(m.phaseId, index + 1); }
+                }}
+                style={dragHandleStyle}
+                title="Glisser pour déplacer"
+              >
+                ⠿
+              </span>
+              <button
+                onClick={() => move(m.phaseId, index - 1)}
+                disabled={index === 0}
+                aria-label={`Avancer ${m.title} dans la journée`}
+                style={{ ...moveBtnStyle, opacity: index === 0 ? 0.35 : 1 }}
+              >
+                ↑
+              </button>
+              <button
+                onClick={() => move(m.phaseId, index + 1)}
+                disabled={index === moments.length - 1}
+                aria-label={`Retarder ${m.title} dans la journée`}
+                style={{ ...moveBtnStyle, opacity: index === moments.length - 1 ? 0.35 : 1 }}
+              >
+                ↓
+              </button>
+              <span style={{ fontSize: 10, color: K.textMuted, fontFamily: typography.family.mono }}>
+                {String(index + 1).padStart(2, '0')} · {m.time} → {m.endTime}
+              </span>
+            </div>
+
             {/* time + title, both editable in place */}
             <div style={{ display: 'flex', gap: 14, alignItems: 'flex-start', flexWrap: 'wrap' }}>
               <div style={{ width: 92 }}>
@@ -253,15 +342,28 @@ function ProgrammeSurface({ model }: { model: ReturnType<typeof projectWorldMode
                 </div>
               </FieldRow>
 
-              {/* PEOPLE — real count, from the model */}
+              {/* PEOPLE — the real people, by stable id */}
               <FieldRow label="Personnes">
-                <span style={{ fontSize: typography.size.body, color: K.textSecondary }}>
-                  {m.keyPersonIds.length > 0
-                    ? `${m.keyPersonIds.length} mobilisée(s) sur ce moment`
-                    : 'Aucune personne rattachée à ce moment'}
-                  {' · '}
-                  <span style={{ color: K.textMuted }}>{model.guests.counts.total} invités au total</span>
-                </span>
+                {m.persons.length > 0 ? (
+                  <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap', alignItems: 'center' }}>
+                    {m.persons.map((p) => (
+                      <Chip
+                        key={p.personId}
+                        label={p.name}
+                        onClick={() => store.setCanvasFocus({ kind: 'person', id: p.personId })}
+                      />
+                    ))}
+                  </div>
+                ) : (
+                  <span style={{ fontSize: typography.size.body, color: K.textMuted }}>
+                    Aucune personne rattachée à ce moment.
+                  </span>
+                )}
+              </FieldRow>
+
+              {/* MEDIA attached to the moment itself */}
+              <FieldRow label="Médias">
+                <MediaField ownerKind="event" ownerId={m.phaseId} existing={m.media.length} />
               </FieldRow>
 
               {/* NOTES */}
@@ -320,6 +422,13 @@ function PeopleSurface({ model }: { model: ReturnType<typeof projectWorldModel> 
           {model.guests.counts.total} personnes · {model.guests.counts.headcount} convives
         </span>
       </div>
+
+      {ordered.length === 0 && (
+        <CanvasEmpty
+          title="Aucune personne"
+          body="Personne n’est encore rattaché à ce mariage. Une personne créée ici apparaît aussitôt dans 02 PERSONNES."
+        />
+      )}
 
       {ordered.map((g) => <PersonCard key={g.guestId} guestId={g.guestId} personId={g.personId} focused={g.personId === focusId} />)}
     </div>
@@ -554,6 +663,13 @@ function VendorsSurface({ model }: { model: ReturnType<typeof projectWorldModel>
         + Créer un prestataire
       </button>
 
+      {model.vendors.vendors.length === 0 && (
+        <CanvasEmpty
+          title="Aucun prestataire"
+          body="Aucun intervenant n’est référencé. Un prestataire créé ici pourra être rattaché à un moment et à un lieu."
+        />
+      )}
+
       {model.vendors.vendors.map((v) => {
         const vendor = store.vendors.find((x) => x.id === v.vendorId);
         if (!vendor) return null;
@@ -626,6 +742,13 @@ function PlacesSurface({ model }: { model: ReturnType<typeof projectWorldModel> 
         + Créer un lieu
       </button>
 
+      {model.places.places.length === 0 && (
+        <CanvasEmpty
+          title="Aucun lieu"
+          body="Aucun espace n’est référencé. Un lieu créé ici devient un espace du Monde et peut accueillir un moment."
+        />
+      )}
+
       {model.places.places.map((p) => {
         const place = store.places.find((x) => x.id === p.placeId);
         if (!place) return null;
@@ -697,6 +820,13 @@ function MusicSurface({ model }: { model: ReturnType<typeof projectWorldModel> }
       </button>
 
       <EnrichmentActivation />
+
+      {model.music.songs.length === 0 && (
+        <CanvasEmpty
+          title="Aucun morceau"
+          body="La bande-son est vide. Un morceau créé ici peut être rattaché à un moment, puis recevoir une pochette et un extrait."
+        />
+      )}
 
       {model.music.songs.map((sg) => {
         const track = store.tracks.find((t) => t.id === sg.songId);
@@ -1011,6 +1141,19 @@ function EnrichmentField({ songId, title, artist }: { songId: string; title: str
     </div>
   );
 }
+
+const dragHandleStyle: React.CSSProperties = {
+  cursor: 'grab', userSelect: 'none',
+  width: 26, height: 26, borderRadius: radius.xs,
+  display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+  color: K.textMuted, fontSize: 13, border: `1px solid ${K.line}`, background: K.surface,
+};
+
+const moveBtnStyle: React.CSSProperties = {
+  font: 'inherit', fontSize: 12, lineHeight: 1,
+  width: 26, height: 26, borderRadius: radius.xs, cursor: 'pointer',
+  border: `1px solid ${K.line}`, background: K.surface, color: K.textSecondary,
+};
 
 const candidateStyle: React.CSSProperties = {
   display: 'flex', alignItems: 'center', gap: 10,

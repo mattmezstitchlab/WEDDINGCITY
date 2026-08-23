@@ -267,6 +267,29 @@ export const pickerRowStyle: CSSProperties = {
   padding: '6px 8px', cursor: 'pointer', textAlign: 'left',
 };
 
+/**
+ * Empty state for a composition surface.
+ *
+ * Same rule as the Mirror: say what is missing and what would fill it. Never
+ * "No data", never an invented row to make the layout look inhabited.
+ */
+export function CanvasEmpty({ title, body }: { title: string; body: string }) {
+  return (
+    <div style={{
+      border: `1px dashed ${K.lineStrong}`, borderRadius: radius.md,
+      padding: '26px 20px', textAlign: 'center',
+    }}>
+      <div style={{ fontSize: typography.size.bodyLg, color: K.textPrimary }}>{title}</div>
+      <p style={{
+        margin: '8px auto 0', maxWidth: 400,
+        fontSize: typography.size.caption, color: K.textSecondary, lineHeight: 1.6,
+      }}>
+        {body}
+      </p>
+    </div>
+  );
+}
+
 export const canvasCard: CSSProperties = {
   background: K.surface, border: `1px solid ${K.line}`,
   borderRadius: radius.lg, boxShadow: shadowFor(2, 'composition'),

@@ -1,5 +1,5 @@
 import { CSSProperties, useEffect, useRef, useState } from 'react';
-import { radius, surfaces, typography, shadowFor, dmcDotStyle } from '../../design/tokens';
+import { radius, surfaces, typography, shadowFor, dmcDotStyle, dmcTint } from '../../design/tokens';
 
 // ---------------------------------------------------------------------------
 // MIRROR — shared editorial primitives.
@@ -95,7 +95,7 @@ export function SectionShell({
         {lead && (
           <p
             style={{
-              margin: `${fluid(18, 26)}px 0 0`,
+              margin: `${fluid(18, 26)} 0 0`,
               maxWidth: 560,
               fontSize: fluid(14, 18),
               lineHeight: typography.leading.relaxed,
@@ -189,6 +189,67 @@ export function DmcMark({ color, code }: { color: string | null; code?: string |
       title={code ?? undefined}
       style={{ ...dmcDotStyle(color, 7), display: 'inline-block', verticalAlign: 'middle' }}
     />
+  );
+}
+
+/**
+ * PORTRAIT — the one way a human being is pictured across the Mirror.
+ *
+ * Real photo when a MediaAsset exists, initials otherwise. Never a generated
+ * avatar, never a stock face. If a remote source fails to load we fall back to
+ * the initials instead of showing a broken frame.
+ *
+ * `shape` follows the context: a circle in a list of people, a soft square in
+ * an editorial block. The DMC colour is a ring — a signal, never a fill.
+ */
+export function Portrait({
+  name, source, dmcColor, size = 34, shape = 'circle',
+}: {
+  name: string;
+  source: string | null;
+  dmcColor?: string | null;
+  size?: number;
+  shape?: 'circle' | 'squircle';
+}) {
+  const [broken, setBroken] = useState(false);
+  useEffect(() => { setBroken(false); }, [source]);
+  const usable = broken ? null : source;
+
+  const initials = name.trim().split(/\s+/).slice(0, 2)
+    .map((part) => part.charAt(0)).join('').toUpperCase();
+
+  return (
+    <span
+      style={{
+        width: size, height: size, flex: '0 0 auto', overflow: 'hidden',
+        borderRadius: shape === 'circle' ? 999 : Math.round(size * 0.26),
+        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+        boxShadow: dmcColor ? `0 0 0 1.5px ${dmcColor}` : `0 0 0 1px ${M.line}`,
+        background: usable ? 'transparent' : dmcTint(dmcColor ?? '#8a8f99', 0.1),
+      }}
+    >
+      {usable ? (
+        <img
+          src={usable}
+          alt={`Portrait de ${name}`}
+          loading="lazy"
+          decoding="async"
+          onError={() => setBroken(true)}
+          style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+        />
+      ) : (
+        <span
+          aria-hidden
+          style={{
+            fontSize: Math.max(9, Math.round(size * 0.32)),
+            fontWeight: typography.weight.semibold,
+            letterSpacing: '0.04em', color: M.textSecondary,
+          }}
+        >
+          {initials}
+        </span>
+      )}
+    </span>
   );
 }
 

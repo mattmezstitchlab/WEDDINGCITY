@@ -56,6 +56,21 @@ export function MirrorVendors({ vendors }: { vendors: VendorsProjection }) {
                         v.documentCount > 0 ? `${v.documentCount} document(s)` : null,
                       ]} />
 
+                      {v.places.length > 0 && (
+                        <div style={{ ...vendorMomentsStyle, flexDirection: 'row', flexWrap: 'wrap', gap: 12 }}>
+                          {v.places.map((pl) => (
+                            <button
+                              key={pl.placeId}
+                              onClick={() => store.showPlaceInWorld(pl.placeId)}
+                              style={momentLinkStyle}
+                            >
+                              {pl.name}
+                              <span style={{ opacity: 0.5 }}> ↗</span>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+
                       {v.moments.length > 0 && (
                         <div style={vendorMomentsStyle}>
                           {v.moments.map((mo) => (
@@ -80,11 +95,12 @@ export function MirrorVendors({ vendors }: { vendors: VendorsProjection }) {
 
                       <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: fluid(14, 18) }}>
                         {v.canShowInWorld && (
-                          <button onClick={() => store.showVendorInWorld(v.vendorId)} style={ghostBtnStyle}>
+                          <button className="wc-action" onClick={() => store.showVendorInWorld(v.vendorId)} style={ghostBtnStyle}>
                             Voir dans le Monde
                           </button>
                         )}
                         <button
+                          className="wc-action"
                           onClick={() => store.openCanvas({ kind: 'vendor', id: v.vendorId })}
                           style={{ ...ghostBtnStyle, borderColor: M.lineStrong, color: M.textPrimary }}
                         >
@@ -146,11 +162,33 @@ export function MirrorPlaces({ places }: { places: PlacesProjection }) {
                   </div>
                 )}
 
+                {/* MOMENT ↔ LIEU ↔ PRESTATAIRES: the third edge of the triangle,
+                    rendered from the same relation the Canvas edits. */}
+                {p.vendors.length > 0 && (
+                  <div style={placeVendorsStyle}>
+                    <span style={placeVendorsLabelStyle}>Sur place</span>
+                    <span style={{ display: 'flex', gap: 10, flexWrap: 'wrap', minWidth: 0 }}>
+                      {p.vendors.map((v) => (
+                        <button
+                          key={v.vendorId}
+                          onClick={() => store.openCanvas({ kind: 'vendor', id: v.vendorId })}
+                          style={momentLinkStyle}
+                          title={v.category}
+                        >
+                          {v.companyName}
+                          <span style={{ color: M.textMuted }}> · {v.category}</span>
+                        </button>
+                      ))}
+                    </span>
+                  </div>
+                )}
+
                 <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: fluid(16, 22) }}>
-                  <button onClick={() => store.showPlaceInWorld(p.placeId)} style={ghostBtnStyle}>
+                  <button className="wc-action" onClick={() => store.showPlaceInWorld(p.placeId)} style={ghostBtnStyle}>
                     Explorer dans le Monde
                   </button>
                   <button
+                    className="wc-action"
                     onClick={() => store.openCanvas({ kind: 'place', id: p.placeId })}
                     style={{ ...ghostBtnStyle, borderColor: M.lineStrong, color: M.textPrimary }}
                   >
@@ -254,15 +292,25 @@ export function MirrorGallery({ gallery }: { gallery: MediaProjection[] }) {
   const images = gallery.filter((g) => g.kind === 'image');
   if (images.length === 0) return null;
 
+  // Asymmetric by composition, not by chance: the rhythm comes from
+  // .wc-gallery in mirror.css and applies to however many REAL assets exist.
   return (
-    <div style={galleryGridStyle}>
+    <div className="wc-gallery">
       {images.map((g, i) => (
-        <Reveal key={g.mediaId} delay={Math.min(i, 6) * 40}>
-          <figure style={{ margin: 0 }}>
-            <img src={g.source} alt={g.title ?? ''} style={galleryImgStyle} />
-            {g.caption && <figcaption style={captionStyle}>{g.caption}</figcaption>}
-          </figure>
-        </Reveal>
+        <figure key={g.mediaId} style={galleryFigureStyle}>
+          <img
+            src={g.source}
+            alt={g.title ?? (g.ownerLabel ? `Média rattaché à ${g.ownerLabel}` : 'Média du mariage')}
+            loading={i < 2 ? 'eager' : 'lazy'}
+            decoding="async"
+            style={galleryImgStyle}
+          />
+          {/* The caption says what this image belongs to — real context, not
+              decoration. Provenance stays a Canvas concern. */}
+          {(g.caption || g.ownerLabel) && (
+            <figcaption style={captionStyle}>{g.caption ?? g.ownerLabel}</figcaption>
+          )}
+        </figure>
       ))}
     </div>
   );
@@ -297,6 +345,21 @@ const momentTimeStyle: React.CSSProperties = {
   fontFamily: typography.family.mono, fontSize: typography.size.caption, color: M.textPrimary,
 };
 
+const placeVendorsStyle: React.CSSProperties = {
+  display: 'flex', gap: 14, alignItems: 'baseline', flexWrap: 'wrap',
+  marginTop: fluid(14, 20),
+};
+
+const placeVendorsLabelStyle: React.CSSProperties = {
+  fontSize: 9, letterSpacing: '0.15em', textTransform: 'uppercase',
+  color: M.textMuted, fontWeight: 700,
+};
+
+const galleryFigureStyle: React.CSSProperties = {
+  margin: 0, position: 'relative', overflow: 'hidden', borderRadius: radius.md,
+  background: 'rgba(16,18,24,0.04)',
+};
+
 const contactRowStyle: React.CSSProperties = {
   display: 'flex', gap: 14, flexWrap: 'wrap', marginTop: fluid(12, 16),
   fontSize: typography.size.caption,
@@ -324,12 +387,12 @@ const placeKindStyle: React.CSSProperties = {
 };
 
 const placeNameStyle: React.CSSProperties = {
-  margin: `${fluid(14, 20)}px 0 0`, fontSize: fluid(26, 54), lineHeight: 1.0,
+  margin: `${fluid(14, 20)} 0 0`, fontSize: fluid(26, 54), lineHeight: 1.0,
   fontWeight: typography.weight.semibold, letterSpacing: '-0.03em', color: M.textPrimary,
 };
 
 const placeDescStyle: React.CSSProperties = {
-  margin: `${fluid(14, 20)}px 0 ${fluid(12, 16)}px`, maxWidth: 560,
+  margin: `${fluid(14, 20)} 0 ${fluid(12, 16)}`, maxWidth: 560,
   fontSize: fluid(13, 16), lineHeight: 1.62, color: M.textSecondary,
 };
 
@@ -369,7 +432,7 @@ const miniLinkStyle: React.CSSProperties = {
 };
 
 const songListStyle: React.CSSProperties = {
-  listStyle: 'none', margin: `${fluid(16, 22)}px 0 0`, padding: 0,
+  listStyle: 'none', margin: `${fluid(16, 22)} 0 0`, padding: 0,
 };
 
 const songRowStyle: React.CSSProperties = {
@@ -401,15 +464,16 @@ const songMetaStyle: React.CSSProperties = {
   color: M.textMuted, whiteSpace: 'nowrap',
 };
 
-const galleryGridStyle: React.CSSProperties = {
-  display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))',
-  gap: fluid(14, 22),
-};
-
+// The grid itself lives in mirror.css (.wc-gallery): the asymmetric rhythm
+// needs nth-child rules and media queries, neither of which exists inline.
 const galleryImgStyle: React.CSSProperties = {
-  width: '100%', height: 'auto', display: 'block', borderRadius: radius.md,
+  width: '100%', height: '100%', objectFit: 'cover', display: 'block',
 };
 
 const captionStyle: React.CSSProperties = {
-  marginTop: 10, fontSize: typography.size.caption, color: M.textSecondary,
+  position: 'absolute', left: 0, right: 0, bottom: 0,
+  padding: '26px 14px 10px',
+  fontSize: typography.size.caption, color: '#fff',
+  background: 'linear-gradient(to top, rgba(12,10,8,.55), rgba(12,10,8,0))',
+  overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
 };

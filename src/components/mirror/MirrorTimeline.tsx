@@ -1,7 +1,7 @@
 import { weddingStore } from '../../game/weddingStore';
 import { ProgrammeMoment } from '../../projections/worldModel';
 import { typography, radius } from '../../design/tokens';
-import { M, fluid, Reveal, MetaLine } from './MirrorPrimitives';
+import { M, fluid, Reveal, MetaLine, Portrait } from './MirrorPrimitives';
 import { TrackArt } from './TrackArt';
 
 // ---------------------------------------------------------------------------
@@ -30,9 +30,9 @@ export function MirrorTimeline({ moments }: { moments: ProgrammeMoment[] }) {
 
         return (
           <Reveal key={m.phaseId} as="li" delay={Math.min(i, 4) * 55}>
-            <article style={rowStyle}>
+            <article className="wc-timeline-row" style={rowStyle}>
               {/* ---- the hour: the thing you scan by ---- */}
-              <div style={hourColStyle}>
+              <div className="wc-timeline-hour" style={hourColStyle}>
                 <div style={{ ...hourStyle, fontSize: isMajor ? fluid(30, 62) : fluid(24, 44) }}>
                   {m.time}
                 </div>
@@ -41,7 +41,7 @@ export function MirrorTimeline({ moments }: { moments: ProgrammeMoment[] }) {
               </div>
 
               {/* ---- the thread ---- */}
-              <div style={threadColStyle} aria-hidden>
+              <div className="wc-timeline-thread" style={threadColStyle} aria-hidden>
                 <span style={{ ...nodeStyle, ...(m.isCurrent ? nodeNowStyle : null) }} />
                 {i < moments.length - 1 && <span style={threadStyle} />}
               </div>
@@ -65,8 +65,30 @@ export function MirrorTimeline({ moments }: { moments: ProgrammeMoment[] }) {
                 <MetaLine items={[m.highlight]} />
 
                 {/* contextual: only rendered when the relation really exists */}
-                {(m.vendors.length > 0 || m.songs.length > 0) && (
+                {(m.vendors.length > 0 || m.songs.length > 0 || m.persons.length > 0) && (
                   <div style={contextStyle}>
+                    {m.persons.length > 0 && (
+                      <div style={contextBlockStyle}>
+                        <div style={contextLabelStyle}>Autour</div>
+                        <div style={peopleRowStyle}>
+                          {m.persons.map((p) => (
+                            <button
+                              key={p.personId}
+                              onClick={() => (p.canShowInWorld
+                                ? store.showPersonInWorld(p.personId)
+                                : store.openCanvas({ kind: 'person', id: p.personId }))}
+                              style={personChipStyle}
+                              title={p.canShowInWorld ? 'Voir dans le Monde' : 'Ouvrir la fiche'}
+                            >
+                              {/* Real photo when one exists, initials otherwise. */}
+                              <Portrait name={p.name} source={p.portraitSource} dmcColor={p.dmcColor} size={26} />
+                              <span style={{ minWidth: 0 }}>{p.name}</span>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
                     {m.vendors.length > 0 && (
                       <div style={contextBlockStyle}>
                         <div style={contextLabelStyle}>Avec</div>
@@ -116,11 +138,29 @@ export function MirrorTimeline({ moments }: { moments: ProgrammeMoment[] }) {
                   </div>
                 )}
 
+                {/* Real media attached to this moment — never a placeholder. */}
+                {m.media.filter((md) => md.kind === 'image').length > 0 && (
+                  <div style={momentMediaStyle}>
+                    {m.media.filter((md) => md.kind === 'image').map((md) => (
+                      <img
+                        key={md.mediaId}
+                        src={md.source}
+                        alt={md.title ?? `Photographie du moment ${m.title}`}
+                        loading="lazy"
+                        decoding="async"
+                        style={momentMediaImgStyle}
+                      />
+                    ))}
+                  </div>
+                )}
+
                 {m.notes && <p style={noteStyle}>{m.notes}</p>}
 
                 <button
+                  className="wc-action"
                   onClick={() => store.openCanvas({ kind: 'event', id: m.phaseId })}
                   style={editStyle}
+                  aria-label={`Composer le moment ${m.time} ${m.title}`}
                 >
                   Composer ce moment
                 </button>
@@ -135,14 +175,13 @@ export function MirrorTimeline({ moments }: { moments: ProgrammeMoment[] }) {
 
 const listStyle: React.CSSProperties = { listStyle: 'none', margin: 0, padding: 0 };
 
+// Columns live in mirror.css (.wc-timeline-row) because a phone must be able
+// to collapse them, and a media query cannot be expressed inline.
 const rowStyle: React.CSSProperties = {
-  display: 'grid',
-  gridTemplateColumns: 'minmax(88px, 168px) 26px minmax(0, 1fr)',
   gap: `0 ${fluid(14, 34)}`,
-  alignItems: 'start',
 };
 
-const hourColStyle: React.CSSProperties = { paddingTop: fluid(6, 12), textAlign: 'right' };
+const hourColStyle: React.CSSProperties = { paddingTop: fluid(6, 12) };
 
 const hourStyle: React.CSSProperties = {
   fontVariantNumeric: 'tabular-nums',
@@ -191,7 +230,7 @@ const titleStyle: React.CSSProperties = {
 };
 
 const subtitleStyle: React.CSSProperties = {
-  margin: `${fluid(12, 18)}px 0 0`, maxWidth: 540,
+  margin: `${fluid(12, 18)} 0 0`, maxWidth: 540,
   fontSize: fluid(13, 16), lineHeight: 1.62, color: M.textSecondary,
 };
 
@@ -224,6 +263,25 @@ const soundtrackRowStyle: React.CSSProperties = {
   display: 'flex', alignItems: 'center', gap: 12, minWidth: 0,
 };
 
+const peopleRowStyle: React.CSSProperties = {
+  display: 'flex', gap: 10, flexWrap: 'wrap', minWidth: 0,
+};
+
+const personChipStyle: React.CSSProperties = {
+  appearance: 'none', background: 'transparent', border: 'none', padding: 0,
+  cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 8,
+  font: 'inherit', fontSize: typography.size.caption, color: M.textSecondary,
+};
+
+const momentMediaStyle: React.CSSProperties = {
+  display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: fluid(18, 26),
+};
+
+const momentMediaImgStyle: React.CSSProperties = {
+  width: 'clamp(120px, 26vw, 190px)', aspectRatio: '3 / 2',
+  objectFit: 'cover', display: 'block', borderRadius: radius.sm,
+};
+
 const contextItemsStyle: React.CSSProperties = {
   display: 'flex', flexDirection: 'column', gap: 5, minWidth: 0,
 };
@@ -235,7 +293,7 @@ const contextLinkStyle: React.CSSProperties = {
 };
 
 const noteStyle: React.CSSProperties = {
-  margin: `${fluid(16, 22)}px 0 0`, maxWidth: 540,
+  margin: `${fluid(16, 22)} 0 0`, maxWidth: 540,
   fontSize: typography.size.caption, lineHeight: 1.6, color: M.textMuted,
   borderLeft: `2px solid ${M.line}`, paddingLeft: 12,
 };

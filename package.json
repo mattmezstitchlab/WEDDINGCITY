@@ -11,7 +11,7 @@
     "typecheck": "tsc --noEmit",
     "test:startup": "node scripts/check-startup.mjs",
     "test:persistence": "node scripts/check-persistence.mjs",
-    "test": "pnpm run test:startup && pnpm run test:persistence && pnpm run test:errors && pnpm run test:interactions && pnpm run test:identity && pnpm run test:projections && pnpm run test:dataviz && pnpm run test:mirror && pnpm run test:canvas && pnpm run test:mirror-canvas && pnpm run test:media-music && pnpm run test:enrichment && pnpm run test:health && pnpm run test:graph",
+    "test": "pnpm run test:startup && pnpm run test:persistence && pnpm run test:errors && pnpm run test:interactions && pnpm run test:identity && pnpm run test:projections && pnpm run test:dataviz && pnpm run test:mirror && pnpm run test:canvas && pnpm run test:mirror-canvas && pnpm run test:media-music && pnpm run test:enrichment && pnpm run test:health && pnpm run test:graph && pnpm run test:finish",
     "verify": "pnpm run typecheck && pnpm run test",
     "test:errors": "node scripts/check-errors.mjs",
     "test:interactions": "node scripts/check-interactions.mjs",
@@ -24,7 +24,8 @@
     "test:canvas": "node scripts/check-canvas.mjs",
     "test:mirror-canvas": "node scripts/check-mirror-canvas.mjs",
     "test:media-music": "node scripts/check-media-music.mjs",
-    "test:enrichment": "node scripts/check-enrichment.mjs"
+    "test:enrichment": "node scripts/check-enrichment.mjs",
+    "test:finish": "node scripts/check-finish.mjs"
   },
   "dependencies": {
     "@react-spring/three": "^9.7.5",

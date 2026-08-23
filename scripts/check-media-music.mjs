@@ -67,13 +67,26 @@ try {
     r.check(store.getPortraitFor(person.id) === null,
       'removing the media returns the person to initials');
 
-    const people = readFileSync(path.join(SRC, 'components', 'mirror', 'MirrorPeople.tsx'), 'utf8');
-    r.check(/store\.getPortraitFor\(guest\.personId\)/.test(people),
+    // Phase FINAL: one portrait rule for the whole product — resolved by the
+    // projection, rendered by the shared <Portrait> primitive. The guarantees
+    // are unchanged; they are simply asserted where they now live.
+    const mirrorDir = path.join(SRC, 'components', 'mirror');
+    const people = readFileSync(path.join(mirrorDir, 'MirrorPeople.tsx'), 'utf8');
+    const primitives = readFileSync(path.join(mirrorDir, 'MirrorPrimitives.tsx'), 'utf8');
+    const model = readFileSync(path.join(SRC, 'projections', 'worldModel.ts'), 'utf8');
+
+    r.check(/weddingStore\.getPortraitFor\(personId\)/.test(model)
+      && /source=\{guest\.portraitSource\}/.test(people),
       'Mirror reads the portrait from the store, never a local copy');
-    r.check(/initialsOf\(guest\.displayName\)/.test(people), 'initials remain the fallback');
-    r.check(/loading="lazy"/.test(people) && /decoding="async"/.test(people),
+    r.check(!/useState<[^>]*Media/.test(people) && !/getMediaFor/.test(people),
+      'the people section keeps no local copy of any media');
+    r.check(/initials/.test(primitives) && /\.charAt\(0\)/.test(primitives),
+      'initials remain the fallback');
+    r.check(/loading="lazy"/.test(primitives) && /decoding="async"/.test(primitives),
       'portraits are lazy-loaded and decoded off the main thread');
-    r.check(/prefers-reduced-motion/.test(people),
+    const mirrorCss = readFileSync(path.join(mirrorDir, 'mirror.css'), 'utf8');
+    r.check(/prefers-reduced-motion/.test(mirrorCss)
+      && /animation-duration:\s*0\.001ms/.test(mirrorCss),
       'the initials → photo transition respects reduced motion');
   }
 

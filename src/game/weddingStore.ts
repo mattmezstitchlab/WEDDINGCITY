@@ -42,6 +42,9 @@ import {
 // Values now live in ./brand (dependency-free) to avoid the module cycle that
 // crashed startup. Re-exported here so every existing import keeps working.
 import { BRAND_ACCENT } from './brand';
+
+/** The six editorial sections, shared by the Mirror and the Canvas. */
+export type CanvasSection = 'programme' | 'people' | 'vendors' | 'places' | 'music' | 'media';
 import { PlaceKind } from '../types/wedding';
 import {
   Person, UserAccountV2, DmcIdentityRecord, Guest, Vendor, SeatingTable,
@@ -1553,6 +1556,10 @@ class WeddingStore {
   // -------------------------------------------------------------------------
   // PROJECTIONS (Phase C)
   //
+  // Editorial sections shared by Mirror and Canvas (01..06). Declared here
+  // because the store carries the intent from one surface to the other.
+  //
+  // (see CANVAS_TABS in components/canvas/CanvasCore — same six ids)
   // One World Model, several renderers. This is only WHICH projection is on
   // screen — never a second copy of the data.
   // -------------------------------------------------------------------------
@@ -1567,6 +1574,15 @@ class WeddingStore {
   // Canvas context: what the user is currently composing.
   public canvasOpen: boolean = false;
   public canvasFocus: { kind: 'event' | 'person' | 'vendor' | 'place' | 'song'; id: string } | null = null;
+  /** Section the Canvas should open on when no single entity is focused. */
+  public canvasSection: CanvasSection | null = null;
+  /**
+   * Incremented every time a surface asks the Canvas to open somewhere.
+   * The shells compare it to what they last honoured, so clicking "Composer"
+   * in 04 LIEUX always lands on 04 — even if the user had wandered to 05 and
+   * the requested section has not changed.
+   */
+  public canvasIntent: number = 0;
 
   // Real World -> 3D World / Interior State
   public interiorMode: boolean = false;
@@ -1718,10 +1734,18 @@ class WeddingStore {
    * not a place: it now composes on top of whichever projection is open, and
    * the shell adapts (side panel over World, editorial surface inside Mirror).
    */
-  public openCanvas(focus?: { kind: 'event' | 'person' | 'vendor' | 'place' | 'song'; id: string }): void {
+  public openCanvas(
+    focus?: { kind: 'event' | 'person' | 'vendor' | 'place' | 'song'; id: string },
+    section?: CanvasSection,
+  ): void {
     this.canvasOpen = true;
     this.showIdentityModal = false;
     if (focus) this.canvasFocus = focus;
+    // A section hint lets the Mirror open the Canvas ALREADY on the matching
+    // surface ("Composer" in 04 LIEUX opens 04 Lieux), with no extra
+    // navigation. An entity focus still wins, since it is more specific.
+    if (section) { this.canvasSection = section; this.canvasIntent++; }
+    else if (focus) { this.canvasSection = null; this.canvasIntent++; }
     this.notify();
   }
 
@@ -1739,6 +1763,8 @@ class WeddingStore {
     this.canvasFocus = focus;
     this.notify();
   }
+
+
 
   // --- D2: moments ---------------------------------------------------------
 
@@ -1767,11 +1793,70 @@ class WeddingStore {
     const phase = this.phases.find((p) => p.id === phaseId);
     if (!phase) return false;
     const duration = endHour !== undefined ? endHour - startHour : phase.endHour - phase.startHour;
-    if (!Number.isFinite(startHour) || duration <= 0) return false;
-    if (startHour < 0 || startHour + duration > 30) return false;
+    if (!this.canPlacePhase(startHour, duration)) return false;
     this.beginMutation('Déplacer le moment');
+    this.applyPhaseTime(phase, startHour, duration);
+    this.saveCurrentState();
+    this.notify();
+    return true;
+  }
+
+  /** Single validation rule for every temporal move. */
+  private canPlacePhase(startHour: number, duration: number): boolean {
+    if (!Number.isFinite(startHour) || !Number.isFinite(duration) || duration <= 0) return false;
+    return startHour >= 0 && startHour + duration <= 30;
+  }
+
+  private applyPhaseTime(phase: { startHour: number; endHour: number }, startHour: number, duration: number): void {
     phase.startHour = startHour;
     phase.endHour = startHour + duration;
+  }
+
+  /**
+   * Move a moment to another position in the programme (drag & drop, or the
+   * keyboard equivalent).
+   *
+   * WHAT IT DOES, EXACTLY: the moments are re-chained in the new order from the
+   * earliest existing start time, and EACH MOMENT KEEPS ITS OWN DURATION.
+   * Nothing is invented — no new hour appears out of thin air, the first start
+   * and every duration come from the data — and the result can never overlap.
+   *
+   * One `beginMutation`, so the whole move is a single undo step; one save, so
+   * it survives a reload; one `notify`, so World, Mirror and Canvas re-derive
+   * together.
+   *
+   * Returns false when the move is impossible or would change nothing.
+   */
+  public movePhaseToIndex(phaseId: string, targetIndex: number): boolean {
+    const ordered = [...this.phases].sort((a, b) => a.startHour - b.startHour);
+    const from = ordered.findIndex((p) => p.id === phaseId);
+    if (from < 0) return false;
+    const to = Math.max(0, Math.min(ordered.length - 1, Math.trunc(targetIndex)));
+    if (to === from) return false;
+
+    const reordered = [...ordered];
+    const [moved] = reordered.splice(from, 1);
+    reordered.splice(to, 0, moved);
+
+    const durations = new Map(ordered.map((p) => [p.id, p.endHour - p.startHour]));
+    const firstStart = ordered[0].startHour;
+
+    // Validate the whole plan BEFORE touching anything: a refused move must
+    // leave the programme exactly as it was.
+    let cursor = firstStart;
+    for (const p of reordered) {
+      const duration = durations.get(p.id) ?? 0;
+      if (!this.canPlacePhase(cursor, duration)) return false;
+      cursor += duration;
+    }
+
+    this.beginMutation('Réordonner le programme');
+    cursor = firstStart;
+    for (const p of reordered) {
+      const duration = durations.get(p.id) ?? 0;
+      this.applyPhaseTime(p, cursor, duration);
+      cursor += duration;
+    }
     this.saveCurrentState();
     this.notify();
     return true;
@@ -2504,6 +2589,9 @@ class WeddingStore {
   public setGuestRsvp(guestId: string, status: RsvpStatus, note?: string): boolean {
     const guest = this.guests.find((g) => g.id === guestId);
     if (!guest) return false;
+    // An RSVP is a real decision: it belongs to the same undo history as every
+    // other mutation, and the aggregates re-derive from it automatically.
+    this.beginMutation('Modifier une réponse');
     guest.rsvp = { ...guest.rsvp, status, note, respondedAt: new Date().toISOString() };
     guest.updatedAt = new Date().toISOString();
     this.saveCurrentState();

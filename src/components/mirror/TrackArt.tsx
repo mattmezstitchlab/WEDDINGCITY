@@ -66,7 +66,7 @@ export function TrackArt({
       {cover ? (
         <img
           src={cover}
-          alt=""
+          alt={`Pochette de ${title}${artist ? `, ${artist}` : ''}`}
           loading="lazy"
           decoding="async"
           onError={() => setBroken(true)}

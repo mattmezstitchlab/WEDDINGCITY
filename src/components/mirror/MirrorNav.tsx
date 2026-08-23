@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { typography, radius, shadowFor } from '../../design/tokens';
 import { M } from './MirrorPrimitives';
+import { weddingStore } from '../../game/weddingStore';
 
 // ---------------------------------------------------------------------------
 // MIRROR NAV — the lowest-cognitive-cost option.
@@ -51,21 +52,55 @@ export function MirrorNav({ sections }: { sections: NavSection[] }) {
   if (visible.length < 2) return null;
 
   const go = (id: string) => {
-    document.getElementById(`mirror-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    const el = document.getElementById(`mirror-${id}`);
+    el?.scrollIntoView({ block: 'start' });
+    // Move the reading position too, so a keyboard user actually lands there.
+    el?.setAttribute('tabindex', '-1');
+    (el as HTMLElement | null)?.focus?.({ preventScroll: true });
+  };
+
+  // ← → walk the rail, exactly like a real contents page.
+  const onKeyDown = (e: React.KeyboardEvent, index: number) => {
+    const delta = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0;
+    if (!delta) return;
+    e.preventDefault();
+    const next = visible[(index + delta + visible.length) % visible.length];
+    go(next.id);
+    const el = document.querySelector<HTMLButtonElement>(`[data-mirror-nav="${next.id}"]`);
+    el?.focus();
   };
 
   return (
     <nav style={barStyle} aria-label="Sections du site">
       <div style={innerStyle}>
-        {visible.map((s) => {
+        {visible.map((s, i) => {
           const isActive = active === s.id;
           return (
-            <button key={s.id} onClick={() => go(s.id)} style={itemStyle(isActive)}>
+            <button
+              key={s.id}
+              data-mirror-nav={s.id}
+              onClick={() => go(s.id)}
+              onKeyDown={(e) => onKeyDown(e, i)}
+              aria-current={isActive ? 'true' : undefined}
+              style={itemStyle(isActive)}
+            >
               <span style={{ ...idxStyle, color: isActive ? M.textPrimary : M.textMuted }}>{s.index}</span>
               <span>{s.label}</span>
             </button>
           );
         })}
+
+        <span style={{ flex: 1, minWidth: 8 }} />
+
+        {/* The other way of understanding the same wedding. Same data, same
+            ids: only the surface changes. */}
+        <button
+          onClick={() => weddingStore.setProjection('world')}
+          style={{ ...itemStyle(false), color: M.textMuted }}
+          title="Basculer vers le monde 3D"
+        >
+          Monde 3D ↗
+        </button>
       </div>
     </nav>
   );

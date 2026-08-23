@@ -226,8 +226,12 @@ try {
     const heroSrc = readFileSync(path.join(dir, 'MirrorHero.tsx'), 'utf8');
     r.check(/getMediaFor\('wedding'/.test(heroSrc),
       'the hero looks for a real MediaAsset attached to the wedding');
-    r.check(/cover \?/.test(heroSrc) || /cover &&/.test(heroSrc),
+    // Phase FINAL: the resolved cover is held in `image`, which is null when the
+    // asset is missing OR fails to load. Same guarantee, two states.
+    r.check(/(?:cover|image)\s*(?:\?|&&)/.test(heroSrc),
       'the hero renders differently with and without a real cover');
+    r.check(/onError=\{\(\) => setBroken\(true\)\}/.test(heroSrc),
+      'a cover that fails to load falls back to the typographic hero');
 
     // With no media in the store, the hero must be typographic.
     const beforeMedia = store.media.length;
@@ -271,8 +275,16 @@ try {
     r.check(/showPlaceInWorld\(p\.placeId\)/.test(sections), 'place → world uses placeId');
     const people = readFileSync(path.join(dir, 'MirrorPeople.tsx'), 'utf8');
     r.check(/showPersonInWorld\(guest\.personId\)/.test(people), 'person → world uses personId');
-    r.check(/getPortraitFor\(guest\.personId\)/.test(people),
+    // Phase FINAL: the portrait is resolved by the PROJECTION (one rule for the
+    // whole product) and rendered by the shared <Portrait> primitive.
+    const model = readFileSync(path.join(SRC, 'projections', 'worldModel.ts'), 'utf8');
+    r.check(/getPortraitFor\(personId\)/.test(model) && /portraitSource/.test(model),
+      'the projection resolves a REAL portrait through the MediaAsset registry');
+    r.check(/source=\{guest\.portraitSource\}/.test(people),
       'people use a REAL portrait when one exists, initials otherwise');
+    const primitives = readFileSync(path.join(dir, 'MirrorPrimitives.tsx'), 'utf8');
+    r.check(/initials/.test(primitives) && /onError=\{\(\) => setBroken\(true\)\}/.test(primitives),
+      'the portrait primitive falls back to initials, never to a stock face');
   }
 
   un();

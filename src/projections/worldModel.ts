@@ -104,6 +104,8 @@ export interface ProgrammeMoment {
   notes: string | null;
   /** Real people mobilised by this phase. */
   keyPersonIds: string[];
+  /** The same people, resolved for rendering (name, portrait, DMC). */
+  persons: PersonRef[];
   /** Vendors intervening at this moment's place. Derived, never stored twice. */
   /** `explicit` = attached by the user, vs derived from the place. */
   vendors: { vendorId: string; companyName: string; category: string; explicit: boolean }[];
@@ -113,6 +115,36 @@ export interface ProgrammeMoment {
     coverSource: string | null; audioSource: string | null;
   }[];
   media: MediaProjection[];
+}
+
+/**
+ * A person as referenced from ANOTHER entity (a moment, a table, a vendor).
+ *
+ * Carries only what a projection needs to render a human: the stable id, the
+ * name, a REAL portrait when one exists, and whether the World can show them.
+ * Never a copy of the Person entity.
+ */
+export interface PersonRef {
+  personId: string;
+  name: string;
+  /** Real MediaAsset source, or null — never a generated avatar. */
+  portraitSource: string | null;
+  dmcColor: string | null;
+  canShowInWorld: boolean;
+}
+
+export function projectPersonRef(personId: string): PersonRef | null {
+  const person = weddingStore.getPerson(personId);
+  if (!person) return null;
+  const portrait = weddingStore.getPortraitFor(personId);
+  const dmc = weddingStore.getDmcForPerson(personId);
+  return {
+    personId,
+    name: person.displayName,
+    portraitSource: portrait?.source ?? null,
+    dmcColor: dmc?.dmcColor ?? null,
+    canShowInWorld: Boolean(weddingStore.getAgentForPerson(personId)),
+  };
 }
 
 export interface ProgrammeProjection {
@@ -179,6 +211,9 @@ export function projectProgramme(): ProgrammeProjection {
         isCurrent: now >= ph.startHour && now < ph.endHour,
         notes: ph.notes ?? null,
         keyPersonIds,
+        persons: keyPersonIds
+          .map((id) => projectPersonRef(id))
+          .filter((x): x is PersonRef => x !== null),
         vendors,
         songs,
         media: projectMedia('event', ph.id),
@@ -204,6 +239,12 @@ export interface GuestProjection {
   side: string;
   dmcColor: string | null;
   dmcCode: string | null;
+  /** Real portrait, resolved through the MediaAsset registry. Never invented. */
+  portraitSource: string | null;
+  /** Moments of the programme this person is actually mobilised on. */
+  moments: { phaseId: string; time: string; title: string }[];
+  /** Real relationships recorded in the model. */
+  relationships: { relationshipId: string; kind: RelationshipKind; otherPersonId: string; otherName: string }[];
   /** True when the person can be focused in the 3D World. */
   canShowInWorld: boolean;
 }
@@ -247,6 +288,23 @@ function projectGuest(guestId: string): GuestProjection | null {
     ? weddingStore.seatingTables.find((t) => t.id === g.seating.tableId) ?? null
     : null;
   const dietary = g.dietary && g.dietary.trim() && g.dietary !== 'Standard' ? g.dietary : null;
+  const portrait = weddingStore.getPortraitFor(g.personId);
+
+  // Moments this person is mobilised on — derived from the phases, so a link
+  // created anywhere shows up in every projection at once.
+  const moments = [...weddingStore.phases]
+    .filter((ph) => (ph.keyAgentIds ?? []).some(
+      (agentId) => weddingStore.getPersonForAgent(agentId)?.id === g.personId,
+    ))
+    .sort((a, b) => a.startHour - b.startHour)
+    .map((ph) => ({ phaseId: ph.id, time: formatHour(ph.startHour), title: stripLeadingTime(ph.name) }));
+
+  const relationships = weddingStore.getRelationshipsFor(g.personId).map(({ relationship, otherPersonId }) => ({
+    relationshipId: relationship.id,
+    kind: relationship.kind,
+    otherPersonId,
+    otherName: weddingStore.getPerson(otherPersonId)?.displayName ?? otherPersonId,
+  }));
 
   return {
     guestId: g.id,
@@ -261,6 +319,9 @@ function projectGuest(guestId: string): GuestProjection | null {
     side: g.side,
     dmcColor: dmc?.dmcColor ?? null,
     dmcCode: dmc?.dmcCode ?? null,
+    portraitSource: portrait?.source ?? null,
+    moments,
+    relationships,
     canShowInWorld: Boolean(agent),
   };
 }
@@ -318,6 +379,11 @@ export interface MediaProjection {
   source: string;
   title: string | null;
   caption: string | null;
+  /** What the asset is attached to. A media always belongs to something real. */
+  ownerKind?: MediaAsset['ownerKind'];
+  ownerId?: string;
+  /** Human label of the owner, e.g. "Clara Petit" — resolved, never stored. */
+  ownerLabel?: string | null;
   /** 'manual' = uploaded by the user, 'research' = confirmed enrichment. */
   origin?: MediaAsset['origin'];
   /**
@@ -325,6 +391,23 @@ export interface MediaProjection {
    * Mirror shows the wedding, never its supply chain.
    */
   provenance?: MediaAsset['provenance'];
+}
+
+/** Resolve the display name of whatever a media hangs from. Never invented. */
+export function describeMediaOwner(kind: MediaAsset['ownerKind'], id: string): string | null {
+  switch (kind) {
+    case 'person': return weddingStore.getPerson(id)?.displayName ?? null;
+    case 'place': return weddingStore.places.find((p) => p.id === id)?.name ?? null;
+    case 'vendor': return weddingStore.vendors.find((v) => v.id === id)?.companyName ?? null;
+    case 'event': return weddingStore.phases.find((p) => p.id === id)
+      ? stripLeadingTime(weddingStore.phases.find((p) => p.id === id)!.name) : null;
+    case 'song': {
+      const t = weddingStore.tracks.find((x) => x.id === id);
+      return t ? `${t.title} — ${t.artist}` : null;
+    }
+    case 'wedding': return weddingStore.currentProject.coupleNames || weddingStore.currentProject.title;
+    default: return null;
+  }
 }
 
 export function projectMedia(ownerKind: MediaAsset['ownerKind'], ownerId: string): MediaProjection[] {
@@ -339,6 +422,9 @@ export function projectMedia(ownerKind: MediaAsset['ownerKind'], ownerId: string
       source: m.source,
       title: m.title ?? null,
       caption: m.caption ?? null,
+      ownerKind: m.ownerKind,
+      ownerId: m.ownerId,
+      ownerLabel: describeMediaOwner(m.ownerKind, m.ownerId),
       origin: m.origin,
       provenance: m.provenance,
     }));
@@ -675,10 +761,15 @@ export function projectWorldModel(): WorldModelProjection {
     vendors: projectVendors(),
     places: projectPlaces(),
     music: projectMusic(),
-    // Every media in the project, whatever it is attached to.
+    // Every media in the project, whatever it is attached to. Each item knows
+    // its owner, so the gallery can be composed editorially instead of being a
+    // pile of anonymous thumbnails.
     gallery: weddingStore.media.map((m) => ({
       mediaId: m.id, kind: m.kind, source: m.source,
       title: m.title ?? null, caption: m.caption ?? null,
+      ownerKind: m.ownerKind, ownerId: m.ownerId,
+      ownerLabel: describeMediaOwner(m.ownerKind, m.ownerId),
+      origin: m.origin, provenance: m.provenance,
     })),
     availability: projectAvailability(),
     version: weddingStore.version,

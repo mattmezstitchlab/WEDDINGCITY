@@ -18,11 +18,19 @@ export function WorldCanvasShell() {
   const focusTab = tabForFocus(store.canvasFocus);
   const [tab, setTab] = useState<CanvasTab>(focusTab);
   const [lastFocus, setLastFocus] = useState(store.canvasFocus?.id ?? null);
+  const [lastIntent, setLastIntent] = useState(store.canvasIntent);
 
   // Arriving with a new focus switches the surface, without losing context.
   if (store.canvasFocus && store.canvasFocus.id !== lastFocus) {
     setLastFocus(store.canvasFocus.id);
     setTab(focusTab);
+  }
+  // A section request from the Mirror ("Composer" in 04 LIEUX) lands directly
+  // on that surface. The intent counter makes a repeated request work too.
+  if (store.canvasIntent !== lastIntent) {
+    setLastIntent(store.canvasIntent);
+    if (store.canvasSection) setTab(store.canvasSection);
+    else if (store.canvasFocus) setTab(tabForFocus(store.canvasFocus));
   }
 
   return (

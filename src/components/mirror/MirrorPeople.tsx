@@ -1,8 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { weddingStore } from '../../game/weddingStore';
 import { GuestsProjection, GuestProjection } from '../../projections/worldModel';
-import { typography, radius, dmcTint } from '../../design/tokens';
-import { M, fluid, Reveal, Rule } from './MirrorPrimitives';
+import { typography, radius } from '../../design/tokens';
+import { M, fluid, Reveal, Rule, Portrait } from './MirrorPrimitives';
 
 // ---------------------------------------------------------------------------
 // 02 PERSONNES — a human composition, not an admin grid.
@@ -22,17 +22,17 @@ const RSVP_COLOR: Record<string, string> = {
   accepted: '#7fb79a', pending: '#d9b877', tentative: '#8fb0c6', declined: '#c98f9c',
 };
 
-function initialsOf(name: string): string {
-  return name.trim().split(/\s+/).slice(0, 2).map((p) => p.charAt(0)).join('').toUpperCase();
-}
+const RELATION_LABEL: Record<string, string> = {
+  partner: 'en couple avec', parent: 'parent de', child: 'enfant de',
+  sibling: 'frère/sœur de', family: 'famille de', friend: 'ami·e de',
+  colleague: 'collègue de', witness: 'témoin de', works_with: 'travaille avec',
+};
 
 export function MirrorPeople({ guests }: { guests: GuestsProjection }) {
   const [openId, setOpenId] = useState<string | null>(null);
 
   return (
     <div>
-      {/* Keyframe kept local to the people composition. */}
-      <style>{'@keyframes wcPortraitIn{from{opacity:0}to{opacity:1}}'}</style>
       {/* Counts read as an editorial line, not as stat cards. */}
       <Reveal>
         <div style={summaryStyle}>
@@ -113,43 +113,23 @@ function PersonName({ guest, open, onToggle }: {
   guest: GuestProjection; open: boolean; onToggle: () => void;
 }) {
   const store = weddingStore;
-  // Real portrait only, resolved from the MediaAsset registry — never copied
-  // into this component. Deterministic order: `portraitMediaId` when valid,
-  // otherwise the first image attached to that person (store.getPortraitFor).
-  const portrait = store.getPortraitFor(guest.personId);
-
-  const [reduced, setReduced] = useState(false);
-  useEffect(() => {
-    setReduced(Boolean(window.matchMedia?.('(prefers-reduced-motion: reduce)').matches));
-  }, []);
 
   return (
     <li style={{ minWidth: 0 }}>
-      <button onClick={onToggle} style={nameBtnStyle}>
-        <span
-          style={{
-            ...markStyle,
-            // DMC as a ring — a signal, never a fill.
-            boxShadow: guest.dmcColor ? `0 0 0 1.5px ${guest.dmcColor}` : `0 0 0 1px ${M.line}`,
-            background: portrait ? 'transparent' : dmcTint(guest.dmcColor ?? '#8a8f99', 0.1),
-          }}
-        >
-          {portrait ? (
-            <img
-              src={portrait.source}
-              alt=""
-              loading="lazy"
-              decoding="async"
-              style={{
-                ...portraitStyle,
-                // Soft swap when a photo appears or disappears.
-                animation: reduced ? undefined : 'wcPortraitIn 420ms ease both',
-              }}
-            />
-          ) : (
-            <span style={initialsStyle}>{initialsOf(guest.displayName)}</span>
-          )}
-        </span>
+      <button
+        onClick={onToggle}
+        style={nameBtnStyle}
+        aria-expanded={open}
+        aria-label={`${guest.displayName} — ${RSVP_LABEL[guest.rsvp]}. Afficher le détail.`}
+      >
+        {/* Real photo when the person has one, initials otherwise — resolved
+            by the projection through the MediaAsset registry, never copied. */}
+        <Portrait
+          name={guest.displayName}
+          source={guest.portraitSource}
+          dmcColor={guest.dmcColor}
+          size={34}
+        />
 
         <span style={{ minWidth: 0 }}>
           <span style={personNameStyle}>{guest.displayName}</span>
@@ -166,13 +146,43 @@ function PersonName({ guest, open, onToggle }: {
         <div style={detailStyle}>
           {guest.dmcCode && <div style={detailLineStyle}>Identité DMC · {guest.dmcCode}</div>}
           {guest.side !== 'unknown' && <div style={detailLineStyle}>Côté {guest.side}</div>}
+
+          {/* Moments this person is really mobilised on. */}
+          {guest.moments.length > 0 && (
+            <div style={detailLineStyle}>
+              {guest.moments.map((mo) => (
+                <button
+                  key={mo.phaseId}
+                  onClick={() => store.showEventInWorld(mo.phaseId)}
+                  style={inlineLinkStyle}
+                >
+                  <span style={{ fontFamily: typography.family.mono, color: M.textMuted }}>{mo.time}</span>
+                  {' '}{mo.title}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* Relations recorded in the model. Nothing is inferred. */}
+          {guest.relationships.length > 0 && (
+            <div style={detailLineStyle}>
+              {guest.relationships.map((rel) => (
+                <span key={rel.relationshipId} style={{ marginRight: 12 }}>
+                  {RELATION_LABEL[rel.kind] ?? rel.kind}{' '}
+                  <span style={{ color: M.textPrimary }}>{rel.otherName}</span>
+                </span>
+              ))}
+            </div>
+          )}
+
           <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 10 }}>
             {guest.canShowInWorld && (
-              <button onClick={() => store.showPersonInWorld(guest.personId)} style={actionStyle}>
+              <button className="wc-action" onClick={() => store.showPersonInWorld(guest.personId)} style={actionStyle}>
                 Voir dans le Monde
               </button>
             )}
             <button
+              className="wc-action"
               onClick={() => store.openCanvas({ kind: 'person', id: guest.personId })}
               style={{ ...actionStyle, borderColor: M.lineStrong, color: M.textPrimary }}
             >
@@ -217,9 +227,9 @@ const tablePlaceStyle: React.CSSProperties = {
 };
 
 const peopleGridStyle: React.CSSProperties = {
-  listStyle: 'none', margin: `${fluid(18, 26)}px 0 0`, padding: 0,
+  listStyle: 'none', margin: `${fluid(18, 26)} 0 0`, padding: 0,
   display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(212px, 1fr))',
-  gap: `${fluid(14, 20)}px ${fluid(20, 36)}px`,
+  gap: `${fluid(14, 20)} ${fluid(20, 36)}`,
 };
 
 const nameBtnStyle: React.CSSProperties = {
@@ -228,18 +238,10 @@ const nameBtnStyle: React.CSSProperties = {
   display: 'flex', alignItems: 'center', gap: 12,
 };
 
-const markStyle: React.CSSProperties = {
-  width: 34, height: 34, borderRadius: 999, flex: '0 0 auto',
-  display: 'inline-flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden',
-};
-
-const portraitStyle: React.CSSProperties = {
-  width: '100%', height: '100%', objectFit: 'cover', display: 'block',
-};
-
-const initialsStyle: React.CSSProperties = {
-  fontSize: 11, fontWeight: typography.weight.semibold,
-  letterSpacing: '0.04em', color: M.textSecondary,
+const inlineLinkStyle: React.CSSProperties = {
+  appearance: 'none', background: 'transparent', border: 'none', padding: 0,
+  marginRight: 12, cursor: 'pointer', font: 'inherit',
+  fontSize: typography.size.caption, color: M.textSecondary,
 };
 
 const personNameStyle: React.CSSProperties = {

@@ -434,8 +434,13 @@ try {
       '01 PROGRAMME shows the SAME artwork for the same songId');
 
     // E) provenance is a Canvas concern: the Mirror components never read it.
+    // Comments may DISCUSS provenance; what matters is that no Mirror component
+    // reads the field to render it.
     const mirrorDir = path.join(SRC, 'components', 'mirror');
-    const leaks = readdirSync(mirrorDir).filter((f) => /provenance/i.test(readFileSync(path.join(mirrorDir, f), 'utf8')));
+    const stripComments = (t) => t.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+    const leaks = readdirSync(mirrorDir)
+      .filter((f) => /\.tsx?$/.test(f))
+      .filter((f) => /\bprovenance\b/i.test(stripComments(readFileSync(path.join(mirrorDir, f), 'utf8'))));
     r.check(leaks.length === 0, 'no Mirror component displays provenance', leaks.join(', '));
 
     // F) a manual upload still wins over the confirmed enrichment.

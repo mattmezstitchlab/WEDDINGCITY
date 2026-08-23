@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import { weddingStore } from '../../game/weddingStore';
 import { HeroProjection, MediaProjection } from '../../projections/worldModel';
 import { typography } from '../../design/tokens';
@@ -21,20 +22,40 @@ export function MirrorHero({ hero }: { hero: HeroProjection }) {
     .filter((m) => m.kind === 'image')
     .map((m) => ({ mediaId: m.id, kind: m.kind, source: m.source, title: m.title ?? null, caption: m.caption ?? null }))[0] ?? null;
 
+  // A cover that cannot be displayed must degrade to the typographic state —
+  // an empty black frame would be worse than no image at all.
+  const [broken, setBroken] = useState(false);
+  useEffect(() => { setBroken(false); }, [cover?.mediaId]);
+  const image = broken ? null : cover;
+
   const names = (hero.coupleNames || hero.title).split(/\s*&\s*/);
 
+  const toProgramme = () => {
+    document.getElementById('mirror-programme')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+
   return (
-    <header style={{ ...heroStyle, color: cover ? '#fff' : M.textPrimary }}>
-      {cover && (
+    <header style={{ ...heroStyle, color: image ? '#fff' : M.textPrimary }}>
+      {image && (
         <>
-          <img src={cover.source} alt={cover.title ?? ''} style={coverImgStyle} />
+          {/* HERO IMAGE state: the real photograph becomes the cover.
+              Eager + high priority: it is the first thing on screen, so
+              deferring it would only produce a flash of empty frame. */}
+          <img
+            src={image.source}
+            alt={image.title ?? `Photographie du mariage de ${hero.coupleNames || hero.title}`}
+            loading="eager"
+            decoding="async"
+            onError={() => setBroken(true)}
+            style={coverImgStyle}
+          />
           {/* A single soft scrim so type stays legible — not a decorative gradient. */}
           <div style={scrimStyle} />
         </>
       )}
 
       <div style={heroInnerStyle}>
-        <div style={{ opacity: cover ? 0.85 : 1 }}>
+        <div style={{ opacity: image ? 0.85 : 1 }}>
           <Eyebrow>{hero.worldType === 'wedding' ? 'Mariage' : hero.worldType}</Eyebrow>
         </div>
 
@@ -55,13 +76,13 @@ export function MirrorHero({ hero }: { hero: HeroProjection }) {
           {hero.formattedDate && <span style={metaItemStyle}>{hero.formattedDate}</span>}
           {hero.locationName && (
             <>
-              <span style={{ ...dotStyle, background: cover ? 'rgba(255,255,255,.6)' : M.textMuted }} />
+              <span style={{ ...dotStyle, background: image ? 'rgba(255,255,255,.6)' : M.textMuted }} />
               <span style={metaItemStyle}>{hero.locationName}</span>
             </>
           )}
           {hero.daysUntil !== null && hero.daysUntil > 0 && (
             <>
-              <span style={{ ...dotStyle, background: cover ? 'rgba(255,255,255,.6)' : M.textMuted }} />
+              <span style={{ ...dotStyle, background: image ? 'rgba(255,255,255,.6)' : M.textMuted }} />
               <span style={metaItemStyle}>
                 <strong style={{ fontVariantNumeric: 'tabular-nums' }}>{hero.daysUntil}</strong> jours
               </span>
@@ -70,11 +91,16 @@ export function MirrorHero({ hero }: { hero: HeroProjection }) {
         </div>
       </div>
 
-      {/* Invitation to descend. */}
-      <div style={{ ...scrollHintStyle, color: cover ? 'rgba(255,255,255,.7)' : M.textMuted }}>
+      {/* Invitation to descend — a real control, reachable by keyboard. */}
+      <button
+        type="button"
+        className="wc-action"
+        onClick={toProgramme}
+        style={{ ...scrollHintStyle, color: image ? 'rgba(255,255,255,.75)' : M.textMuted }}
+      >
         <span>Le déroulé</span>
-        <span style={{ display: 'block', marginTop: 8, fontSize: 15, lineHeight: 1 }}>↓</span>
-      </div>
+        <span aria-hidden style={{ display: 'block', marginTop: 8, fontSize: 15, lineHeight: 1 }}>↓</span>
+      </button>
     </header>
   );
 }
@@ -102,7 +128,7 @@ const heroInnerStyle: React.CSSProperties = {
 };
 
 const heroTitleStyle: React.CSSProperties = {
-  margin: `${fluid(22, 36)}px 0 0`,
+  margin: `${fluid(22, 36)} 0 0`,
   fontSize: fluid(52, 148),
   lineHeight: 0.86,
   fontWeight: typography.weight.semibold,
@@ -136,6 +162,8 @@ const dotStyle: React.CSSProperties = {
 };
 
 const scrollHintStyle: React.CSSProperties = {
-  position: 'relative', maxWidth: 1080, margin: `${fluid(34, 54)}px auto 0`, width: '100%',
+  position: 'relative', maxWidth: 1080, margin: `${fluid(34, 54)} auto 0`, width: '100%',
   fontSize: typography.size.micro, letterSpacing: '0.18em', textTransform: 'uppercase',
+  appearance: 'none', background: 'transparent', border: 'none', padding: 0,
+  cursor: 'pointer', font: 'inherit', textAlign: 'left', display: 'block',
 };
