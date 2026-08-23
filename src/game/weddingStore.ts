@@ -1562,6 +1562,11 @@ class WeddingStore {
   public showIdentityModal: boolean = false;
   public brandMenuOpen: boolean = false;
   public createWeddingModalOpen: boolean = false;
+  /**
+   * The editorial creation surface (Mirror). Same business path as the World
+   * panel — see startWeddingCreation — but dressed for the public site.
+   */
+  public weddingCreationOpen: boolean = false;
   public landingPageModalOpen: boolean = false;
   public guideDocModalOpen: boolean = false;
   public inviteModalOpen: boolean = false;
@@ -1788,9 +1793,24 @@ class WeddingStore {
    * is the one already validated by the multi-project acceptance pass.
    */
   public startWeddingCreation(): void {
-    this.createWeddingModalOpen = true;
     this.brandMenuOpen = false;
     this.worldLabModalOpen = false;
+    // Two doors, one room. From the public site (or before any wedding is
+    // open) the editorial surface opens; from inside the 3D world the existing
+    // spatial panel stays. Both end on createRealWedding.
+    if (!this.projectChosen || this.projection === 'mirror') {
+      this.weddingCreationOpen = true;
+      this.createWeddingModalOpen = false;
+    } else {
+      this.createWeddingModalOpen = true;
+    }
+    this.notify();
+  }
+
+  /** Leave the creation surface without creating anything. */
+  public cancelWeddingCreation(): void {
+    this.weddingCreationOpen = false;
+    this.createWeddingModalOpen = false;
     this.notify();
   }
 
@@ -3325,6 +3345,7 @@ class WeddingStore {
 
     this.saveCurrentState();
     this.createWeddingModalOpen = false;
+    this.weddingCreationOpen = false;
     this.brandMenuOpen = false;
     this.focusPlace('place_ceremonie');
     this.spawnGridWave([0, 0, 0], BRAND_ACCENT);

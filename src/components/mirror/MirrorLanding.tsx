@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { weddingStore } from '../../game/weddingStore';
 import { getStoredProjects } from '../../game/persistence';
 import { typography, radius } from '../../design/tokens';
+import { EDITORIAL_ASSETS } from '../../design/editorialAssets';
 import { M, fluid, Eyebrow, Reveal } from './MirrorPrimitives';
 
 // ---------------------------------------------------------------------------
@@ -31,18 +32,21 @@ const DIMENSIONS = [
     name: 'World',
     line: 'Le monde vivant',
     body: 'Les lieux, les personnes et les heures occupent un espace. On s’y déplace, on regarde qui est où, et la journée se comprend d’un seul coup d’œil.',
+    asset: EDITORIAL_ASSETS.world,
   },
   {
     index: '02',
     name: 'Mirror',
     line: 'Le récit',
     body: 'Le même mariage, raconté comme un site : le déroulé, les visages, les lieux, la musique. C’est ce que vous pourrez partager.',
+    asset: EDITORIAL_ASSETS.mirror,
   },
   {
     index: '03',
     name: 'Canvas',
     line: 'La composition',
     body: 'On écrit le mariage directement là où on le lit. Une heure, un lieu, un morceau : la modification apparaît aussitôt dans les deux autres espaces.',
+    asset: EDITORIAL_ASSETS.canvas,
   },
 ];
 
@@ -90,10 +94,23 @@ export function MirrorLanding() {
         </div>
       </nav>
 
-      {/* ---- hero ---- */}
+      {/* ---- hero: a real picture, and the type on top of it ---- */}
       <header id="landing-hero" style={heroStyle}>
+        <img
+          src={EDITORIAL_ASSETS.hero.src}
+          alt={EDITORIAL_ASSETS.hero.alt}
+          width={EDITORIAL_ASSETS.hero.width}
+          height={EDITORIAL_ASSETS.hero.height}
+          /* The only image of the first screen: it loads immediately, the
+             others wait until they are scrolled to. */
+          loading="eager"
+          decoding="async"
+          style={heroImgStyle}
+        />
+        <div style={heroScrimStyle} aria-hidden />
+
         <div style={heroInnerStyle}>
-          <Eyebrow>Wedding City</Eyebrow>
+          <Eyebrow inherit>Wedding City</Eyebrow>
           <h1 style={heroTitleStyle}>
             <span style={{ display: 'block' }}>Le mariage</span>
             <span style={{ display: 'block' }}>devient un monde.</span>
@@ -141,20 +158,57 @@ export function MirrorLanding() {
               <span style={hairlineStyle} />
             </div>
             <h2 style={sectionTitleStyle}>Trois espaces, un seul mariage</h2>
+            <p style={sectionLeadStyle}>
+              Vous ne remplissez pas une application : vous composez un monde.
+              Chaque espace montre le même mariage sous un angle différent.
+            </p>
           </Reveal>
 
-          <div style={dimensionsStyle}>
+          {/* A sequence, not three cards: image and text alternate sides so
+              the scroll has a rhythm. */}
+          <div style={sequenceStyle}>
             {DIMENSIONS.map((d, i) => (
               <Reveal key={d.name} delay={Math.min(i, 3) * 60}>
-                <article style={dimensionStyle}>
-                  <div style={dimensionIndexStyle}>{d.index}</div>
-                  <h3 style={dimensionNameStyle}>{d.name}</h3>
-                  <div style={dimensionLineStyle}>{d.line}</div>
-                  <p style={dimensionBodyStyle}>{d.body}</p>
+                <article className="wc-landing-row" style={sequenceRowStyle(i % 2 === 1)}>
+                  <div style={sequenceTextStyle}>
+                    <div style={dimensionIndexStyle}>{d.index}</div>
+                    <h3 style={dimensionNameStyle}>{d.name}</h3>
+                    <div style={dimensionLineStyle}>{d.line}</div>
+                    <p style={dimensionBodyStyle}>{d.body}</p>
+                  </div>
+                  <figure style={sequenceFigureStyle}>
+                    <img
+                      src={d.asset.src}
+                      alt={d.asset.alt}
+                      width={d.asset.width}
+                      height={d.asset.height}
+                      loading="lazy"
+                      decoding="async"
+                      style={sequenceImgStyle}
+                    />
+                  </figure>
                 </article>
               </Reveal>
             ))}
           </div>
+        </div>
+      </section>
+
+      {/* ---- immersive band: almost no words, a lot of air ---- */}
+      <section style={immersiveStyle} aria-label="Un jour, des milliers de relations">
+        <img
+          src={EDITORIAL_ASSETS.immersive.src}
+          alt={EDITORIAL_ASSETS.immersive.alt}
+          width={EDITORIAL_ASSETS.immersive.width}
+          height={EDITORIAL_ASSETS.immersive.height}
+          loading="lazy"
+          decoding="async"
+          style={immersiveImgStyle}
+        />
+        <div style={immersiveScrimStyle} aria-hidden />
+        <div style={immersiveTextStyle}>
+          <span style={{ display: 'block' }}>Un jour.</span>
+          <span style={{ display: 'block' }}>Des milliers de relations.</span>
         </div>
       </section>
 
@@ -282,13 +336,29 @@ const navCtaStyle: React.CSSProperties = {
 };
 
 const heroStyle: React.CSSProperties = {
-  position: 'relative',
-  display: 'flex', flexDirection: 'column', justifyContent: 'center',
-  minHeight: 'min(82vh, 900px)',
-  padding: `${fluid(70, 120)} ${fluid(20, 72)} ${fluid(50, 90)}`,
+  position: 'relative', overflow: 'hidden',
+  display: 'flex', flexDirection: 'column', justifyContent: 'flex-end',
+  minHeight: 'min(88vh, 940px)',
+  padding: `${fluid(90, 150)} ${fluid(20, 72)} ${fluid(50, 84)}`,
+  color: '#fff',
 };
 
-const heroInnerStyle: React.CSSProperties = { maxWidth: 1080, margin: '0 auto', width: '100%' };
+const heroImgStyle: React.CSSProperties = {
+  position: 'absolute', inset: 0, width: '100%', height: '100%',
+  objectFit: 'cover', objectPosition: 'center 58%', display: 'block',
+};
+
+// Enough veil for white type to hold over a bright picture, little enough for
+// the orangery to stay readable. Measured, not guessed (see check-landing).
+const heroScrimStyle: React.CSSProperties = {
+  position: 'absolute', inset: 0,
+  background:
+    'linear-gradient(to top, rgba(14,12,10,.76) 0%, rgba(14,12,10,.48) 46%, rgba(14,12,10,.26) 100%)',
+};
+
+const heroInnerStyle: React.CSSProperties = {
+  position: 'relative', maxWidth: 1080, margin: '0 auto', width: '100%',
+};
 
 const heroTitleStyle: React.CSSProperties = {
   margin: `${fluid(20, 30)} 0 0`,
@@ -300,7 +370,8 @@ const heroTitleStyle: React.CSSProperties = {
 
 const heroLeadStyle: React.CSSProperties = {
   margin: `${fluid(24, 34)} 0 0`, maxWidth: 560,
-  fontSize: fluid(15, 19), lineHeight: typography.leading.relaxed, color: M.textSecondary,
+  fontSize: fluid(15, 19), lineHeight: typography.leading.relaxed,
+  color: 'rgba(255,253,250,0.88)',
 };
 
 const heroActionsStyle: React.CSSProperties = {
@@ -309,7 +380,7 @@ const heroActionsStyle: React.CSSProperties = {
 
 const primaryCtaStyle: React.CSSProperties = {
   appearance: 'none', cursor: 'pointer',
-  background: M.textPrimary, color: M.surface, border: 'none',
+  background: M.surface, color: M.textPrimary, border: 'none',
   borderRadius: radius.pill, padding: '13px 26px',
   fontSize: typography.editorial.body, fontWeight: typography.weight.semibold,
   letterSpacing: '0.02em',
@@ -317,8 +388,8 @@ const primaryCtaStyle: React.CSSProperties = {
 
 const secondaryCtaStyle: React.CSSProperties = {
   appearance: 'none', cursor: 'pointer',
-  background: 'transparent', color: M.textPrimary,
-  border: `1px solid ${M.lineStrong}`,
+  background: 'transparent', color: '#fff',
+  border: '1px solid rgba(255,253,250,0.5)',
   borderRadius: radius.pill, padding: '13px 22px',
   fontSize: typography.editorial.body, fontWeight: typography.weight.medium,
 };
@@ -349,6 +420,52 @@ const sectionTitleStyle: React.CSSProperties = {
 const sectionLeadStyle: React.CSSProperties = {
   margin: `${fluid(20, 28)} 0 0`, maxWidth: 620,
   fontSize: fluid(14, 18), lineHeight: typography.leading.relaxed, color: M.textSecondary,
+};
+
+const sequenceStyle: React.CSSProperties = {
+  display: 'grid', gap: fluid(48, 96), marginTop: fluid(40, 70),
+};
+
+// Columns live in mirror.css (.wc-landing-row) so a phone can stack them.
+const sequenceRowStyle = (reversed: boolean): React.CSSProperties => ({
+  gap: `${fluid(20, 34)} ${fluid(26, 64)}`,
+  alignItems: 'center',
+  direction: reversed ? 'rtl' : 'ltr',
+});
+
+const sequenceTextStyle: React.CSSProperties = { direction: 'ltr', minWidth: 0 };
+
+const sequenceFigureStyle: React.CSSProperties = {
+  direction: 'ltr', margin: 0, overflow: 'hidden', borderRadius: radius.md,
+  background: 'rgba(16,18,24,0.05)',
+};
+
+const sequenceImgStyle: React.CSSProperties = {
+  width: '100%', height: '100%', aspectRatio: '4 / 3',
+  objectFit: 'cover', display: 'block',
+};
+
+const immersiveStyle: React.CSSProperties = {
+  position: 'relative', overflow: 'hidden',
+  minHeight: 'min(72vh, 640px)',
+  display: 'flex', alignItems: 'flex-end',
+  padding: `${fluid(50, 90)} ${fluid(20, 72)}`,
+};
+
+const immersiveImgStyle: React.CSSProperties = {
+  position: 'absolute', inset: 0, width: '100%', height: '100%',
+  objectFit: 'cover', display: 'block',
+};
+
+const immersiveScrimStyle: React.CSSProperties = {
+  position: 'absolute', inset: 0,
+  background: 'linear-gradient(to top, rgba(14,12,10,.66) 0%, rgba(14,12,10,.20) 60%, rgba(14,12,10,.10) 100%)',
+};
+
+const immersiveTextStyle: React.CSSProperties = {
+  position: 'relative', maxWidth: 1080, margin: '0 auto', width: '100%',
+  color: '#fff', fontSize: fluid(28, 62), lineHeight: 1.04,
+  fontWeight: typography.weight.semibold, letterSpacing: '-0.032em',
 };
 
 const dimensionsStyle: React.CSSProperties = {

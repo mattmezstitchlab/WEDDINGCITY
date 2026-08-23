@@ -53,12 +53,36 @@ const brief = (s) => `${s.activeId ?? 'AUCUN'} · ${s.couple ?? '—'} · lieux=
   + `moments=${s.counts.phases} personnes=${s.counts.persons} morceaux=${s.counts.tracks}`;
 
 /**
- * Creation flow. From the landing the CTA reads "Créer mon mariage"; from the
- * brand menu of an open wedding it reads "Créer un Mariage (Wedding City)".
- * Both open the SAME modal and the same store method.
+ * Two doors, one creation.
+ *  · from the public site → the editorial surface (three questions);
+ *  · from the World brand menu → the existing spatial panel (one form).
+ * Both end on createRealWedding.
  */
-const createFromLanding = async (couple, place, ctaLabel = 'Créer mon mariage') => {
-  const cta = await clickText(ctaLabel);
+const createEditorial = async (one, two, date, place) => {
+  const cta = await clickText('Créer mon mariage');
+  await wait(1300);
+  const fill = (ph, v) => page.evaluate((ph, v) => {
+    const i = [...document.querySelectorAll('input')]
+      .find((x) => (x.placeholder || '').includes(ph) || x.type === ph);
+    if (!i) return false;
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(i, v);
+    i.dispatchEvent(new Event('input', { bubbles: true }));
+    return true;
+  }, ph, v);
+  await fill('Clara', one);
+  await fill('Alexandre', two);
+  await wait(300);
+  await clickText('Continuer'); await wait(700);
+  await fill('date', date); await wait(250);
+  await clickText('Continuer'); await wait(700);
+  await fill('Domaine', place); await wait(250);
+  const gen = await clickText('Générer notre monde');
+  await wait(3200);
+  return { cta, gen };
+};
+
+const createFromWorldPanel = async (couple, place) => {
+  const cta = await clickText('Créer un Mariage');
   await wait(1200);
   await page.evaluate((c, pl) => {
     const set = (el, v) => { if (!el) return;
@@ -85,7 +109,7 @@ try {
   await shot('01-landing');
 
   say('\n=== 2. CRÉER ALPHA DEPUIS LA LANDING ===');
-  const created = await createFromLanding('ALPHA-UN & ALPHA-DEUX', 'DOMAINE ALPHA');
+  const created = await createEditorial('ALPHA-UN', 'ALPHA-DEUX', '2027-03-05', 'DOMAINE ALPHA');
   say('  CTA/génération :', JSON.stringify(created));
   const sA = await snap();
   say('  ' + brief(sA), '| HUD:', sA.hud.slice(0, 40));
@@ -139,7 +163,7 @@ try {
   await wait(1400);
   await page.evaluate(() => document.querySelector('[title="Ouvrir le menu principal Wedding City"]')?.click());
   await wait(800);
-  const createdB = await createFromLanding('BETA-UN & BETA-DEUX', 'CHALET BETA', 'Créer un Mariage');
+  const createdB = await createFromWorldPanel('BETA-UN & BETA-DEUX', 'CHALET BETA');
   say('  création B :', JSON.stringify(createdB));
   const sB = await snap();
   say('  ' + brief(sB), '| ZORGLUB dans B :', sB.persons.some((n) => /ZORGLUB/.test(n)));

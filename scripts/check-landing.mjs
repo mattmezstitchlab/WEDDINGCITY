@@ -10,7 +10,7 @@
  * asserted on the source where behaviour cannot be rendered.
  */
 
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 import { renderComponent, SRC } from './lib/render-harness.mjs';
 import { createReporter } from './lib/esm-harness.mjs';
@@ -33,6 +33,9 @@ export async function mount() {
   createRoot(document.getElementById('root')).render(<MirrorSite />);
 }
 `;
+
+/** Comments explain the rules; only real code is judged. */
+const code = (text) => text.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
 
 const views = [];
 const render = async (entry, options) => {
@@ -82,10 +85,86 @@ try {
       'which is the store\u2019s one creation entry point');
 
     const storeSrc = readFileSync(path.join(SRC, 'game', 'weddingStore.ts'), 'utf8');
-    r.check(/public startWeddingCreation\(\): void \{[\s\S]{0,200}createWeddingModalOpen = true/.test(storeSrc),
-      'and it opens the EXISTING creation modal — no second creation system');
+    r.check(/public startWeddingCreation\(\): void \{[\s\S]{0,600}(weddingCreationOpen|createWeddingModalOpen) = true/
+      .test(code(storeSrc)),
+      'and it opens a creation surface — no second creation system');
     r.check(!/createRealWedding\(/.test(landingSrc),
       'the landing never reimplements the creation logic');
+  }
+
+  // ---------------------------------------------------------------------------
+  console.log('\n[1b/4] The landing is visual, and its pictures are NOT wedding media');
+  // ---------------------------------------------------------------------------
+  {
+    const { document: doc } = await render(LANDING_ENTRY, { width: 1440 });
+    const imgs = [...doc.querySelectorAll('img')];
+    r.check(imgs.length >= 5, `the landing carries real pictures (${imgs.length})`);
+    r.check(imgs.every((i) => (i.getAttribute('src') || '').startsWith('/editorial/')),
+      'all of them come from the product asset folder',
+      imgs.map((i) => i.getAttribute('src')).filter((s) => !s.startsWith('/editorial/')).join(', '));
+    r.check(imgs.every((i) => i.getAttribute('alt') !== null),
+      'each one carries an alternative text');
+    const eager = imgs.filter((i) => i.getAttribute('loading') !== 'lazy');
+    r.check(eager.length === 1, 'only the hero loads eagerly; the rest are lazy',
+      String(eager.length));
+    r.check(imgs.every((i) => i.getAttribute('width') && i.getAttribute('height')),
+      'and each declares its intrinsic size, so nothing jumps while loading');
+
+    // THE isolation rule: editorial assets are product furniture, never data.
+    const assets = readFileSync(path.join(SRC, 'design', 'editorialAssets.ts'), 'utf8');
+    r.check(!/weddingStore|addMedia|MediaAsset/.test(code(assets)),
+      'the asset registry cannot reach the store — it imports nothing from it');
+    const srcDir = path.join(SRC);
+    const offenders = [];
+    const walk = (dir) => {
+      for (const e of readdirSync(dir, { withFileTypes: true })) {
+        const fp = path.join(dir, e.name);
+        if (e.isDirectory()) { walk(fp); continue; }
+        if (!/\.tsx?$/.test(e.name)) continue;
+        const body = readFileSync(fp, 'utf8');
+        // Anything that would push an editorial picture into the media model.
+        if (/addMedia\([^)]*editorial/s.test(body)
+          || /EDITORIAL_ASSETS[^\n]*addMedia/.test(body)) offenders.push(path.relative(SRC, fp));
+      }
+    };
+    walk(srcDir);
+    r.check(offenders.length === 0,
+      'no code path ever attaches an editorial picture to a wedding', offenders.join(', '));
+
+    const store = readFileSync(path.join(SRC, 'game', 'weddingStore.ts'), 'utf8');
+    r.check(!/editorial/i.test(code(store).replace(/editorial creation surface/gi, '')),
+      'and the store never references an editorial asset');
+  }
+
+  // ---------------------------------------------------------------------------
+  console.log('\n[1c/4] Creating a wedding is one flow behind two doors');
+  // ---------------------------------------------------------------------------
+  {
+    const modal = readFileSync(path.join(SRC, 'components', 'mirror', 'WeddingCreationModal.tsx'), 'utf8');
+    const store = readFileSync(path.join(SRC, 'game', 'weddingStore.ts'), 'utf8');
+    const app = readFileSync(path.join(SRC, 'App.tsx'), 'utf8');
+
+    r.check(/store\.createRealWedding\(\{/.test(modal),
+      'the editorial modal ends on the one real creation method');
+    r.check(!/INITIAL_|applyDomain|saveWeddingProject/.test(modal),
+      'and reimplements none of its logic');
+    r.check(/if \(!this\.projectChosen \|\| this\.projection === 'mirror'\)/.test(store),
+      'startWeddingCreation routes to the editorial surface from the site');
+    r.check(/this\.createWeddingModalOpen = true;/.test(store),
+      'and keeps the existing spatial panel for the World');
+    r.check(/weddingStore\.weddingCreationOpen && \(/.test(app),
+      'the app mounts the editorial surface');
+
+    // Modal behaviour that a user actually feels.
+    r.check(/role="dialog"/.test(modal) && /aria-modal="true"/.test(modal), 'it is a real dialog');
+    r.check(/e\.key === 'Escape'/.test(modal), 'Escape closes it');
+    r.check(/document\.body\.style\.overflow = 'hidden'/.test(modal)
+      && /document\.body\.style\.overflow = previous/.test(modal),
+      'the page behind does not scroll, and gets its scroll back on close');
+    r.check(/shiftKey && document\.activeElement === first/.test(modal),
+      'focus is trapped inside');
+    r.check(/aria-label="Fermer et revenir au site"/.test(modal), 'and closing is labelled');
+    r.check(/Générer notre monde/.test(modal), 'the last step names what happens');
   }
 
   // ---------------------------------------------------------------------------

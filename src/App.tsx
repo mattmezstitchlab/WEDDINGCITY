@@ -18,6 +18,7 @@ const WorldCanvasShell = lazy(() => import('./components/canvas/WorldCanvasShell
 const MirrorCanvasShell = lazy(() => import('./components/canvas/MirrorCanvasShell').then((m) => ({ default: m.MirrorCanvasShell })));
 import { ProjectionVeil } from './components/ui/ProjectionVeil';
 
+const WeddingCreationModal = lazy(() => import('./components/mirror/WeddingCreationModal').then((m) => ({ default: m.WeddingCreationModal })));
 const MirrorSite = lazy(() => import('./components/mirror/MirrorSite').then((m) => ({ default: m.MirrorSite })));
 const GuestConstellation = lazy(() => import('./components/ui/GuestConstellation').then((m) => ({ default: m.GuestConstellation })));
 const SystemNerveCenterModal = lazy(() => import('./components/ui/SystemNerveCenterModal').then((m) => ({ default: m.SystemNerveCenterModal })));
@@ -163,6 +164,14 @@ export default function App() {
           {/* Same CanvasCore, two shells: a side panel over the 3D world, an
               editorial surface inside the Mirror. The projection decides. */}
           {weddingStore.getCanvasShell() === 'mirror' ? <MirrorCanvasShell /> : <WorldCanvasShell />}
+        </Suspense>
+      )}
+
+      {/* Creating a wedding from the public site happens on the site, in its
+          own language — not by dropping the visitor into the 3D panel. */}
+      {weddingStore.weddingCreationOpen && (
+        <Suspense fallback={null}>
+          <WeddingCreationModal />
         </Suspense>
       )}
 

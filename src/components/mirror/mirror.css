@@ -225,3 +225,58 @@
     display: none;
   }
 }
+
+/* --- landing sequence ------------------------------------------------------
+   Text and picture side by side, alternating; stacked on a phone. Declared
+   here (not inline) so the media query can actually win. */
+.wc-landing-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr);
+}
+
+@media (max-width: 780px) {
+  .wc-landing-row {
+    grid-template-columns: minmax(0, 1fr);
+    direction: ltr !important;
+  }
+}
+
+/* --- editorial creation surface --------------------------------------------
+   Wide screen: the questions on the left, the picture holding the right-hand
+   column full height. Phone: one column, picture last. */
+.wc-creation-surface {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 0.82fr);
+  grid-template-rows: auto 1fr;
+}
+
+.wc-creation-top {
+  grid-column: 1 / -1;
+}
+
+@media (max-width: 900px) {
+  .wc-creation-surface {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* --- the two names ---------------------------------------------------------
+   Side by side with the ampersand between them; stacked on a phone, where the
+   ampersand becomes a centred separator. */
+.wc-creation-names {
+  display: flex;
+  align-items: flex-end;
+  flex-wrap: wrap;
+}
+
+@media (max-width: 680px) {
+  .wc-creation-names {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    justify-items: stretch;
+  }
+  .wc-creation-amp {
+    justify-self: center;
+    line-height: 1 !important;
+  }
+}
