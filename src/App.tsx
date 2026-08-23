@@ -85,10 +85,13 @@ export default function App() {
       } else if (e.code === 'KeyL' && !weddingStore.showIdentityModal) {
         weddingStore.worldLabModalOpen = !weddingStore.worldLabModalOpen;
         weddingStore.notify();
+      } else if (e.code === 'KeyM' && e.shiftKey) {
+        // MEASURED: this branch used to sit AFTER the bare KeyM one, so the
+        // documented ⇧M shortcut could never fire — M always opened the DJ
+        // booth instead. Found by actually driving the app in a browser.
+        weddingStore.setProjection(weddingStore.projection === 'mirror' ? 'world' : 'mirror');
       } else if (e.code === 'KeyM' && !weddingStore.showIdentityModal) {
         weddingStore.setDjBoothOpen(!weddingStore.djBoothModalOpen);
-      } else if (e.code === 'KeyM' && e.shiftKey) {
-        weddingStore.setProjection(weddingStore.projection === 'mirror' ? 'world' : 'mirror');
       } else if (e.code === 'KeyK' && !weddingStore.showIdentityModal) {
         if (weddingStore.canvasOpen) weddingStore.closeCanvas();
         else weddingStore.openCanvas();

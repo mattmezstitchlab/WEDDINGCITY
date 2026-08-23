@@ -202,8 +202,11 @@ const nowStyle: React.CSSProperties = {
   color: '#4c7a63', fontWeight: 700,
 };
 
+// `display` lives in mirror.css (.wc-timeline-thread): an inline value would
+// beat the mobile media query, which is exactly what happened — on a phone the
+// thread column stayed visible and left an orphan green dot mid-paragraph.
 const threadColStyle: React.CSSProperties = {
-  display: 'flex', flexDirection: 'column', alignItems: 'center',
+  flexDirection: 'column', alignItems: 'center',
   alignSelf: 'stretch', paddingTop: fluid(14, 24),
 };
 

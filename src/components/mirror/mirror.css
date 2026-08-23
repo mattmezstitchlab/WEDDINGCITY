@@ -46,6 +46,22 @@
   animation: wcMirrorIn 420ms cubic-bezier(0.22, 0.61, 0.36, 1) both;
 }
 
+/* --- the cover ------------------------------------------------------------- */
+.wc-hero {
+  min-height: min(94vh, 1000px);
+  justify-content: flex-end;
+}
+
+@media (max-width: 680px) {
+  /* Shorter, and the lockup sits low but not marooned: the first section
+     starts to show, which is what invites the scroll. */
+  .wc-hero {
+    min-height: 86vh;
+    justify-content: center;
+    padding-top: 96px;
+  }
+}
+
 /* --- the timeline, the spine of the site ---------------------------------- */
 .wc-timeline-row {
   display: grid;
@@ -55,6 +71,11 @@
 
 .wc-timeline-hour {
   text-align: right;
+}
+
+/* Declared here, never inline: the mobile rule below must be able to win. */
+.wc-timeline-thread {
+  display: flex;
 }
 
 @media (max-width: 680px) {
@@ -68,6 +89,10 @@
     display: flex;
     align-items: baseline;
     gap: 12px;
+    /* Stacked, the hour needs air before the title: without it the moment
+       read as one dense block on a phone. */
+    margin-bottom: 14px;
+    padding-top: 0;
   }
   .wc-timeline-thread {
     display: none;
@@ -150,4 +175,16 @@
 
 .wc-skip:focus {
   left: 16px;
+}
+
+/* --- covers ----------------------------------------------------------------
+   92px is a graphic element on a laptop and a battering ram on a phone: the
+   row measured 383px inside a 350px column at 390px wide. The size is set
+   inline (the component needs the number for its own proportions), so the
+   responsive override has to be marked important — deliberately, here only. */
+@media (max-width: 680px) {
+  .wc-cover-lg {
+    width: 68px !important;
+    height: 68px !important;
+  }
 }

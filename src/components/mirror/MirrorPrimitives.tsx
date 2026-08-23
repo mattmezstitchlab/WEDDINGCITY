@@ -60,7 +60,9 @@ export function SectionShell({
             ? `${fluid(52, 96)} ${fluid(20, 72)}`
             : `${fluid(72, 148)} ${fluid(20, 72)}`,
         borderTop: tone === 'surface' ? 'none' : `1px solid ${M.line}`,
-        scrollMarginTop: 68,
+        // Rail (sticky at 62) + its own height: an anchored section must not
+        // land underneath it.
+        scrollMarginTop: 116,
       }}
     >
       <div style={{ maxWidth: 1080, margin: '0 auto' }}>

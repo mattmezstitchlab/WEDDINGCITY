@@ -35,7 +35,7 @@ export function MirrorHero({ hero }: { hero: HeroProjection }) {
   };
 
   return (
-    <header style={{ ...heroStyle, color: image ? '#fff' : M.textPrimary }}>
+    <header className="wc-hero" style={{ ...heroStyle, color: image ? '#fff' : M.textPrimary }}>
       {image && (
         <>
           {/* HERO IMAGE state: the real photograph becomes the cover.
@@ -105,10 +105,12 @@ export function MirrorHero({ hero }: { hero: HeroProjection }) {
   );
 }
 
+// Height and vertical anchoring live in mirror.css (.wc-hero) so a phone can
+// have its own: at 390px the 94vh cover left ~380px of emptiness above the
+// names, which reads as a loading state rather than as a composition.
 const heroStyle: React.CSSProperties = {
   position: 'relative',
-  minHeight: 'min(94vh, 1000px)',
-  display: 'flex', flexDirection: 'column', justifyContent: 'flex-end',
+  display: 'flex', flexDirection: 'column',
   padding: `${fluid(110, 170)} ${fluid(20, 72)} ${fluid(56, 92)}`,
   overflow: 'hidden',
 };

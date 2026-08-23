@@ -99,13 +99,24 @@ export function InlineSelect<T extends string>({
   placeholder?: string;
 }) {
   return (
+    // SEEN IN THE BROWSER: the native control (system chevron, boxed field) was
+    // the one element that made the Canvas read as a form rather than as a
+    // composition surface. Same control, same behaviour, editorial clothing:
+    // no native appearance, hairline underline, one discreet chevron.
     <select
       value={value ?? ''}
       onChange={(e) => onCommit((e.target.value || null) as T | null)}
       style={{
         font: 'inherit', fontSize: typography.size.body, color: value ? K.textPrimary : K.textMuted,
-        background: K.bg, border: `1px solid ${K.line}`, borderRadius: radius.xs,
-        padding: '5px 8px', outline: 'none', maxWidth: '100%', cursor: 'pointer',
+        appearance: 'none', WebkitAppearance: 'none', MozAppearance: 'none',
+        background: 'transparent',
+        backgroundImage:
+          `url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='9' height='6'>`
+          + `<path d='M1 1l3.5 3.5L8 1' fill='none' stroke='%23636874' stroke-width='1.2'/></svg>")`,
+        backgroundRepeat: 'no-repeat',
+        backgroundPosition: 'right 2px center',
+        border: 'none', borderBottom: `1px solid ${K.lineStrong}`, borderRadius: 0,
+        padding: '5px 20px 5px 0', outline: 'none', maxWidth: '100%', cursor: 'pointer',
       }}
     >
       <option value="">{placeholder ?? '—'}</option>

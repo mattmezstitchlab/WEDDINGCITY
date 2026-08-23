@@ -322,6 +322,55 @@ try {
   }
 
   // ---------------------------------------------------------------------------
+  console.log('\n[5b/6] What a real browser found, locked down');
+  // ---------------------------------------------------------------------------
+  // Every assertion here corresponds to a defect SEEN in Chromium during the
+  // final pass. jsdom cannot lay out, so these guard the CAUSE, not the pixels.
+  {
+    const { readFileSync } = await import('node:fs');
+    const p2 = (...parts) => path.join(SRC, ...parts);
+    const nav = readFileSync(p2('components', 'mirror', 'MirrorNav.tsx'), 'utf8');
+    const css = readFileSync(p2('components', 'mirror', 'mirror.css'), 'utf8');
+    const timeline = readFileSync(p2('components', 'mirror', 'MirrorTimeline.tsx'), 'utf8');
+    const hero = readFileSync(p2('components', 'mirror', 'MirrorHero.tsx'), 'utf8');
+    const sections = readFileSync(p2('components', 'mirror', 'MirrorSections.tsx'), 'utf8');
+    const app = readFileSync(path.join(SRC, 'App.tsx'), 'utf8');
+
+    // The fixed projection pill was drawn over the middle of the rail.
+    r.check(/position: 'sticky', top: 62/.test(nav),
+      'the editorial rail starts below the floating projection switcher');
+    r.check(/scrollMarginTop: 116/.test(readFileSync(p2('components', 'mirror', 'MirrorPrimitives.tsx'), 'utf8')),
+      'and an anchored section lands below the rail, not under it');
+
+    // An inline `display` beat the mobile media query: orphan dot on a phone.
+    r.check(!/display: 'flex'[^}]*alignSelf: 'stretch'/.test(timeline)
+      && /\.wc-timeline-thread \{\s*display: flex;/.test(css),
+      'the timeline thread declares its display in CSS, so mobile can hide it');
+
+    // Same class of bug for the cover size and the hero height.
+    r.check(/className="wc-cover-lg"/.test(sections) && /\.wc-cover-lg/.test(css),
+      'the 92px cover can shrink on a phone');
+    r.check(/className="wc-hero"/.test(hero) && /\.wc-hero \{/.test(css)
+      && !/minHeight: 'min\(94vh/.test(hero),
+      'the hero height is responsive, not frozen inline');
+
+    // Measured at 390px: a nowrap title imposed its width on the flex row.
+    r.check(/minWidth: 0, overflow: 'hidden'/.test(sections),
+      'a song row can actually shrink inside a 350px column');
+
+    // The documented ⇧M shortcut was unreachable behind a bare KeyM branch.
+    const shiftFirst = app.indexOf("e.code === 'KeyM' && e.shiftKey");
+    const bareM = app.indexOf("e.code === 'KeyM' && !weddingStore.showIdentityModal");
+    r.check(shiftFirst > 0 && shiftFirst < bareM,
+      'the ⇧M shortcut is reachable: its branch is tested before the bare M one');
+
+    // The native select was the only thing that made the Canvas a form.
+    const prim = readFileSync(p2('components', 'canvas', 'CanvasPrimitives.tsx'), 'utf8');
+    r.check(/appearance: 'none'/.test(prim) && /borderBottom: `1px solid \$\{K.lineStrong\}`/.test(prim),
+      'the Canvas select wears editorial clothing, not the system widget');
+  }
+
+  // ---------------------------------------------------------------------------
   console.log('\n[6/6] The Canvas opens in context, and stays a composition tool');
   // ---------------------------------------------------------------------------
   {

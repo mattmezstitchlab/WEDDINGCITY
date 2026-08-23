@@ -19,6 +19,8 @@ import { subscribePlayer, togglePlay, getPlayerState, PlayerState } from '../../
 // ---------------------------------------------------------------------------
 
 export interface TrackArtProps {
+  /** Lets a context shrink the cover responsively (see mirror.css). */
+  className?: string;
   songId: string;
   title: string;
   artist: string;
@@ -34,7 +36,7 @@ function usePlayer(): PlayerState {
 }
 
 export function TrackArt({
-  songId, title, artist, coverSource, audioSource, size = 64,
+  className, songId, title, artist, coverSource, audioSource, size = 64,
 }: TrackArtProps) {
   const player = usePlayer();
   const active = player.songId === songId;
@@ -56,10 +58,11 @@ export function TrackArt({
 
   return (
     <div
+      className={className}
       style={{
         position: 'relative', width: size, height: size, flex: '0 0 auto',
         borderRadius: size >= 80 ? radius.md : radius.sm, overflow: 'hidden',
-        background: cover ? 'transparent' : 'rgba(16,18,24,0.045)',
+        background: cover ? 'transparent' : 'rgba(16,18,24,0.05)',
         boxShadow: `inset 0 0 0 1px ${M.line}`,
       }}
     >
@@ -76,16 +79,21 @@ export function TrackArt({
           }}
         />
       ) : (
-        // Typographic fallback — never a fabricated cover image.
+        // Typographic cover — never a fabricated image.
+        // SEEN IN THE BROWSER: a small grey letter floating in a 92px square
+        // read as a missing image. Set larger, tighter and slightly off the
+        // optical centre, the same letter reads as a deliberate cover.
         <span
           aria-hidden
           style={{
             position: 'absolute', inset: 0,
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontSize: Math.round(size * 0.34),
+            fontSize: Math.round(size * 0.52),
             fontWeight: typography.weight.semibold,
-            letterSpacing: '-0.03em',
-            color: M.textMuted,
+            letterSpacing: '-0.05em',
+            lineHeight: 1,
+            paddingBottom: Math.round(size * 0.04),
+            color: M.textSecondary,
           }}
         >
           {title.trim().charAt(0).toUpperCase()}

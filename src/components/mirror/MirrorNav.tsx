@@ -40,7 +40,10 @@ export function MirrorNav({ sections }: { sections: NavSection[] }) {
           .sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0];
         if (inView) setActive(inView.target.id.replace('mirror-', ''));
       },
-      { rootMargin: '-20% 0px -65% 0px', threshold: [0.05, 0.25, 0.5] },
+      // The trigger line sits just under the rail (62 + its height), so the
+      // section you are actually reading is the one highlighted. With -20% the
+      // rail still showed 02 while 03 filled the screen.
+      { rootMargin: '-116px 0px -55% 0px', threshold: [0, 0.02, 0.2] },
     );
     for (const s of visible) {
       const el = document.getElementById(`mirror-${s.id}`);
@@ -107,7 +110,11 @@ export function MirrorNav({ sections }: { sections: NavSection[] }) {
 }
 
 const barStyle: React.CSSProperties = {
-  position: 'sticky', top: 0, zIndex: 5,
+  // SEEN IN THE BROWSER: the fixed WORLD/MIRROR/CANVAS pill (top ~14px, 38px
+  // tall, centred) was drawn straight over the middle of this rail — "04 LIEUX"
+  // and "05 MUSIQUE" were unreadable at 1440px and worse on a phone. The rail
+  // now begins below the pill instead of fighting it.
+  position: 'sticky', top: 62, zIndex: 5,
   background: 'rgba(247, 245, 240, 0.92)',
   borderBottom: `1px solid ${M.line}`,
 };

@@ -26,7 +26,9 @@
     "test:media-music": "node scripts/check-media-music.mjs",
     "test:enrichment": "node scripts/check-enrichment.mjs",
     "test:finish": "node scripts/check-finish.mjs",
-    "test:render": "node scripts/check-render.mjs"
+    "test:render": "node scripts/check-render.mjs",
+    "visual:shoot": "node scripts/shoot.mjs",
+    "visual:overflow": "node scripts/overflow-probe.mjs"
   },
   "dependencies": {
     "@react-spring/three": "^9.7.5",
@@ -43,12 +45,14 @@
     "three-custom-shader-material": "^6.3.1"
   },
   "devDependencies": {
+    "@sparticuz/chromium": "^149.0.0",
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
     "@types/three": "^0.171.0",
     "@vitejs/plugin-react": "^4.3.4",
     "esbuild": "^0.25.0",
     "jsdom": "^30.0.1",
+    "puppeteer-core": "^25.8.0",
     "typescript": "~5.6.3",
     "vite": "^6.0.3"
   }

@@ -269,6 +269,7 @@ export function MirrorMusic({ music }: { music: MusicProjection }) {
                   <div style={songInnerStyle}>
                     {/* Same artwork + player used by the Timeline. */}
                     <TrackArt
+                      className="wc-cover-lg"
                       songId={sg.songId}
                       title={sg.title}
                       artist={sg.artist}
@@ -283,7 +284,10 @@ export function MirrorMusic({ music }: { music: MusicProjection }) {
                       onClick={() => store.openCanvas({ kind: 'song', id: sg.songId })}
                       style={songBtnStyle}
                     >
-                      <span style={{ minWidth: 0 }}>
+                      {/* MEASURED at 390px: without `overflow: hidden` here the
+                          nowrap title imposed its full width on the flex row and
+                          pushed the whole section 14px past the viewport. */}
+                      <span style={{ minWidth: 0, overflow: 'hidden' }}>
                         <span style={songTitleStyle}>{sg.title}</span>
                         <span style={songArtistStyle}>{sg.artist}</span>
                       </span>
@@ -351,7 +355,10 @@ const vendorNameStyle: React.CSSProperties = {
 };
 
 const vendorMomentsStyle: React.CSSProperties = {
-  display: 'flex', flexDirection: 'column', gap: 4, marginTop: fluid(12, 16),
+  // A wedding planner works on seven moments: stacked, that is a table.
+  // Wrapped inline, it reads as a rhythm of hours.
+  display: 'flex', flexWrap: 'wrap', gap: `6px ${fluid(14, 22)}`,
+  marginTop: fluid(14, 20),
 };
 
 const momentLinkStyle: React.CSSProperties = {
