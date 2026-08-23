@@ -38,16 +38,26 @@ import {
   getStoredAccounts,
 } from './persistence';
 
-// Apple Vision Pro & Spatial Design System Constants
-export const BRAND_ACCENT = '#e2b448'; // Refined Champagne Titanium / Warm Light
-export const BRAND_BG = '#08090d';
-export const BRAND_SURFACE = '#12151e';
-export const BRAND_SURFACE_HOVER = '#181c28';
-export const BRAND_BORDER = 'rgba(255, 255, 255, 0.09)';
-export const BRAND_BORDER_ACTIVE = 'rgba(226, 180, 72, 0.6)';
-export const BRAND_TEXT_MUTED = '#717684';
-export const BRAND_TEXT_PRIMARY = '#f5f5f7';
-export const BRAND_TEXT_SECONDARY = '#9ba1b0';
+// Apple Vision Pro & Spatial Design System Constants.
+// Values now live in ./brand (dependency-free) to avoid the module cycle that
+// crashed startup. Re-exported here so every existing import keeps working.
+import { BRAND_ACCENT } from './brand';
+import {
+  PersistedDomainState,
+  serializeDomain,
+  applyDomain,
+} from './persistenceSchema';
+export {
+  BRAND_ACCENT,
+  BRAND_BG,
+  BRAND_SURFACE,
+  BRAND_SURFACE_HOVER,
+  BRAND_BORDER,
+  BRAND_BORDER_ACTIVE,
+  BRAND_TEXT_MUTED,
+  BRAND_TEXT_PRIMARY,
+  BRAND_TEXT_SECONDARY,
+} from './brand';
 
 // Initial Reconstructed Venues
 export const INITIAL_RECONSTRUCTED_VENUES: ReconstructedVenue[] = [
@@ -1348,6 +1358,52 @@ export const CHAOS_PRESETS: ImportPresetFile[] = [
 ];
 
 // Wedding Store Class with Real Persistent Multi-Project Architecture
+/** Default avatar identity. Single definition, shared by the class field and the reset factory. */
+export const DEFAULT_USER_IDENTITY: UserIdentity = {
+  role: 'wedding_planner',
+  name: 'Sophie Étoile',
+  roleTitle: 'Cheffe d\u2019Orchestre du Jour J',
+  outfitColor: '#e2b448',
+  accessory: 'clipboard',
+  avatarIcon: 'planner',
+  isCreated: true,
+};
+
+/**
+ * Deep copy, so callers cannot mutate the module-level INITIAL_* constants.
+ *
+ * `[...INITIAL_AD_SLOTS]` only copies the array — the element objects stay
+ * shared. Claiming an ad slot therefore mutated the "pristine" constant
+ * itself, which leaked state across project switches and made defaults
+ * non-pristine. Cloning removes that whole class of contamination.
+ */
+function clone<T>(value: T): T {
+  if (typeof structuredClone === 'function') return structuredClone(value);
+  return JSON.parse(JSON.stringify(value)) as T;
+}
+
+/**
+ * Pristine defaults for every persisted field. Declared once, used by both the
+ * "no snapshot" and the "partial snapshot" paths.
+ */
+function createDefaultDomainState(): PersistedDomainState {
+  return clone({
+    time: 15.4,
+    userIdentity: DEFAULT_USER_IDENTITY,
+    userDmcIdentity: DEFAULT_DMC_IDENTITY,
+    places: INITIAL_PLACES,
+    agents: INITIAL_AGENTS,
+    docs: INITIAL_DOCS,
+    tasks: INITIAL_TASKS,
+    conflicts: INITIAL_CONFLICTS,
+    phases: TIMELINE_PHASES,
+    tracks: INITIAL_TRACKS,
+    reconstructedVenues: INITIAL_RECONSTRUCTED_VENUES,
+    placedObjects: INITIAL_RECONSTRUCTED_VENUES[0].objects,
+    adSlots: INITIAL_AD_SLOTS,
+  });
+}
+
 class WeddingStore {
   public version: number = 0;
   public time: number = 15.4;
@@ -1380,17 +1436,17 @@ class WeddingStore {
   public interiorMode: boolean = false;
   public activeVenueId: string | null = null;
   public constructionMode: boolean = false;
-  public reconstructedVenues: ReconstructedVenue[] = [...INITIAL_RECONSTRUCTED_VENUES];
-  public placedObjects: PlacedObject[] = [...INITIAL_RECONSTRUCTED_VENUES[0].objects];
+  public reconstructedVenues: ReconstructedVenue[] = clone(INITIAL_RECONSTRUCTED_VENUES);
+  public placedObjects: PlacedObject[] = clone(INITIAL_RECONSTRUCTED_VENUES[0].objects);
   public selectedObjectId: string | null = null;
   public avatarPos: [number, number, number] = [0, 0, 8];
   public avatarRot: number = 0;
 
   // Advertising Grid 3D Slots
-  public adSlots: AdDisplaySlot[] = [...INITIAL_AD_SLOTS];
+  public adSlots: AdDisplaySlot[] = clone(INITIAL_AD_SLOTS);
 
   // DMC ID Identity (DMC Color + DMC Symbol)
-  public userDmcIdentity: DmcIdentity = { ...DEFAULT_DMC_IDENTITY };
+  public userDmcIdentity: DmcIdentity = clone(DEFAULT_DMC_IDENTITY);
 
   // Active Project & Account
   public currentProject: WeddingProject = {
@@ -1412,27 +1468,19 @@ class WeddingStore {
   public activeAccount: UserAccount | null = null;
 
   // Identity state
-  public userIdentity: UserIdentity = {
-    role: 'wedding_planner',
-    name: 'Sophie Étoile',
-    roleTitle: 'Cheffe d’Orchestre du Jour J',
-    outfitColor: '#e2b448',
-    accessory: 'clipboard',
-    avatarIcon: 'planner',
-    isCreated: true,
-  };
+  public userIdentity: UserIdentity = clone(DEFAULT_USER_IDENTITY);
 
   public introCinematicActive: boolean = false;
   public introProgress: number = 1.0;
 
-  public places: Place[] = [...INITIAL_PLACES];
+  public places: Place[] = clone(INITIAL_PLACES);
   public vehicles: TransitVehicle[] = [...INITIAL_VEHICLES];
-  public agents: Agent[] = [...INITIAL_AGENTS];
-  public docs: DocumentEntity[] = [...INITIAL_DOCS];
-  public tasks: TaskEntity[] = [...INITIAL_TASKS];
-  public conflicts: ConflictEntity[] = [...INITIAL_CONFLICTS];
-  public phases: TimelinePhase[] = [...TIMELINE_PHASES];
-  public tracks: TrackEntity[] = [...INITIAL_TRACKS];
+  public agents: Agent[] = clone(INITIAL_AGENTS);
+  public docs: DocumentEntity[] = clone(INITIAL_DOCS);
+  public tasks: TaskEntity[] = clone(INITIAL_TASKS);
+  public conflicts: ConflictEntity[] = clone(INITIAL_CONFLICTS);
+  public phases: TimelinePhase[] = clone(TIMELINE_PHASES);
+  public tracks: TrackEntity[] = clone(INITIAL_TRACKS);
 
   public selectedEntity: {
     type: 'agent' | 'place' | 'document' | 'task' | 'phase' | 'conflict' | 'route' | 'track' | 'object' | 'venue';
@@ -1459,6 +1507,13 @@ class WeddingStore {
 
   private listeners: Set<() => void> = new Set();
 
+  /**
+   * What the last restore actually recovered vs. silently defaulted.
+   * Exposed so the System Nerve can report non-persisted state instead of
+   * letting it disappear without a trace.
+   */
+  public lastRestoreReport: ReturnType<typeof applyDomain> | null = null;
+
   constructor() {
     this.initFromPersistence();
   }
@@ -1473,16 +1528,10 @@ class WeddingStore {
         this.currentProject = proj;
         const saved = loadPersistedState(proj.id);
         if (saved) {
-          this.time = saved.time || this.time;
-          this.userIdentity = saved.userIdentity || this.userIdentity;
-          this.places = saved.places && saved.places.length > 0 ? saved.places : this.places;
-          this.agents = saved.agents && saved.agents.length > 0 ? saved.agents : this.agents;
-          this.docs = saved.docs && saved.docs.length > 0 ? saved.docs : this.docs;
-          this.tasks = saved.tasks && saved.tasks.length > 0 ? saved.tasks : this.tasks;
-          this.conflicts = saved.conflicts || this.conflicts;
-          this.tracks = saved.tracks && saved.tracks.length > 0 ? saved.tracks : this.tracks;
-          this.reconstructedVenues = saved.reconstructedVenues && saved.reconstructedVenues.length > 0 ? saved.reconstructedVenues : this.reconstructedVenues;
-          this.placedObjects = saved.placedObjects && saved.placedObjects.length > 0 ? saved.placedObjects : this.placedObjects;
+          // Single restore path (shared with loadProject). Defaults are the
+          // values the store was constructed with, so a partial/legacy
+          // snapshot degrades field-by-field instead of wiping state.
+          this.lastRestoreReport = applyDomain(this, saved, serializeDomain(this));
         }
       }
     } catch {
@@ -1494,17 +1543,9 @@ class WeddingStore {
     try {
       savePersistedState(this.currentProject.id, {
         project: this.currentProject,
-        time: this.time,
-        userIdentity: this.userIdentity,
-        places: this.places,
-        agents: this.agents,
-        docs: this.docs,
-        tasks: this.tasks,
-        conflicts: this.conflicts,
-        phases: this.phases,
-        tracks: this.tracks,
-        reconstructedVenues: this.reconstructedVenues,
-        placedObjects: this.placedObjects,
+        // Single serializer — driven by PERSISTED_FIELDS, so this can never
+        // fall out of sync with the restore path again.
+        ...serializeDomain(this),
       });
       saveWeddingProject(this.currentProject);
     } catch {
@@ -1940,27 +1981,9 @@ class WeddingStore {
     setActiveProjectId(projectId);
     this.currentProject = proj;
     const saved = loadPersistedState(projectId);
-    if (saved) {
-      this.time = saved.time || 15.4;
-      this.userIdentity = saved.userIdentity || this.userIdentity;
-      this.places = saved.places || [...INITIAL_PLACES];
-      this.agents = saved.agents || [...INITIAL_AGENTS];
-      this.docs = saved.docs || [...INITIAL_DOCS];
-      this.tasks = saved.tasks || [...INITIAL_TASKS];
-      this.conflicts = saved.conflicts || [...INITIAL_CONFLICTS];
-      this.tracks = saved.tracks || [...INITIAL_TRACKS];
-      this.reconstructedVenues = saved.reconstructedVenues || [...INITIAL_RECONSTRUCTED_VENUES];
-      this.placedObjects = saved.placedObjects || [...INITIAL_RECONSTRUCTED_VENUES[0].objects];
-    } else {
-      this.places = [...INITIAL_PLACES];
-      this.agents = [...INITIAL_AGENTS];
-      this.docs = [...INITIAL_DOCS];
-      this.tasks = [...INITIAL_TASKS];
-      this.conflicts = [...INITIAL_CONFLICTS];
-      this.tracks = [...INITIAL_TRACKS];
-      this.reconstructedVenues = [...INITIAL_RECONSTRUCTED_VENUES];
-      this.placedObjects = [...INITIAL_RECONSTRUCTED_VENUES[0].objects];
-    }
+    // Same single restore path as boot. When there is no snapshot, every field
+    // simply falls back to its pristine default.
+    this.lastRestoreReport = applyDomain(this, saved, createDefaultDomainState());
 
     weddingAudio.playNeuralWave();
     this.brandMenuOpen = false;

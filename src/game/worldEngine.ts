@@ -8,7 +8,6 @@ import {
   TimelinePhase,
   TrackEntity,
 } from '../types/wedding';
-import { BRAND_ACCENT } from './weddingStore';
 
 // 11 Universal World Archetypes for the World Lab
 export const WORLD_ARCHETYPES: WorldArchetype[] = [

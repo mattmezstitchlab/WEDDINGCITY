@@ -5,7 +5,8 @@ import {
   DataSourceOrigin,
 } from '../types/wedding';
 import { weddingAudio } from './audio';
-import { weddingStore, BRAND_ACCENT } from './weddingStore';
+import { weddingStore } from './weddingStore';
+import { BRAND_ACCENT } from './brand';
 
 const CONNECTORS_STORAGE_KEY = 'wedding_city_connectors_v1';
 

@@ -1,17 +1,9 @@
+import { UserAccount, WeddingProject } from '../types/wedding';
 import {
-  UserAccount,
-  WeddingProject,
-  Agent,
-  Place,
-  DocumentEntity,
-  TaskEntity,
-  ConflictEntity,
-  TrackEntity,
-  TimelinePhase,
-  UserIdentity,
-  ReconstructedVenue,
-  PlacedObject,
-} from '../types/wedding';
+  PersistedDomainState,
+  SCHEMA_VERSION,
+  migrateSnapshot,
+} from './persistenceSchema';
 
 const ACCOUNTS_KEY = 'wedding_city_accounts_v1';
 const ACTIVE_ACCOUNT_KEY = 'wedding_city_active_account_v1';
@@ -19,21 +11,16 @@ const PROJECTS_KEY = 'wedding_city_projects_v1';
 const ACTIVE_PROJECT_ID_KEY = 'wedding_city_active_project_id_v1';
 const PROJECT_STATE_PREFIX = 'wedding_city_state_';
 
-export interface PersistedWeddingState {
+/**
+ * On-disk snapshot = the domain slice (defined ONCE in persistenceSchema.ts)
+ * plus storage envelope fields. The domain half is never re-declared here, so
+ * it cannot drift from the reader/writer again.
+ */
+export type PersistedWeddingState = PersistedDomainState & {
   project: WeddingProject;
-  time: number;
-  userIdentity: UserIdentity;
-  places: Place[];
-  agents: Agent[];
-  docs: DocumentEntity[];
-  tasks: TaskEntity[];
-  conflicts: ConflictEntity[];
-  phases: TimelinePhase[];
-  tracks: TrackEntity[];
-  reconstructedVenues?: ReconstructedVenue[];
-  placedObjects?: PlacedObject[];
+  schemaVersion: number;
   savedAt: string;
-}
+};
 
 // ---------------- ACCOUNTS MANAGEMENT ----------------
 
@@ -151,23 +138,34 @@ export function setActiveProjectId(projectId: string): void {
 
 // ---------------- FULL WEDDING STATE PERSISTENCE ----------------
 
-export function savePersistedState(projectId: string, state: Omit<PersistedWeddingState, 'savedAt'>): void {
+export function savePersistedState(
+  projectId: string,
+  state: Omit<PersistedWeddingState, 'savedAt' | 'schemaVersion'>,
+): void {
   try {
     const payload: PersistedWeddingState = {
       ...state,
+      schemaVersion: SCHEMA_VERSION,
       savedAt: new Date().toISOString(),
     };
     localStorage.setItem(`${PROJECT_STATE_PREFIX}${projectId}`, JSON.stringify(payload));
-  } catch {
-    // safe fallback
+  } catch (err) {
+    // Storage failures (quota exceeded, private mode, corrupted profile) used
+    // to vanish into an empty catch. Surface them so the System Nerve can
+    // report "data not persisted" instead of the user losing work silently.
+    reportStorageFailure('save', projectId, err);
   }
 }
 
 export function loadPersistedState(projectId: string): PersistedWeddingState | null {
   try {
     const raw = localStorage.getItem(`${PROJECT_STATE_PREFIX}${projectId}`);
-    return raw ? JSON.parse(raw) : null;
-  } catch {
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    // Legacy snapshots (no schemaVersion) are upgraded, never discarded.
+    return migrateSnapshot(parsed) as unknown as PersistedWeddingState;
+  } catch (err) {
+    reportStorageFailure('load', projectId, err);
     return null;
   }
 }
@@ -183,4 +181,42 @@ export function deleteStoredProject(projectId: string): void {
   } catch {
     // safe fallback
   }
+}
+
+// ---------------------------------------------------------------------------
+// Storage failure reporting
+// ---------------------------------------------------------------------------
+
+export interface StorageFailure {
+  op: 'save' | 'load';
+  projectId: string;
+  message: string;
+  at: string;
+}
+
+const storageFailures: StorageFailure[] = [];
+
+function reportStorageFailure(op: 'save' | 'load', projectId: string, err: unknown): void {
+  const failure: StorageFailure = {
+    op,
+    projectId,
+    message: err instanceof Error ? err.message : String(err),
+    at: new Date().toISOString(),
+  };
+  storageFailures.push(failure);
+  if (storageFailures.length > 25) storageFailures.shift();
+  try {
+    console.error(`[WeddingCity/persistence] ${op} failed for ${projectId}:`, err);
+  } catch {
+    /* console unavailable */
+  }
+}
+
+/** Consumed by the System Nerve to turn silent data loss into a visible status. */
+export function getStorageFailures(): readonly StorageFailure[] {
+  return storageFailures;
+}
+
+export function clearStorageFailures(): void {
+  storageFailures.length = 0;
 }
