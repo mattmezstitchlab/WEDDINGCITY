@@ -21,6 +21,10 @@
 // ---------------------------------------------------------------------------
 
 import {
+  Guest, Person, Vendor, UserAccountV2, DmcIdentityRecord,
+  SeatingTable, ProjectMembership, Invitation, TrackVote,
+} from '../types/identity';
+import {
   Agent,
   Place,
   DocumentEntity,
@@ -41,6 +45,19 @@ export interface BrokenReference {
 }
 
 export interface IntegrityInput {
+  // --- identity model ---
+  persons?: Person[];
+  accounts?: UserAccountV2[];
+  guests?: Guest[];
+  vendors?: Vendor[];
+  dmcIdentities?: DmcIdentityRecord[];
+  seatingTables?: SeatingTable[];
+  memberships?: ProjectMembership[];
+  invitations?: Invitation[];
+  trackVotes?: TrackVote[];
+  tracks?: { id: string }[];
+  currentPersonId?: string | null;
+  // --- world model ---
   places?: Place[];
   agents?: Agent[];
   docs?: DocumentEntity[];
@@ -127,6 +144,83 @@ export function checkReferentialIntegrity(input: IntegrityInput): IntegrityRepor
     verify(`phase:${ph.id}`, 'keyAgentIds', 'agent', ph.keyAgentIds);
     verify(`phase:${ph.id}`, 'keyDocIds', 'doc', ph.keyDocIds);
     verify(`phase:${ph.id}`, 'keyTaskIds', 'task', ph.keyTaskIds);
+  }
+
+  // -------------------------------------------------------------------------
+  // Identity model. Every relation here must be an ID that resolves.
+  // -------------------------------------------------------------------------
+  const persons = input.persons ?? [];
+  const guests = input.guests ?? [];
+  const vendors = input.vendors ?? [];
+  const accounts = input.accounts ?? [];
+  const dmcIdentities = input.dmcIdentities ?? [];
+  const seatingTables = input.seatingTables ?? [];
+  const memberships = input.memberships ?? [];
+  const invitations = input.invitations ?? [];
+  const trackVotes = input.trackVotes ?? [];
+
+  const personIds = new Set(persons.map((p) => p.id));
+  const accountIds = new Set(accounts.map((a) => a.id));
+  const guestIds = new Set(guests.map((g) => g.id));
+  const dmcIds = new Set(dmcIdentities.map((d) => d.id));
+  const tableIds = new Set(seatingTables.map((t) => t.id));
+  const invitationIds = new Set(invitations.map((i) => i.id));
+  const trackIds = new Set((input.tracks ?? []).map((t) => t.id));
+
+  const verifySet = (from: string, field: string, kind: string, known: Set<string>, value: unknown) => {
+    const list = Array.isArray(value) ? value : value === undefined || value === null ? [] : [value];
+    for (const raw of list) {
+      if (typeof raw !== 'string' || raw.length === 0) continue;
+      checked++;
+      if (!known.has(raw)) broken.push({ from, field, missingId: raw, expectedKind: kind });
+    }
+  };
+
+  for (const p of persons) {
+    verifySet(`person:${p.id}`, 'agentId', 'agent', ids.agent, p.agentId);
+    verifySet(`person:${p.id}`, 'dmcIdentityId', 'dmcIdentity', dmcIds, p.dmcIdentityId);
+    verifySet(`person:${p.id}`, 'accountId', 'account', accountIds, p.accountId);
+  }
+  for (const a of accounts) {
+    verifySet(`account:${a.id}`, 'personId', 'person', personIds, a.personId);
+  }
+  for (const d of dmcIdentities) {
+    verifySet(`dmc:${d.id}`, 'ownerPersonId', 'person', personIds, d.ownerPersonId);
+  }
+  for (const g of guests) {
+    verifySet(`guest:${g.id}`, 'personId', 'person', personIds, g.personId);
+    verifySet(`guest:${g.id}`, 'seating.tableId', 'seatingTable', tableIds, g.seating?.tableId);
+    verifySet(`guest:${g.id}`, 'invitationId', 'invitation', invitationIds, g.invitationId);
+  }
+  for (const v of vendors) {
+    verifySet(`vendor:${v.id}`, 'contactPersonId', 'person', personIds, v.contactPersonId);
+    verifySet(`vendor:${v.id}`, 'agentId', 'agent', ids.agent, v.agentId);
+    verifySet(`vendor:${v.id}`, 'documentIds', 'doc', ids.doc, v.documentIds);
+    verifySet(`vendor:${v.id}`, 'taskIds', 'task', ids.task, v.taskIds);
+    verifySet(`vendor:${v.id}`, 'placeIds', 'place', ids.place, v.placeIds);
+  }
+  for (const t of seatingTables) {
+    verifySet(`table:${t.id}`, 'placeId', 'place', ids.place, t.placeId);
+  }
+  for (const m of memberships) {
+    verifySet(`membership:${m.id}`, 'accountId', 'account', accountIds, m.accountId);
+    verifySet(`membership:${m.id}`, 'personId', 'person', personIds, m.personId);
+    verifySet(`membership:${m.id}`, 'invitationId', 'invitation', invitationIds, m.invitationId);
+  }
+  for (const i of invitations) {
+    verifySet(`invitation:${i.id}`, 'guestId', 'guest', guestIds, i.guestId);
+    verifySet(`invitation:${i.id}`, 'acceptedByAccountId', 'account', accountIds, i.acceptedByAccountId);
+    verifySet(`invitation:${i.id}`, 'createdByAccountId', 'account', accountIds, i.createdByAccountId);
+  }
+  for (const v of trackVotes) {
+    verifySet('trackVote', 'personId', 'person', personIds, v.personId);
+    if (trackIds.size > 0) verifySet('trackVote', 'trackId', 'track', trackIds, v.trackId);
+  }
+  for (const a of input.agents ?? []) {
+    verifySet(`agent:${a.id}`, 'personId', 'person', personIds, a.personId);
+  }
+  if (input.currentPersonId) {
+    verifySet('session', 'currentPersonId', 'person', personIds, input.currentPersonId);
   }
 
   return { ok: broken.length === 0, checkedReferences: checked, broken };

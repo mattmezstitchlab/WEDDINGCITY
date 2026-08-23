@@ -42,6 +42,16 @@ import {
 // Values now live in ./brand (dependency-free) to avoid the module cycle that
 // crashed startup. Re-exported here so every existing import keeps working.
 import { BRAND_ACCENT } from './brand';
+import {
+  Person, UserAccountV2, DmcIdentityRecord, Guest, Vendor, SeatingTable,
+  ProjectMembership, Invitation, TrackVote, Capability, MembershipRole, RsvpStatus,
+} from '../types/identity';
+import {
+  migrateIdentityModel, MigrationReport, emptyIdentityState, capabilitiesForRole,
+  membershipRoleForAgentRole, personIdForAgent, guestIdForPerson, createGuestFromAgent,
+  createSeatingTable, createInvitation, createMembership, createAccount, createDmcRecord,
+  dmcIdForPerson, tableIdForNumber, freshId, invitationIdForCode,
+} from './identityModel';
 import { reportDiagnostic } from './diagnostics';
 import {
   PersistedDomainState,
@@ -1498,6 +1508,11 @@ function createDefaultDomainState(): PersistedDomainState {
     reconstructedVenues: INITIAL_RECONSTRUCTED_VENUES,
     placedObjects: INITIAL_RECONSTRUCTED_VENUES[0].objects,
     adSlots: INITIAL_AD_SLOTS,
+    // Identity model starts empty; migrateIdentityModel() derives it from the
+    // agents right after restore, so a fresh project is populated too.
+    persons: [], accounts: [], dmcIdentities: [], guests: [], vendors: [],
+    seatingTables: [], memberships: [], invitations: [], trackVotes: [],
+    currentPersonId: null,
   });
 }
 
@@ -1544,6 +1559,26 @@ class WeddingStore {
 
   // DMC ID Identity (DMC Color + DMC Symbol)
   public userDmcIdentity: DmcIdentity = clone(DEFAULT_DMC_IDENTITY);
+
+  // -------------------------------------------------------------------------
+  // First-order identity model (schema v3).
+  //
+  // `Agent` remains the spatial projection; these are the domain identities.
+  // Everything here is related by stable ID — never by role or display name.
+  // -------------------------------------------------------------------------
+  public persons: Person[] = [];
+  public accounts: UserAccountV2[] = [];
+  public dmcIdentities: DmcIdentityRecord[] = [];
+  public guests: Guest[] = [];
+  public vendors: Vendor[] = [];
+  public seatingTables: SeatingTable[] = [];
+  public memberships: ProjectMembership[] = [];
+  public invitations: Invitation[] = [];
+  public trackVotes: TrackVote[] = [];
+  /** The person this session acts as. Replaces role-based avatar matching. */
+  public currentPersonId: string | null = null;
+  /** Result of the last identity migration, surfaced by the System Nerve. */
+  public lastMigrationReport: MigrationReport | null = null;
 
   // Active Project & Account
   public currentProject: WeddingProject = {
@@ -1630,10 +1665,268 @@ class WeddingStore {
           // snapshot degrades field-by-field instead of wiping state.
           this.lastRestoreReport = applyDomain(this, saved, serializeDomain(this));
         }
+        this.ensureIdentityModel();
       }
     } catch (error) {
       reportDiagnostic({ source: 'store', severity: 'error', code: 'store_persist_failed', error });
     }
+  }
+
+  // -------------------------------------------------------------------------
+  // IDENTITY MODEL
+  // -------------------------------------------------------------------------
+
+  /**
+   * Derive the identity entities from legacy state when they are missing.
+   *
+   * Idempotent (ids are deterministic) and additive: agents are never deleted,
+   * only given a `personId` back-reference. Safe to call after every restore.
+   */
+  public ensureIdentityModel(): MigrationReport {
+    const needsMigration = this.persons.length === 0;
+
+    const { state, report, agentPatches } = migrateIdentityModel({
+      project: this.currentProject,
+      agents: this.agents,
+      tracks: this.tracks.map((t) => ({ id: t.id, hasVoted: t.hasVoted, votes: t.votes })),
+      legacyAccount: this.activeAccount
+        ? {
+            id: this.activeAccount.id,
+            email: this.activeAccount.email,
+            name: this.activeAccount.name,
+            role: this.activeAccount.role,
+          }
+        : null,
+      legacyUserIdentity: { role: this.userIdentity.role, name: this.userIdentity.name },
+      legacyDmc: this.userDmcIdentity,
+      existing: {
+        ...emptyIdentityState(),
+        persons: this.persons, accounts: this.accounts, dmcIdentities: this.dmcIdentities,
+        guests: this.guests, vendors: this.vendors, seatingTables: this.seatingTables,
+        memberships: this.memberships, invitations: this.invitations,
+        trackVotes: this.trackVotes, currentPersonId: this.currentPersonId,
+      },
+    });
+
+    this.persons = state.persons;
+    this.accounts = state.accounts;
+    this.dmcIdentities = state.dmcIdentities;
+    this.guests = state.guests;
+    this.vendors = state.vendors;
+    this.seatingTables = state.seatingTables;
+    this.memberships = state.memberships;
+    this.invitations = state.invitations;
+    this.trackVotes = state.trackVotes;
+    this.currentPersonId = state.currentPersonId;
+
+    // Link agents back to their person, without touching anything else.
+    for (const patch of agentPatches) {
+      const agent = this.agents.find((a) => a.id === patch.agentId);
+      if (agent) agent.personId = patch.personId;
+    }
+
+    this.lastMigrationReport = report;
+    if (needsMigration) this.saveCurrentState();
+    return report;
+  }
+
+  // --- Lookups (by id, always) ---------------------------------------------
+
+  public getPerson(personId: string | null | undefined): Person | null {
+    if (!personId) return null;
+    return this.persons.find((p) => p.id === personId) ?? null;
+  }
+
+  public getCurrentPerson(): Person | null {
+    return this.getPerson(this.currentPersonId);
+  }
+
+  public getPersonForAgent(agentId: string): Person | null {
+    const agent = this.agents.find((a) => a.id === agentId);
+    if (agent?.personId) return this.getPerson(agent.personId);
+    return this.persons.find((p) => p.agentId === agentId) ?? null;
+  }
+
+  public getAgentForPerson(personId: string): Agent | null {
+    const person = this.getPerson(personId);
+    if (person?.agentId) return this.agents.find((a) => a.id === person.agentId) ?? null;
+    return this.agents.find((a) => a.personId === personId) ?? null;
+  }
+
+  /**
+   * Is this agent the connected user?
+   *
+   * Replaces `agent.role === userIdentity.role`, which made every person
+   * sharing a role look like the user.
+   */
+  public isCurrentUserAgent(agentId: string): boolean {
+    if (!this.currentPersonId) return false;
+    const agent = this.agents.find((a) => a.id === agentId);
+    return agent?.personId === this.currentPersonId;
+  }
+
+  public getGuestForPerson(personId: string): Guest | null {
+    return this.guests.find((g) => g.personId === personId) ?? null;
+  }
+
+  public getVendorForAgent(agentId: string): Vendor | null {
+    return this.vendors.find((v) => v.agentId === agentId) ?? null;
+  }
+
+  public getDmcForPerson(personId: string): DmcIdentityRecord | null {
+    return this.dmcIdentities.find((d) => d.ownerPersonId === personId) ?? null;
+  }
+
+  // --- Guests: RSVP and seating --------------------------------------------
+
+  public setGuestRsvp(guestId: string, status: RsvpStatus, note?: string): boolean {
+    const guest = this.guests.find((g) => g.id === guestId);
+    if (!guest) return false;
+    guest.rsvp = { ...guest.rsvp, status, note, respondedAt: new Date().toISOString() };
+    guest.updatedAt = new Date().toISOString();
+    this.saveCurrentState();
+    this.notify();
+    return true;
+  }
+
+  public setGuestPlusOnes(guestId: string, plusOnes: number): boolean {
+    const guest = this.guests.find((g) => g.id === guestId);
+    if (!guest) return false;
+    guest.rsvp = { ...guest.rsvp, plusOnes: Math.max(0, Math.floor(plusOnes)) };
+    guest.updatedAt = new Date().toISOString();
+    this.saveCurrentState();
+    this.notify();
+    return true;
+  }
+
+  /** Seat a guest. Returns false when the table is unknown or already full. */
+  public assignGuestToTable(guestId: string, tableId: string | null): boolean {
+    const guest = this.guests.find((g) => g.id === guestId);
+    if (!guest) return false;
+
+    if (tableId === null) {
+      guest.seating = { tableId: undefined, seatIndex: undefined };
+      guest.updatedAt = new Date().toISOString();
+      this.saveCurrentState();
+      this.notify();
+      return true;
+    }
+
+    const table = this.seatingTables.find((t) => t.id === tableId);
+    if (!table) return false;
+
+    const seated = this.guests.filter((g) => g.seating.tableId === tableId && g.id !== guestId);
+    const occupancy = seated.reduce((n, g) => n + 1 + g.rsvp.plusOnes, 0);
+    if (occupancy + 1 + guest.rsvp.plusOnes > table.capacity) return false;
+
+    guest.seating = { tableId, seatIndex: occupancy };
+    guest.updatedAt = new Date().toISOString();
+    // Keep the legacy agent field in sync so the 3D view keeps working.
+    const agent = this.getAgentForPerson(guest.personId);
+    if (agent) agent.assignedTable = table.number;
+    this.saveCurrentState();
+    this.notify();
+    return true;
+  }
+
+  public getTableOccupancy(tableId: string): { seated: number; capacity: number } {
+    const table = this.seatingTables.find((t) => t.id === tableId);
+    const seated = this.guests
+      .filter((g) => g.seating.tableId === tableId)
+      .reduce((n, g) => n + 1 + g.rsvp.plusOnes, 0);
+    return { seated, capacity: table?.capacity ?? 0 };
+  }
+
+  public addSeatingTable(capacity = 8, placeId?: string): SeatingTable {
+    const next = this.seatingTables.reduce((m, t) => Math.max(m, t.number), 0) + 1;
+    const table = createSeatingTable(this.currentProject.id, next, capacity, placeId);
+    this.seatingTables.push(table);
+    this.saveCurrentState();
+    this.notify();
+    return table;
+  }
+
+  public getRsvpSummary(): Record<RsvpStatus, number> & { total: number; expectedHeads: number } {
+    const summary = { pending: 0, accepted: 0, declined: 0, tentative: 0, total: 0, expectedHeads: 0 };
+    for (const g of this.guests) {
+      summary[g.rsvp.status]++;
+      summary.total++;
+      if (g.rsvp.status === 'accepted') summary.expectedHeads += 1 + g.rsvp.plusOnes;
+    }
+    return summary;
+  }
+
+  // --- Permissions (model in place; not yet enforced on mutations) ----------
+
+  public getCurrentMembership(): ProjectMembership | null {
+    if (!this.activeAccount) return null;
+    return this.memberships.find(
+      (m) => m.projectId === this.currentProject.id && m.accountId === this.activeAccount!.id,
+    ) ?? null;
+  }
+
+  /**
+   * Capability check for the current session.
+   *
+   * Deliberately permissive today: with no server, refusing actions locally
+   * would be security theatre. It gives the UI a single, honest place to ask
+   * the question, so enforcement can be switched on with the backend.
+   */
+  public can(capability: Capability): boolean {
+    const membership = this.getCurrentMembership();
+    if (!membership) return true; // no account yet: single-user local mode
+    return membership.capabilities.includes(capability);
+  }
+
+  public getCurrentCapabilities(): Capability[] {
+    const membership = this.getCurrentMembership();
+    if (membership) return membership.capabilities;
+    return capabilitiesForRole('owner');
+  }
+
+  // --- Invitations ----------------------------------------------------------
+
+  public createInvitationForProject(role: MembershipRole = 'guest', guestId?: string): Invitation {
+    const code = `WC-${Date.now().toString(36).toUpperCase()}`;
+    const invitation = createInvitation(
+      this.currentProject.id, code, role, this.activeAccount?.id, guestId,
+    );
+    this.invitations.push(invitation);
+    this.saveCurrentState();
+    this.notify();
+    return invitation;
+  }
+
+  public getInvitationByCode(code: string): Invitation | null {
+    const id = invitationIdForCode(code);
+    return this.invitations.find((i) => i.id === id) ?? null;
+  }
+
+  /** Mark an invitation as accepted and create the matching membership. */
+  public acceptInvitation(code: string): { ok: boolean; reason?: string } {
+    const invitation = this.getInvitationByCode(code);
+    if (!invitation) return { ok: false, reason: 'unknown' };
+    if (invitation.status === 'revoked') return { ok: false, reason: 'revoked' };
+
+    invitation.status = 'accepted';
+    invitation.acceptedAt = new Date().toISOString();
+    invitation.acceptedByAccountId = this.activeAccount?.id;
+    invitation.updatedAt = invitation.acceptedAt;
+
+    if (this.activeAccount && this.currentPersonId) {
+      const existing = this.memberships.find(
+        (m) => m.projectId === invitation.projectId && m.accountId === this.activeAccount!.id,
+      );
+      if (!existing) {
+        this.memberships.push(createMembership(
+          invitation.projectId, this.activeAccount.id, this.currentPersonId,
+          invitation.role, invitation.id,
+        ));
+      }
+    }
+    this.saveCurrentState();
+    this.notify();
+    return { ok: true };
   }
 
   public saveCurrentState() {
@@ -2081,6 +2374,7 @@ class WeddingStore {
     // Same single restore path as boot. When there is no snapshot, every field
     // simply falls back to its pristine default.
     this.lastRestoreReport = applyDomain(this, saved, createDefaultDomainState());
+    this.ensureIdentityModel();
 
     weddingAudio.playNeuralWave();
     this.brandMenuOpen = false;
@@ -2252,13 +2546,37 @@ class WeddingStore {
     this.notify();
   }
 
+  /** Has THIS person already voted for the track? */
+  public hasPersonVoted(trackId: string, personId?: string | null): boolean {
+    const pid = personId ?? this.currentPersonId;
+    if (!pid) return false;
+    return this.trackVotes.some((v) => v.trackId === trackId && v.personId === pid);
+  }
+
+  public getTrackVoters(trackId: string): Person[] {
+    return this.trackVotes
+      .filter((v) => v.trackId === trackId)
+      .map((v) => this.getPerson(v.personId))
+      .filter((p): p is Person => p !== null);
+  }
+
   public voteTrack(trackId: string) {
     const track = this.tracks.find((t) => t.id === trackId);
     if (!track) return;
 
-    if (!track.hasVoted) {
+    // Votes are now recorded PER PERSON. `hasVoted` used to be a boolean on
+    // the track itself, so the first vote marked the song as "already voted"
+    // for every single user. It is kept in sync below purely for backward
+    // compatibility with existing UI reads.
+    const personId = this.currentPersonId;
+    const already = personId ? this.hasPersonVoted(trackId, personId) : track.hasVoted;
+
+    if (!already) {
+      if (personId) {
+        this.trackVotes.push({ trackId, personId, votedAt: new Date().toISOString() });
+      }
       track.votes += 1;
-      track.hasVoted = true;
+      track.hasVoted = personId ? this.hasPersonVoted(trackId, personId) : true;
       weddingAudio.playTrackUpvote();
 
       if (track.votes >= 10 && track.status === 'pending') {

@@ -30,6 +30,17 @@
 // ---------------------------------------------------------------------------
 
 import {
+  Person,
+  UserAccountV2,
+  DmcIdentityRecord,
+  Guest,
+  Vendor,
+  SeatingTable,
+  ProjectMembership,
+  Invitation,
+  TrackVote,
+} from '../types/identity';
+import {
   Agent,
   Place,
   DocumentEntity,
@@ -49,8 +60,12 @@ import {
  *  v1 — implicit/legacy: no `schemaVersion`; missing `adSlots` + `userDmcIdentity`;
  *       `phases` written but never read back.
  *  v2 — versioned; `adSlots` and `userDmcIdentity` persisted; `phases` restored.
+ *  v3 — first-order identity model: persons, accounts, guests, vendors, DMC
+ *       records, seating tables, memberships, invitations and per-person track
+ *       votes. Derived from legacy agents by migrateIdentityModel(); nothing
+ *       from v2 is dropped, so v2 snapshots keep loading.
  */
-export const SCHEMA_VERSION = 2;
+export const SCHEMA_VERSION = 3;
 
 /** Every piece of project state that survives a reload. */
 export interface PersistedDomainState {
@@ -67,6 +82,19 @@ export interface PersistedDomainState {
   reconstructedVenues: ReconstructedVenue[];
   placedObjects: PlacedObject[];
   adSlots: AdDisplaySlot[];
+
+  // --- Identity model (v3) -------------------------------------------------
+  // Relations between these entities use IDs only, never roles or names.
+  persons: Person[];
+  accounts: UserAccountV2[];
+  dmcIdentities: DmcIdentityRecord[];
+  guests: Guest[];
+  vendors: Vendor[];
+  seatingTables: SeatingTable[];
+  memberships: ProjectMembership[];
+  invitations: Invitation[];
+  trackVotes: TrackVote[];
+  currentPersonId: string | null;
 }
 
 export type PersistedDomainKey = keyof PersistedDomainState;
@@ -107,6 +135,19 @@ export const PERSISTED_FIELDS = [
   { key: 'reconstructedVenues', kind: 'list', emptyListMeansUnset: true },
   { key: 'placedObjects', kind: 'list' },
   { key: 'adSlots', kind: 'list', emptyListMeansUnset: true },
+  // Identity model. These lists CAN legitimately be empty (a project with no
+  // vendors yet), so `emptyListMeansUnset` stays off — except for `persons`,
+  // whose emptiness means "not migrated yet" and must trigger the migration.
+  { key: 'persons', kind: 'list', emptyListMeansUnset: true },
+  { key: 'accounts', kind: 'list' },
+  { key: 'dmcIdentities', kind: 'list' },
+  { key: 'guests', kind: 'list' },
+  { key: 'vendors', kind: 'list' },
+  { key: 'seatingTables', kind: 'list' },
+  { key: 'memberships', kind: 'list' },
+  { key: 'invitations', kind: 'list' },
+  { key: 'trackVotes', kind: 'list' },
+  { key: 'currentPersonId', kind: 'value' },
 ] as const satisfies readonly FieldSpec[];
 
 // ---------------------------------------------------------------------------
@@ -173,6 +214,14 @@ export function applyDomain(
 export function migrateSnapshot<T extends Record<string, unknown>>(raw: T): T & { schemaVersion: number } {
   const version = typeof raw.schemaVersion === 'number' ? raw.schemaVersion : 1;
   const migrated: Record<string, unknown> = { ...raw };
+
+  if (version < 3) {
+    // v2 → v3: purely additive. The identity entities are absent, so
+    // `applyDomain` fills them with defaults and the store then runs
+    // migrateIdentityModel() to derive them from the existing agents.
+    // No v2 field is removed or rewritten.
+    migrated.schemaVersion = 3;
+  }
 
   if (version < 2) {
     // v1 → v2: no destructive change. `adSlots`/`userDmcIdentity` were never

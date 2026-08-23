@@ -366,9 +366,15 @@ export function DjZoneModal({ isOpen, onClose }: DjZoneModalProps) {
                   {/* Upvote Button */}
                   <button
                     onClick={() => store.voteTrack(track.id)}
-                    style={upvoteBtnStyle(track.hasVoted)}
+                    // Per-person vote state: `track.hasVoted` was global, so
+                    // one person voting marked the song as voted for everyone.
+                    style={upvoteBtnStyle(store.hasPersonVoted(track.id))}
                   >
-                    <IconHeart size={12} color={track.hasVoted ? BRAND_ACCENT : '#ffffff'} filled={track.hasVoted} />
+                    <IconHeart
+                      size={12}
+                      color={store.hasPersonVoted(track.id) ? BRAND_ACCENT : '#ffffff'}
+                      filled={store.hasPersonVoted(track.id)}
+                    />
                     <span>{track.votes}</span>
                   </button>
                 </div>

@@ -252,6 +252,12 @@ export interface UserIdentity {
 
 export interface Agent {
   id: string;
+  /**
+   * Back-reference to the Person this agent is the spatial projection of.
+   * Added by the identity migration; optional so legacy snapshots stay valid.
+   * Relations must use this id, never `role` or `name`.
+   */
+  personId?: string;
   name: string;
   role: AgentRole;
   title: string;

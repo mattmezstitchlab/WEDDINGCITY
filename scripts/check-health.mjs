@@ -99,7 +99,16 @@ try {
     r.check(byId.WEB_RESEARCH?.status === 'MOCK', 'web research declared 🟡 MOCK', `status=${byId.WEB_RESEARCH?.status}`);
     r.check(byId.OCR?.status === 'PARTIAL', 'OCR declared 🟠 PARTIAL (text only)', `status=${byId.OCR?.status}`);
     r.check(byId.AUTH?.status === 'NOT_IMPLEMENTED', 'authentication declared ⚪ ABSENT', `status=${byId.AUTH?.status}`);
-    r.check(byId.PERMISSIONS?.status === 'NOT_IMPLEMENTED', 'permissions declared ⚪ ABSENT', `status=${byId.PERMISSIONS?.status}`);
+    // The capability model now exists (memberships + capabilities bound to real
+    // ids), so ABSENT would be wrong. But nothing is enforced, so VERIFIED
+    // would be a lie. PARTIAL is the only honest answer.
+    r.check(byId.PERMISSIONS?.status === 'PARTIAL',
+      'permissions declared 🟠 PARTIAL (model exists, nothing enforced)',
+      `status=${byId.PERMISSIONS?.status}`);
+    r.check(byId.PERMISSIONS?.warnings.some((w) => w.code === 'permissions_not_enforced'),
+      'permissions explicitly warn that no rule is applied');
+    r.check(byId.PERMISSIONS?.evidence.some((e) => /non/i.test(e.value) && /application/i.test(e.label)),
+      'evidence states enforcement is off, client and server side');
     r.check(byId.INVITATIONS?.status === 'PARTIAL', 'invitations declared 🟠 PARTIAL (local only)', `status=${byId.INVITATIONS?.status}`);
 
     const agg = registry.aggregate(checks, new Date().toISOString());

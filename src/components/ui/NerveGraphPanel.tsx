@@ -44,6 +44,9 @@ export function NerveGraphPanel() {
   const graph = useMemo(
     () =>
       buildNerveGraph({
+        guests: weddingStore.guests,
+        vendors: weddingStore.vendors,
+        seatingTables: weddingStore.seatingTables,
         places: weddingStore.places,
         agents: weddingStore.agents,
         docs: weddingStore.docs,

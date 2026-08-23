@@ -13,6 +13,7 @@
 // an incident is no longer a line in a log, it is a blast radius in the graph.
 // ---------------------------------------------------------------------------
 
+import { Guest, Vendor, SeatingTable } from '../types/identity';
 import {
   Agent,
   Place,
@@ -66,6 +67,14 @@ export interface NerveGraph {
 }
 
 export interface GraphInput {
+  /**
+   * First-order entities. When provided, vendor/person classification comes
+   * from the DATA MODEL (vendor.agentId / guest.personId) instead of guessing
+   * from `agent.role` — which is the whole point of the identity refactor.
+   */
+  guests?: Guest[];
+  vendors?: Vendor[];
+  seatingTables?: SeatingTable[];
   places?: Place[];
   agents?: Agent[];
   docs?: DocumentEntity[];
@@ -88,6 +97,14 @@ export function buildNerveGraph(input: GraphInput): NerveGraph {
   const tasks = input.tasks ?? [];
   const phases = input.phases ?? [];
 
+  const guests = input.guests ?? [];
+  const vendors = input.vendors ?? [];
+  const seatingTables = input.seatingTables ?? [];
+
+  // Authoritative vendor classification, by ID.
+  const vendorAgentIds = new Set(vendors.map((v) => v.agentId).filter(Boolean) as string[]);
+  const hasIdentityModel = vendors.length > 0 || guests.length > 0;
+
   const nodes: GraphNode[] = [];
   const edges: GraphEdge[] = [];
   const byId = new Map<string, GraphNode>();
@@ -107,8 +124,10 @@ export function buildNerveGraph(input: GraphInput): NerveGraph {
     addNode('document', d.id, d.title, d.category);
   }
   for (const a of agents) {
-    const kind: GraphNodeKind = VENDOR_ROLES.has(a.role) ? 'vendor' : 'person';
-    addNode(kind, a.id, a.name, a.title || a.role);
+    // Prefer the identity model; fall back to the role heuristic only when it
+    // has not been migrated yet.
+    const isVendor = hasIdentityModel ? vendorAgentIds.has(a.id) : VENDOR_ROLES.has(a.role);
+    addNode(isVendor ? 'vendor' : 'person', a.id, a.name, a.title || a.role);
   }
   for (const t of tasks) addNode('task', t.id, t.title, t.category);
   for (const ph of phases) addNode('phase', ph.id, ph.name, `${ph.startHour}h → ${ph.endHour}h`);
@@ -117,7 +136,8 @@ export function buildNerveGraph(input: GraphInput): NerveGraph {
   const agentKey = (id: string) => {
     const a = agents.find((x) => x.id === id);
     if (!a) return null;
-    return nodeId(VENDOR_ROLES.has(a.role) ? 'vendor' : 'person', a.id);
+    const isVendor = hasIdentityModel ? vendorAgentIds.has(a.id) : VENDOR_ROLES.has(a.role);
+    return nodeId(isVendor ? 'vendor' : 'person', a.id);
   };
 
   const link = (from: string | null, to: string | null, relation: string) => {
@@ -162,6 +182,23 @@ export function buildNerveGraph(input: GraphInput): NerveGraph {
   for (const p of places) {
     const from = nodeId('place', p.id);
     for (const id of p.connectedAgentIds ?? []) link(from, agentKey(id), 'lieu accueille');
+  }
+
+  // VENDOR entity relations (by id): Vendor → Document → Zone → Tasks.
+  for (const v of vendors) {
+    const from = v.agentId ? agentKey(v.agentId) : null;
+    if (!from) continue;
+    for (const docId of v.documentIds) link(nodeId('document', docId), from, 'contrat du prestataire');
+    for (const taskId of v.taskIds) link(from, nodeId('task', taskId), 'prestation à réaliser');
+    for (const placeId of v.placeIds) link(from, nodeId('place', placeId), 'zone d’intervention');
+  }
+
+  // GUEST entity relations: Guest → Table → Place, and Guest → Person.
+  for (const g of guests) {
+    const table = g.seating.tableId ? seatingTables.find((t) => t.id === g.seating.tableId) : undefined;
+    if (!table?.placeId) continue;
+    const agent = agents.find((a) => a.personId === g.personId);
+    if (agent) link(agentKey(agent.id), nodeId('place', table.placeId), `placé à ${table.label}`);
   }
 
   const outgoing = new Map<string, string[]>();

@@ -153,6 +153,17 @@ const integrityProbe: HealthProbe = {
   run: () => {
     const meta = { id: 'DATA_INTEGRITY', name: integrityProbe.name, category: 'data' as const, dependencies: ['PERSISTENCE'] };
     const report = checkReferentialIntegrity({
+      persons: weddingStore.persons,
+      accounts: weddingStore.accounts,
+      guests: weddingStore.guests,
+      vendors: weddingStore.vendors,
+      dmcIdentities: weddingStore.dmcIdentities,
+      seatingTables: weddingStore.seatingTables,
+      memberships: weddingStore.memberships,
+      invitations: weddingStore.invitations,
+      trackVotes: weddingStore.trackVotes,
+      tracks: weddingStore.tracks,
+      currentPersonId: weddingStore.currentPersonId,
       places: weddingStore.places,
       agents: weddingStore.agents,
       docs: weddingStore.docs,
@@ -559,15 +570,45 @@ const authProbe = absent('AUTH', 'Authentification', 'core', {
   ],
 });
 
-const permissionsProbe = absent('PERMISSIONS', 'Permissions & rôles', 'core', {
-  cause: 'Le rôle choisi est purement visuel ; aucune vérification ne protège les actions du store.',
-  impact: 'Un invité peut exécuter les mêmes mutations qu’une wedding planner.',
-  solution: 'ACL appliquée côté store puis côté serveur (roadmap P2.7).',
-  evidence: [
-    { label: 'Contrôle d’accès', value: 'aucun' },
-    { label: 'Méthodes du store protégées', value: '0' },
-  ],
-});
+/**
+ * PERMISSIONS is deliberately PARTIAL, not VERIFIED.
+ *
+ * The model now exists (ProjectMembership + capabilities, resolved by role and
+ * attached to real account/person ids) and `weddingStore.can()` is the single
+ * place the UI can ask the question. But NOTHING is enforced: with no server,
+ * refusing an action in the browser would be security theatre. Reporting this
+ * as working would be exactly the kind of claim this architecture forbids.
+ */
+const permissionsProbe: HealthProbe = {
+  id: 'PERMISSIONS',
+  name: 'Permissions & rôles projet',
+  category: 'core',
+  dependencies: ['IDENTITY'],
+  run: () => {
+    const memberships = weddingStore.memberships;
+    const caps = weddingStore.getCurrentCapabilities();
+    const membership = weddingStore.getCurrentMembership();
+    return base({ id: 'PERMISSIONS', name: 'Permissions & rôles projet', category: 'core', dependencies: ['IDENTITY'] }, {
+      status: 'PARTIAL',
+      summary: 'Modèle de capacités en place et rattaché aux identités ; aucune règle n’est encore appliquée.',
+      evidence: [
+        { label: 'Adhésions projet', value: String(memberships.length) },
+        { label: 'Rôle de session', value: membership?.role ?? 'aucun (mode local mono-utilisateur)' },
+        { label: 'Capacités résolues', value: String(caps.length) },
+        { label: 'Point de contrôle unique', value: 'weddingStore.can(capability)' },
+        { label: 'Application côté client', value: 'non (aucune mutation bloquée)' },
+        { label: 'Application côté serveur', value: 'non (aucun serveur)' },
+      ],
+      warnings: [{
+        code: 'permissions_not_enforced',
+        message: 'Les capacités sont calculées mais aucune action n’est refusée.',
+        cause: 'Sans backend, un refus côté navigateur serait contournable et donnerait une fausse impression de sécurité.',
+        impact: 'Tout utilisateur peut encore appeler toutes les méthodes du store.',
+        solution: 'Activer l’application des règles en même temps que l’autorisation serveur (roadmap P2.7/P3.1).',
+      }],
+    });
+  },
+};
 
 const ocrProbe: HealthProbe = {
   id: 'OCR',

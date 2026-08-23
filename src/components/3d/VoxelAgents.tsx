@@ -153,7 +153,7 @@ function SingleVoxelAgent({
       {/* Torso with DMC Color on upper chest */}
       <RoundedBox args={[0.44, 0.54, 0.26]} radius={0.04} smoothness={2} position={[0, 0.7, 0]} castShadow>
         <meshStandardMaterial
-          color={agent.role === weddingStore.userIdentity.role ? weddingStore.userDmcIdentity.dmcColor : bodyColor}
+          color={weddingStore.isCurrentUserAgent(agent.id) ? weddingStore.userDmcIdentity.dmcColor : bodyColor}
           roughness={0.6}
           emissive={isSelected ? BRAND_ACCENT : '#000000'}
           emissiveIntensity={isSelected ? 0.25 : 0}
@@ -161,7 +161,9 @@ function SingleVoxelAgent({
       </RoundedBox>
 
       {/* Micro Embroidered DMC Badge / Emblem on Chest */}
-      {agent.role === weddingStore.userIdentity.role && (
+      {/* Identity is bound by PERSON ID, not by role: two people sharing a
+          role used to both render as the connected user. */}
+      {weddingStore.isCurrentUserAgent(agent.id) && (
         <mesh position={[0.1, 0.8, 0.14]}>
           <boxGeometry args={[0.08, 0.08, 0.02]} />
           <meshStandardMaterial color={BRAND_ACCENT} emissive={BRAND_ACCENT} emissiveIntensity={0.6} />

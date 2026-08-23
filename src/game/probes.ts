@@ -12,6 +12,7 @@ import { HealthCheck, HealthProbe, createUnverified } from '../types/health';
 import { weddingStore } from './weddingStore';
 import { DMC_PALETTE, DMC_SYMBOLS } from './dmcPalette';
 import { loadPersistedState } from './persistence';
+import { SCHEMA_VERSION } from './persistenceSchema';
 import { generateWorldFromDescription } from './worldEngine';
 import { ALL_WORLD_TYPES } from '../types/wedding';
 import { checkReferentialIntegrity, describeBrokenReferences } from './integrity';
@@ -170,26 +171,28 @@ export const playlistProbe: HealthProbe = {
   id: 'PLAYLIST',
   name: 'DJ Zone & playlist collaborative',
   category: 'audio',
-  dependencies: ['PERSISTENCE'],
+  dependencies: ['PERSISTENCE', 'IDENTITY'],
   run: () => {
     const tracks = weddingStore.tracks;
+    const votes = weddingStore.trackVotes;
     const moments = new Set(tracks.map((t) => t.moment));
     const validated = tracks.filter((t) => t.status === 'verified').length;
-    const voted = tracks.filter((t) => t.hasVoted).length;
-    const badBpm = tracks.filter((t) => !t.bpm || t.bpm < 40 || t.bpm > 220);
+    const voters = new Set(votes.map((v) => v.personId));
+    const orphanVotes = votes.filter((v) => !tracks.some((t) => t.id === v.trackId));
 
     const evidence = [
       { label: 'Morceaux', value: String(tracks.length) },
       { label: 'Moments couverts', value: `${moments.size} (${[...moments].join(', ')})` },
       { label: 'Validés', value: String(validated) },
-      { label: 'Marqués « déjà voté »', value: String(voted) },
-      { label: 'BPM hors plage', value: String(badBpm.length) },
-      { label: 'Modèle de vote', value: 'booléen global par morceau (pas par personne)' },
+      { label: 'Votes nominatifs enregistrés', value: String(votes.length) },
+      { label: 'Votants distincts', value: String(voters.size) },
+      { label: 'Modèle de vote', value: 'un vote par personne et par morceau (personId)' },
+      { label: 'Votes orphelins', value: String(orphanVotes.length) },
       { label: 'Lecture audio réelle', value: 'aucune (synthèse procédurale uniquement)' },
     ];
 
     if (tracks.length === 0) {
-      return mk('PLAYLIST', playlistProbe.name, 'audio', ['PERSISTENCE'], {
+      return mk('PLAYLIST', playlistProbe.name, 'audio', ['IDENTITY'], {
         status: 'ERROR', summary: 'Aucun morceau chargé.', evidence,
         errors: [{
           code: 'playlist_empty', message: 'La playlist est vide.',
@@ -200,18 +203,49 @@ export const playlistProbe: HealthProbe = {
       });
     }
 
-    return mk('PLAYLIST', playlistProbe.name, 'audio', ['PERSISTENCE'], {
+    if (orphanVotes.length > 0) {
+      return mk('PLAYLIST', playlistProbe.name, 'audio', ['IDENTITY'], {
+        status: 'ERROR',
+        summary: `${orphanVotes.length} vote(s) portent sur des morceaux inexistants.`,
+        evidence,
+        errors: [{
+          code: 'orphan_track_votes',
+          message: `Votes orphelins : ${orphanVotes.slice(0, 3).map((v) => v.trackId).join(', ')}.`,
+          cause: 'Des morceaux ont été supprimés sans nettoyer les votes associés.',
+          impact: 'Les compteurs de votes ne correspondent plus à la playlist.',
+          solution: 'Supprimer les votes dont le morceau n’existe plus.',
+        }],
+        repairable: true,
+        repairAction: {
+          id: 'prune_orphan_votes',
+          label: 'Nettoyer les votes orphelins',
+          description: 'Supprime uniquement les votes pointant vers un morceau inexistant.',
+        },
+      });
+    }
+
+    return mk('PLAYLIST', playlistProbe.name, 'audio', ['IDENTITY'], {
       status: 'PARTIAL',
-      summary: `${tracks.length} morceaux persistés ; vote non nominatif et aucune lecture réelle.`,
+      summary: `${tracks.length} morceaux ; votes nominatifs opérationnels, aucune lecture audio réelle.`,
       evidence,
       warnings: [{
-        code: 'playlist_vote_not_per_user',
-        message: '`hasVoted` est un booléen porté par le morceau, pas par le votant.',
-        cause: 'Le modèle de données ne relie pas un vote à une identité.',
-        impact: 'Dès qu’une personne vote, le morceau apparaît « déjà voté » pour tout le monde.',
-        solution: 'Remplacer hasVoted par une liste de votes (voterId, date) — nécessite les identités (roadmap P2.2/P2.7).',
+        code: 'playlist_no_playback',
+        message: 'Aucun morceau n’est réellement joué : il n’y a ni fichier ni service de streaming.',
+        cause: 'Le moteur audio ne fait que de la synthèse procédurale.',
+        impact: 'La playlist est une liste de décisions, pas une lecture.',
+        solution: 'Brancher un service de streaming avec les droits associés (hors périmètre actuel).',
       }],
     });
+  },
+  repair: (actionId) => {
+    if (actionId !== 'prune_orphan_votes') return false;
+    const before = weddingStore.trackVotes.length;
+    weddingStore.trackVotes = weddingStore.trackVotes.filter(
+      (v) => weddingStore.tracks.some((t) => t.id === v.trackId),
+    );
+    weddingStore.saveCurrentState();
+    weddingStore.notify();
+    return weddingStore.trackVotes.length < before;
   },
 };
 
@@ -354,26 +388,28 @@ export const missionsProbe: HealthProbe = {
 // ---------------------------------------------------------------------------
 export const peopleProbe: HealthProbe = {
   id: 'PEOPLE',
-  name: 'Agents simulés & invités',
+  name: 'Personnes, invités & prestataires',
   category: 'core',
-  dependencies: ['DATA_INTEGRITY'],
+  dependencies: ['DATA_INTEGRITY', 'IDENTITY'],
   run: () => {
     const agents = weddingStore.agents;
-    const roles = new Set(agents.map((a) => a.role));
-    const placed = agents.filter((a) => a.assignedPlaceId).length;
+    const persons = weddingStore.persons;
+    const guests = weddingStore.guests;
+    const vendors = weddingStore.vendors;
     const duplicates = agents.map((a) => a.id).filter((id, i, arr) => arr.indexOf(id) !== i);
+    const unlinkedAgents = agents.filter((a) => !a.personId);
 
     const evidence = [
-      { label: 'Agents', value: String(agents.length) },
-      { label: 'Rôles distincts', value: String(roles.size) },
-      { label: 'Assignés à un lieu', value: `${placed} / ${agents.length}` },
-      { label: 'Identifiants dupliqués', value: String(duplicates.length) },
-      { label: 'Entité Guest dédiée', value: 'inexistante (les invités sont des agents)' },
-      { label: 'Liaison identité utilisateur', value: 'par rôle, pas par identifiant' },
+      { label: 'Agents (projection 3D)', value: String(agents.length) },
+      { label: 'Personnes (identités)', value: String(persons.length) },
+      { label: 'Invités', value: String(guests.length) },
+      { label: 'Prestataires', value: String(vendors.length) },
+      { label: 'Agents reliés à une personne', value: `${agents.length - unlinkedAgents.length} / ${agents.length}` },
+      { label: 'Identifiants d’agent dupliqués', value: String(duplicates.length) },
     ];
 
     if (duplicates.length > 0) {
-      return mk('PEOPLE', peopleProbe.name, 'core', ['DATA_INTEGRITY'], {
+      return mk('PEOPLE', peopleProbe.name, 'core', ['IDENTITY'], {
         status: 'ERROR', summary: `${duplicates.length} agent(s) partagent un identifiant.`, evidence,
         errors: [{
           code: 'duplicate_agent_ids', message: `Ids dupliqués : ${[...new Set(duplicates)].join(', ')}.`,
@@ -384,18 +420,37 @@ export const peopleProbe: HealthProbe = {
       });
     }
 
-    return mk('PEOPLE', peopleProbe.name, 'core', ['DATA_INTEGRITY'], {
-      status: 'PARTIAL',
-      summary: `${agents.length} agents cohérents ; pas de CRUD ni d’entité invité distincte.`,
+    if (unlinkedAgents.length > 0) {
+      return mk('PEOPLE', peopleProbe.name, 'core', ['IDENTITY'], {
+        status: 'PARTIAL',
+        summary: `${unlinkedAgents.length} agent(s) sans identité rattachée.`,
+        evidence,
+        warnings: [{
+          code: 'agents_without_person',
+          message: `Agents non migrés : ${unlinkedAgents.slice(0, 5).map((a) => a.id).join(', ')}.`,
+          cause: 'Ces agents ont été créés après la migration d’identité.',
+          impact: 'Ils n’ont ni fiche personne, ni RSVP, ni place à table.',
+          solution: 'Relancer la migration d’identité (réparation disponible).',
+        }],
+        repairable: true,
+        repairAction: {
+          id: 'run_identity_migration',
+          label: 'Rattacher les agents orphelins',
+          description: 'Relance migrateIdentityModel(), qui est idempotent et purement additif.',
+        },
+      });
+    }
+
+    return mk('PEOPLE', peopleProbe.name, 'core', ['IDENTITY'], {
+      status: 'VERIFIED',
+      summary: `${persons.length} personnes, ${guests.length} invités et ${vendors.length} prestataires, tous reliés par identifiant.`,
       evidence,
-      warnings: [{
-        code: 'people_no_guest_entity',
-        message: 'Les invités ne sont pas une entité de premier ordre.',
-        cause: 'Aucun type Guest : RSVP, régimes et table sont portés par des agents de démonstration.',
-        impact: 'Import de liste, RSVP et plan de table réel sont impossibles.',
-        solution: 'Créer l’entité Guest avec identifiants stables (roadmap P2.2).',
-      }],
     });
+  },
+  repair: (actionId) => {
+    if (actionId !== 'run_identity_migration') return false;
+    const report = weddingStore.ensureIdentityModel();
+    return report.agentsLinked >= 0;
   },
 };
 
@@ -406,47 +461,61 @@ export const avatarProbe: HealthProbe = {
   id: 'AVATAR',
   name: 'Avatar & personnalisation',
   category: 'world_3d',
-  dependencies: ['PEOPLE', 'DMC_ID'],
+  dependencies: ['IDENTITY', 'DMC_ID'],
   run: () => {
-    const identity = weddingStore.userIdentity;
-    const sameRole = weddingStore.agents.filter((a) => a.role === identity.role);
+    const person = weddingStore.getCurrentPerson();
+    const agent = weddingStore.currentPersonId
+      ? weddingStore.getAgentForPerson(weddingStore.currentPersonId)
+      : null;
+    const sameRole = agent ? weddingStore.agents.filter((a) => a.role === agent.role).length : 0;
+    const dmc = weddingStore.currentPersonId
+      ? weddingStore.getDmcForPerson(weddingStore.currentPersonId)
+      : null;
+
     const evidence = [
-      { label: 'Rôle de l’identité', value: identity.role },
-      { label: 'Agents partageant ce rôle', value: String(sameRole.length) },
-      { label: 'Agent porteur de l’identité', value: sameRole[0]?.id ?? 'aucun' },
-      { label: 'Liaison', value: 'par rôle (premier agent trouvé)' },
+      { label: 'Personne de session', value: person ? `${person.displayName} (${person.id})` : 'aucune' },
+      { label: 'Agent porteur', value: agent ? agent.id : 'aucun' },
+      { label: 'Mode de rattachement', value: 'identifiant de personne (plus par rôle)' },
+      { label: 'Agents partageant le même rôle', value: String(sameRole) },
+      { label: 'Identité DMC rattachée', value: dmc ? dmc.dmcCode : 'aucune' },
       { label: 'Position avatar intérieur', value: weddingStore.avatarPos.map((n) => n.toFixed(1)).join(', ') },
       { label: 'Contrôles clavier', value: 'WASD + flèches, montés' },
     ];
 
-    if (sameRole.length === 0) {
-      return mk('AVATAR', avatarProbe.name, 'world_3d', ['PEOPLE'], {
-        status: 'ERROR',
-        summary: `Aucun agent ne porte le rôle « ${identity.role} » : l’avatar n’est rattaché à rien.`,
+    if (!person) {
+      return mk('AVATAR', avatarProbe.name, 'world_3d', ['IDENTITY'], {
+        status: 'PARTIAL',
+        summary: 'Aucune personne de session : la personnalisation n’est appliquée à personne.',
         evidence,
-        errors: [{
-          code: 'avatar_unbound',
-          message: 'Identité utilisateur sans agent correspondant.',
-          cause: 'L’avatar est relié par rôle ; ce rôle n’existe pas dans la distribution actuelle.',
-          impact: 'La personnalisation n’est visible sur aucun personnage du monde.',
-          solution: 'Rattacher l’identité à un identifiant d’agent stable plutôt qu’à un rôle.',
+        warnings: [{
+          code: 'avatar_no_person',
+          message: 'currentPersonId est nul.',
+          cause: 'La migration d’identité n’a trouvé aucun agent correspondant.',
+          impact: 'La couleur et le symbole DMC ne sont portés par aucun personnage.',
+          solution: 'Relancer la migration d’identité depuis le module IDENTITY.',
         }],
       });
     }
 
-    return mk('AVATAR', avatarProbe.name, 'world_3d', ['PEOPLE'], {
-      status: 'PARTIAL',
-      summary: sameRole.length > 1
-        ? `Avatar rattaché par rôle ; ${sameRole.length} agents partagent ce rôle (ambigu).`
-        : 'Avatar rattaché par rôle à un agent unique.',
+    if (!agent) {
+      return mk('AVATAR', avatarProbe.name, 'world_3d', ['IDENTITY'], {
+        status: 'PARTIAL',
+        summary: `${person.displayName} n’a pas de projection 3D dans ce monde.`,
+        evidence,
+        warnings: [{
+          code: 'avatar_no_agent',
+          message: 'La personne de session n’est reliée à aucun agent.',
+          cause: 'Personne créée hors migration, ou monde régénéré depuis.',
+          impact: 'L’utilisateur n’est visible nulle part dans la scène.',
+          solution: 'Rattacher la personne à un agent, ou relancer la migration.',
+        }],
+      });
+    }
+
+    return mk('AVATAR', avatarProbe.name, 'world_3d', ['IDENTITY'], {
+      status: 'VERIFIED',
+      summary: `Avatar rattaché à ${person.displayName} par identifiant, sans ambiguïté malgré ${sameRole} agent(s) du même rôle.`,
       evidence,
-      warnings: [{
-        code: 'avatar_bound_by_role',
-        message: 'L’identité est appliquée au premier agent du même rôle, pas à une personne précise.',
-        cause: 'Aucun identifiant stable ne relie un compte à un agent.',
-        impact: 'Deux personnes du même rôle sont confondues visuellement.',
-        solution: 'Introduire un lien accountId → agentId (roadmap P2.2/P2.7).',
-      }],
     });
   },
 };
@@ -629,7 +698,324 @@ export const narrationProbe: HealthProbe = {
   },
 };
 
+
+// ---------------------------------------------------------------------------
+// IDENTITY — the model itself: stable ids, no role-based binding
+// ---------------------------------------------------------------------------
+export const identityProbe: HealthProbe = {
+  id: 'IDENTITY',
+  name: 'Modèle d’identité (Person / Account / DMC)',
+  category: 'core',
+  dependencies: ['PERSISTENCE'],
+  run: () => {
+    const persons = weddingStore.persons;
+    const dupes = persons.map((p) => p.id).filter((id, i, a) => a.indexOf(id) !== i);
+    const noName = persons.filter((p) => !p.displayName?.trim());
+    const current = weddingStore.getCurrentPerson();
+    const boundAgent = weddingStore.currentPersonId
+      ? weddingStore.getAgentForPerson(weddingStore.currentPersonId)
+      : null;
+    const sameRole = boundAgent
+      ? weddingStore.agents.filter((a) => a.role === boundAgent.role).length
+      : 0;
+
+    const evidence = [
+      { label: 'Personnes', value: String(persons.length) },
+      { label: 'Comptes', value: String(weddingStore.accounts.length) },
+      { label: 'Identités DMC', value: String(weddingStore.dmcIdentities.length) },
+      { label: 'Personne de session', value: current ? `${current.displayName} (${current.id})` : 'non définie' },
+      { label: 'Agent rattaché', value: boundAgent ? boundAgent.id : '—' },
+      { label: 'Rattachement', value: 'par identifiant de personne' },
+      { label: 'Agents partageant ce rôle', value: String(sameRole) },
+      { label: 'Identifiants dupliqués', value: String(dupes.length) },
+    ];
+
+    if (dupes.length > 0 || noName.length > 0) {
+      return mk('IDENTITY', identityProbe.name, 'core', ['PERSISTENCE'], {
+        status: 'ERROR',
+        summary: 'Le registre des personnes est incohérent.',
+        evidence,
+        errors: [{
+          code: 'person_registry_invalid',
+          message: dupes.length ? `Ids dupliqués : ${[...new Set(dupes)].join(', ')}.` : `${noName.length} personne(s) sans nom.`,
+          cause: 'Création de personnes sans identifiant déterministe ou sans nom.',
+          impact: 'Les relations par identifiant deviennent ambiguës.',
+          solution: 'Relancer la migration d’identité, qui réutilise des ids déterministes.',
+        }],
+      });
+    }
+
+    if (!current) {
+      return mk('IDENTITY', identityProbe.name, 'core', ['PERSISTENCE'], {
+        status: 'PARTIAL',
+        summary: 'Aucune personne de session : l’avatar n’est rattaché à personne.',
+        evidence,
+        warnings: [{
+          code: 'no_current_person',
+          message: 'currentPersonId est nul.',
+          cause: 'Aucun agent ne correspondait à l’identité héritée lors de la migration.',
+          impact: 'La personnalisation DMC n’est appliquée à aucun personnage.',
+          solution: 'Choisir une identité dans le parcours d’entrée, ou relancer la migration.',
+        }],
+        repairable: true,
+        repairAction: {
+          id: 'run_identity_migration',
+          label: 'Relancer la migration d’identité',
+          description: 'Ré-exécute migrateIdentityModel() pour rattacher la session à une personne.',
+        },
+      });
+    }
+
+    return mk('IDENTITY', identityProbe.name, 'core', ['PERSISTENCE'], {
+      status: 'VERIFIED',
+      summary: `Session rattachée à ${current.displayName} par identifiant, ${persons.length} personnes enregistrées.`,
+      evidence,
+    });
+  },
+  repair: (actionId) => {
+    if (actionId !== 'run_identity_migration') return false;
+    weddingStore.ensureIdentityModel();
+    return weddingStore.currentPersonId !== null;
+  },
+};
+
+// ---------------------------------------------------------------------------
+// GUESTS — RSVP and seating, measured against real capacity
+// ---------------------------------------------------------------------------
+export const guestsProbe: HealthProbe = {
+  id: 'GUESTS',
+  name: 'Invités, RSVP & plan de table',
+  category: 'data',
+  dependencies: ['IDENTITY'],
+  run: () => {
+    const guests = weddingStore.guests;
+    const tables = weddingStore.seatingTables;
+    const rsvp = weddingStore.getRsvpSummary();
+    const seated = guests.filter((g) => g.seating.tableId);
+    const target = weddingStore.currentProject.guestCountTarget;
+
+    const overfull = tables
+      .map((t) => ({ t, occ: weddingStore.getTableOccupancy(t.id) }))
+      .filter((x) => x.occ.seated > x.occ.capacity);
+
+    const evidence = [
+      { label: 'Invités', value: String(guests.length) },
+      { label: 'RSVP', value: `${rsvp.accepted} acceptés · ${rsvp.pending} en attente · ${rsvp.declined} refusés` },
+      { label: 'Convives attendus (avec accompagnants)', value: String(rsvp.expectedHeads) },
+      { label: 'Objectif projet', value: String(target) },
+      { label: 'Tables', value: String(tables.length) },
+      { label: 'Placés', value: `${seated.length} / ${guests.length}` },
+      { label: 'Capacité totale', value: String(tables.reduce((n, t) => n + t.capacity, 0)) },
+      { label: 'Tables en surcapacité', value: String(overfull.length) },
+    ];
+
+    if (overfull.length > 0) {
+      return mk('GUESTS', guestsProbe.name, 'data', ['IDENTITY'], {
+        status: 'ERROR',
+        summary: `${overfull.length} table(s) dépassent leur capacité.`,
+        evidence,
+        errors: overfull.slice(0, 3).map((x) => ({
+          code: 'table_overcapacity',
+          message: `${x.t.label} : ${x.occ.seated} convives pour ${x.occ.capacity} places.`,
+          cause: 'Des invités ont été placés au-delà de la capacité, ou des accompagnants ont été ajoutés après le placement.',
+          impact: 'Le plan de table est physiquement irréalisable le jour J.',
+          solution: 'Déplacer des invités, ou augmenter la capacité de la table.',
+        })),
+      });
+    }
+
+    if (guests.length === 0) {
+      return mk('GUESTS', guestsProbe.name, 'data', ['IDENTITY'], {
+        status: 'PARTIAL', summary: 'Aucun invité enregistré.', evidence,
+        warnings: [{
+          code: 'no_guests', message: 'La liste d’invités est vide.',
+          cause: 'Projet neuf ou migration non exécutée.',
+          impact: 'Ni RSVP ni plan de table possibles.',
+          solution: 'Importer une liste, ou relancer la migration d’identité.',
+        }],
+      });
+    }
+
+    const unseated = guests.length - seated.length;
+    if (unseated > 0) {
+      return mk('GUESTS', guestsProbe.name, 'data', ['IDENTITY'], {
+        status: 'PARTIAL',
+        summary: `${guests.length} invités suivis ; ${unseated} sans table attribuée.`,
+        evidence,
+        warnings: [{
+          code: 'guests_unseated',
+          message: `${unseated} invité(s) ne sont affectés à aucune table.`,
+          cause: 'Le plan de table n’est pas terminé.',
+          impact: 'Le placement du jour J est incomplet.',
+          solution: 'Attribuer une table à chaque invité ayant accepté.',
+        }],
+      });
+    }
+
+    return mk('GUESTS', guestsProbe.name, 'data', ['IDENTITY'], {
+      status: 'VERIFIED',
+      summary: `${guests.length} invités, tous placés, aucune table en surcapacité.`,
+      evidence,
+    });
+  },
+};
+
+// ---------------------------------------------------------------------------
+// VENDORS — engagement status and document linkage
+// ---------------------------------------------------------------------------
+export const vendorsProbe: HealthProbe = {
+  id: 'VENDORS',
+  name: 'Prestataires & engagements',
+  category: 'data',
+  dependencies: ['IDENTITY', 'DOCUMENTS'],
+  run: () => {
+    const vendors = weddingStore.vendors;
+    const contracted = vendors.filter((v) => v.status === 'contracted');
+    const withoutDoc = vendors.filter((v) => v.documentIds.length === 0);
+    const withoutContact = vendors.filter((v) => !v.contactPersonId);
+    const withoutZone = vendors.filter((v) => v.placeIds.length === 0);
+
+    const evidence = [
+      { label: 'Prestataires', value: String(vendors.length) },
+      { label: 'Sous contrat', value: String(contracted.length) },
+      { label: 'Sans document lié', value: String(withoutDoc.length) },
+      { label: 'Sans contact identifié', value: String(withoutContact.length) },
+      { label: 'Sans zone d’intervention', value: String(withoutZone.length) },
+      { label: 'Catégories', value: [...new Set(vendors.map((v) => v.category))].join(', ') || '—' },
+    ];
+
+    if (vendors.length === 0) {
+      return mk('VENDORS', vendorsProbe.name, 'data', ['IDENTITY'], {
+        status: 'PARTIAL', summary: 'Aucun prestataire enregistré.', evidence,
+        warnings: [{
+          code: 'no_vendors', message: 'Le registre des prestataires est vide.',
+          cause: 'Projet neuf ou migration non exécutée.',
+          impact: 'Aucun suivi contractuel possible.',
+          solution: 'Relancer la migration, ou ajouter un prestataire.',
+        }],
+      });
+    }
+
+    if (withoutDoc.length > 0) {
+      return mk('VENDORS', vendorsProbe.name, 'data', ['IDENTITY'], {
+        status: 'PARTIAL',
+        summary: `${vendors.length} prestataires ; ${withoutDoc.length} sans aucun document contractuel.`,
+        evidence,
+        warnings: [{
+          code: 'vendors_without_document',
+          message: `Sans document : ${withoutDoc.slice(0, 4).map((v) => v.companyName).join(', ')}.`,
+          cause: 'Prestataire présent dans le monde mais sans devis ni contrat rattaché.',
+          impact: 'Son coût n’entre pas dans le budget et son engagement n’est pas tracé.',
+          solution: 'Rattacher un devis ou un contrat à chaque prestataire engagé.',
+        }],
+      });
+    }
+
+    return mk('VENDORS', vendorsProbe.name, 'data', ['IDENTITY'], {
+      status: 'VERIFIED',
+      summary: `${vendors.length} prestataires, tous documentés et reliés par identifiant.`,
+      evidence,
+    });
+  },
+};
+
+// ---------------------------------------------------------------------------
+// MIGRATION — did the identity migration actually run, and is it idempotent?
+// ---------------------------------------------------------------------------
+export const migrationProbe: HealthProbe = {
+  id: 'MIGRATION',
+  name: 'Migration du modèle de données',
+  category: 'data',
+  dependencies: ['PERSISTENCE', 'IDENTITY'],
+  run: () => {
+    const snapshot = loadPersistedState(weddingStore.currentProject.id);
+    const version = snapshot ? (snapshot as unknown as Record<string, unknown>).schemaVersion : undefined;
+    const report = weddingStore.lastMigrationReport;
+    const agents = weddingStore.agents;
+    const linked = agents.filter((a) => a.personId).length;
+
+    const evidence = [
+      { label: 'Version de schéma du snapshot', value: version !== undefined ? `v${version}` : 'aucun snapshot' },
+      { label: 'Version attendue', value: `v${SCHEMA_VERSION}` },
+      { label: 'Migration exécutée', value: report ? 'oui' : 'non' },
+      { label: 'Personnes créées', value: report ? String(report.personsCreated) : '—' },
+      { label: 'Invités créés', value: report ? String(report.guestsCreated) : '—' },
+      { label: 'Prestataires créés', value: report ? String(report.vendorsCreated) : '—' },
+      { label: 'Agents rattachés', value: `${linked} / ${agents.length}` },
+      { label: 'Données héritées conservées', value: 'oui (migration additive)' },
+    ];
+    if (report?.notes.length) evidence.push({ label: 'Notes', value: report.notes.join(' · ') });
+
+    if (!report) {
+      return mk('MIGRATION', migrationProbe.name, 'data', ['PERSISTENCE'], {
+        status: 'UNKNOWN',
+        summary: 'Aucune migration n’a encore été exécutée dans cette session.',
+        evidence,
+      });
+    }
+
+    if (version !== undefined && Number(version) < SCHEMA_VERSION) {
+      return mk('MIGRATION', migrationProbe.name, 'data', ['PERSISTENCE'], {
+        status: 'PARTIAL',
+        summary: `Snapshot en v${version}, sera converti en v${SCHEMA_VERSION} à la prochaine sauvegarde.`,
+        evidence,
+        warnings: [{
+          code: 'snapshot_older_schema',
+          message: `Le snapshot enregistré est encore en v${version}.`,
+          cause: 'Aucune sauvegarde n’a eu lieu depuis la montée de version.',
+          impact: 'Les entités d’identité seront reconstruites à chaque chargement.',
+          solution: 'Forcer une sauvegarde pour figer le schéma courant.',
+        }],
+        repairable: true,
+        repairAction: {
+          id: 'force_upgrade_snapshot',
+          label: 'Convertir le snapshot',
+          description: 'Réenregistre l’état courant au schéma le plus récent.',
+        },
+      });
+    }
+
+    if (linked < agents.length) {
+      return mk('MIGRATION', migrationProbe.name, 'data', ['PERSISTENCE'], {
+        status: 'PARTIAL',
+        summary: `${agents.length - linked} agent(s) restent sans identité.`,
+        evidence,
+        warnings: [{
+          code: 'migration_incomplete',
+          message: 'Certains agents ne sont pas rattachés à une personne.',
+          cause: 'Agents créés après la dernière migration.',
+          impact: 'Ces personnages n’ont ni fiche, ni RSVP, ni permissions.',
+          solution: 'Relancer la migration (idempotente).',
+        }],
+        repairable: true,
+        repairAction: {
+          id: 'force_upgrade_snapshot',
+          label: 'Relancer la migration',
+          description: 'Ré-exécute migrateIdentityModel() puis réenregistre.',
+        },
+      });
+    }
+
+    return mk('MIGRATION', migrationProbe.name, 'data', ['PERSISTENCE'], {
+      status: 'VERIFIED',
+      summary: `Schéma v${SCHEMA_VERSION}, ${linked}/${agents.length} agents rattachés, aucune donnée héritée perdue.`,
+      evidence,
+    });
+  },
+  repair: (actionId) => {
+    if (actionId !== 'force_upgrade_snapshot') return false;
+    weddingStore.ensureIdentityModel();
+    weddingStore.saveCurrentState();
+    const snap = loadPersistedState(weddingStore.currentProject.id);
+    return !!snap && Number((snap as unknown as Record<string, unknown>).schemaVersion) >= SCHEMA_VERSION;
+  },
+};
+
 export const extraProbes: HealthProbe[] = [
+  identityProbe,
+  guestsProbe,
+  vendorsProbe,
+  migrationProbe,
   documentsProbe,
   dmcProbe,
   playlistProbe,

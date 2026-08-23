@@ -379,6 +379,10 @@ class SystemNerveEngine {
     INVITATIONS: ['COLLABORATION'],
     AUTH: ['AUTH'],
     PERMISSIONS: [],
+    IDENTITY: [],
+    GUESTS: [],
+    VENDORS: [],
+    MIGRATION: [],
     // Dedicated domain probes
     DOCUMENTS: ['DOCUMENTS'],
     DMC_ID: ['DMC_ID'],
