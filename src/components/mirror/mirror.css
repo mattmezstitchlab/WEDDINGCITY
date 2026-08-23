@@ -188,3 +188,17 @@
     height: 68px !important;
   }
 }
+
+/* --- the Canvas masthead ---------------------------------------------------
+   SEEN AT 390px: the fixed projection pill sat on top of the Canvas header,
+   hiding its eyebrow and clipping the title. On a wide screen the header has
+   room to its left, so only the narrow case needs to give way. */
+.wc-canvas-masthead {
+  padding-top: clamp(20px, calc(20px + 10 * ((100vw - 360px) / 920)), 30px);
+}
+
+@media (max-width: 780px) {
+  .wc-canvas-masthead {
+    padding-top: 64px;
+  }
+}

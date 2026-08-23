@@ -55,8 +55,13 @@ export function MirrorHero({ hero }: { hero: HeroProjection }) {
       )}
 
       <div style={heroInnerStyle}>
-        <div style={{ opacity: image ? 0.85 : 1 }}>
-          <Eyebrow>{hero.worldType === 'wedding' ? 'Mariage' : hero.worldType}</Eyebrow>
+        {/* SEEN IN THE BROWSER: over a photograph the eyebrow kept its ivory
+            grey and all but vanished. It follows the type, like everything
+            else in the image state. */}
+        <div style={{ color: image ? 'rgba(255,253,250,0.82)' : undefined }}>
+          <Eyebrow inherit={Boolean(image)}>
+            {hero.worldType === 'wedding' ? 'Mariage' : hero.worldType}
+          </Eyebrow>
         </div>
 
         {/* The names set as a monumental two-line lockup. */}
@@ -120,9 +125,13 @@ const coverImgStyle: React.CSSProperties = {
   objectFit: 'cover', display: 'block',
 };
 
+// The names sit in the middle third, where the old gradient was at 18% — fine
+// over the dark test image, a gamble over a bright one (a white dress, a sky).
+// Still a scrim, not a filter: a whisper of even veil plus a firmer foot.
 const scrimStyle: React.CSSProperties = {
   position: 'absolute', inset: 0,
-  background: 'linear-gradient(to top, rgba(12,10,8,.62) 0%, rgba(12,10,8,.18) 46%, rgba(12,10,8,.06) 100%)',
+  background:
+    'linear-gradient(to top, rgba(12,10,8,.70) 0%, rgba(12,10,8,.38) 42%, rgba(12,10,8,.20) 100%)',
 };
 
 const heroInnerStyle: React.CSSProperties = {

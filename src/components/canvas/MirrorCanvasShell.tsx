@@ -45,7 +45,7 @@ export function MirrorCanvasShell() {
   return (
     <div id="wc-mirror-canvas" style={pageStyle}>
       {/* --- editorial masthead, not a toolbar --- */}
-      <header style={mastheadStyle}>
+      <header className="wc-canvas-masthead" style={mastheadStyle}>
         <div style={{ maxWidth: 1080, margin: '0 auto', width: '100%' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, alignItems: 'flex-start', flexWrap: 'wrap' }}>
             <div style={{ minWidth: 0 }}>
@@ -116,7 +116,11 @@ const mastheadStyle: React.CSSProperties = {
   position: 'sticky', top: 0, zIndex: 2,
   background: M.bg,
   borderBottom: `1px solid ${M.line}`,
-  padding: `${fluid(20, 30)} ${fluid(20, 72)} 0`,
+  // padding-top lives in mirror.css (.wc-canvas-masthead): the shorthand here
+  // would outrank the mobile media query, as it silently did once already.
+  paddingRight: fluid(20, 72),
+  paddingBottom: 0,
+  paddingLeft: fluid(20, 72),
 };
 
 const titleStyle: React.CSSProperties = {

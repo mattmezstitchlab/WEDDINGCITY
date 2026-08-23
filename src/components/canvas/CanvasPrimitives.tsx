@@ -109,7 +109,9 @@ export function InlineSelect<T extends string>({
       style={{
         font: 'inherit', fontSize: typography.size.body, color: value ? K.textPrimary : K.textMuted,
         appearance: 'none', WebkitAppearance: 'none', MozAppearance: 'none',
-        background: 'transparent',
+        // Long-hand only: mixing the `background` shorthand with backgroundImage
+        // makes React warn about conflicting style properties on rerender.
+        backgroundColor: 'transparent',
         backgroundImage:
           `url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='9' height='6'>`
           + `<path d='M1 1l3.5 3.5L8 1' fill='none' stroke='%23636874' stroke-width='1.2'/></svg>")`,

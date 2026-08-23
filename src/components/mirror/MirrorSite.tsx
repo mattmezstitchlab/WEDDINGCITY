@@ -182,7 +182,7 @@ export function MirrorSite() {
         eyebrow="Les images"
         title="Médias"
         lead={galleryImages.length > 0
-          ? `${galleryImages.length} image(s) rattachée(s) au projet.`
+          ? `${galleryImages.length} ${galleryImages.length > 1 ? 'images rattachées' : 'image rattachée'} au projet.`
           : undefined}
         action={<ComposeBtn section="media" label="Ajouter" />}
       >
@@ -191,8 +191,10 @@ export function MirrorSite() {
             <MirrorGallery gallery={galleryImages} />
             {otherMedia > 0 && (
               <p style={otherMediaStyle}>
-                {otherMedia} autre(s) fichier(s) — extraits audio et documents — sont
-                rattachés au projet sans être des images.
+                {otherMedia > 1
+                  ? `${otherMedia} autres fichiers — extraits audio et documents — sont rattachés`
+                  : `${otherMedia} autre fichier — extrait audio ou document — est rattaché`}
+                {' '}au projet sans être des images.
               </p>
             )}
           </>
@@ -200,7 +202,7 @@ export function MirrorSite() {
           <EmptyState
             title="Votre histoire visuelle commencera ici"
             body={otherMedia > 0
-              ? `Aucune image pour l’instant : les ${otherMedia} fichier(s) rattaché(s) au projet sont des extraits audio ou des documents. La première photographie ajoutée apparaîtra ici, et pourra devenir la couverture du site.`
+              ? `Aucune image pour l’instant : ${otherMedia > 1 ? `les ${otherMedia} fichiers rattachés au projet sont des extraits audio ou des documents` : 'le seul fichier rattaché au projet est un extrait audio ou un document'}. La première photographie ajoutée apparaîtra ici, et pourra devenir la couverture du site.`
               : 'Aucune photographie n’est encore rattachée à ce mariage. Rien n’est affiché à la place : ces images n’existent pas. La première ajoutée apparaîtra ici, et pourra devenir la couverture du site.'}
           />
         )}

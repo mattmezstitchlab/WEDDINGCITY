@@ -115,7 +115,9 @@ const barStyle: React.CSSProperties = {
   // and "05 MUSIQUE" were unreadable at 1440px and worse on a phone. The rail
   // now begins below the pill instead of fighting it.
   position: 'sticky', top: 62, zIndex: 5,
-  background: 'rgba(247, 245, 240, 0.92)',
+  // Opaque: at 92% the content scrolling underneath showed through the rail
+  // and muddied the contents page. No blur — the audit forbids glassmorphism.
+  background: M.bg,
   borderBottom: `1px solid ${M.line}`,
 };
 

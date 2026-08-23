@@ -15,7 +15,20 @@ export const M = surfaces.composition;
 export const fluid = (minPx: number, maxPx: number, minVw = 360, maxVw = 1280) =>
   `clamp(${minPx}px, calc(${minPx}px + ${maxPx - minPx} * ((100vw - ${minVw}px) / ${maxVw - minVw})), ${maxPx}px)`;
 
-export function Eyebrow({ children }: { children: React.ReactNode }) {
+/**
+ * Real French plural, because "3 régime(s) particulier(s)" is a form field,
+ * not a sentence. Nothing invented: the count is the count.
+ */
+export function plural(count: number, singular: string, pluralForm?: string): string {
+  const word = count > 1 ? (pluralForm ?? `${singular}s`) : singular;
+  return `${count} ${word}`;
+}
+
+export function Eyebrow({ children, inherit }: {
+  children: React.ReactNode;
+  /** Over a photograph the eyebrow must follow the surrounding type colour. */
+  inherit?: boolean;
+}) {
   return (
     <div
       style={{
@@ -23,7 +36,7 @@ export function Eyebrow({ children }: { children: React.ReactNode }) {
         fontWeight: typography.weight.bold,
         letterSpacing: '0.18em',
         textTransform: 'uppercase',
-        color: M.textMuted,
+        color: inherit ? 'inherit' : M.textMuted,
       }}
     >
       {children}

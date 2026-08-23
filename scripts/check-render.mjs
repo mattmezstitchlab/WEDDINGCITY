@@ -364,10 +364,40 @@ try {
     r.check(shiftFirst > 0 && shiftFirst < bareM,
       'the ⇧M shortcut is reachable: its branch is tested before the bare M one');
 
+    // Over a photograph the eyebrow vanished, and the scrim was thin enough to
+    // lose white type on a bright picture.
+    r.check(/<Eyebrow inherit=\{Boolean\(image\)\}>/.test(hero),
+      'the hero eyebrow follows the type colour over an image');
+    r.check(/rgba\(12,10,8,\.70\)[\s\S]*rgba\(12,10,8,\.38\)[\s\S]*rgba\(12,10,8,\.20\)/.test(hero),
+      'the scrim protects the type across the whole cover, not only its foot');
+
+    // No administrative "(s)" on a wedding site.
+    const mirrorCopy = ['MirrorPeople.tsx', 'MirrorSections.tsx', 'MirrorSite.tsx']
+      .map((f) => readFileSync(p2('components', 'mirror', f), 'utf8')).join('\n')
+      .replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+    const admin = mirrorCopy.match(/\w+\(s\)/g) ?? [];
+    r.check(admin.length === 0, 'plurals are written out, not "(s)"', admin.slice(0, 3).join(' '));
+
+    // The rail let the page show through and muddied the contents page.
+    r.check(/background: M\.bg,/.test(nav) && !/rgba\(247, 245, 240, 0\.92\)/.test(nav),
+      'the sticky rail is opaque');
+
+    // Layout that must survive a media query is never set inline.
+    const shell = readFileSync(p2('components', 'canvas', 'MirrorCanvasShell.tsx'), 'utf8');
+    r.check(/paddingRight: fluid/.test(shell) && !/padding: `\$\{fluid\(20, 30\)/.test(shell)
+      && /\.wc-canvas-masthead/.test(css),
+      'the Canvas masthead can make room for the floating switcher on a phone');
+
+    // The absence of a preview belongs in the metadata line, said once.
+    r.check(/· sans extrait/.test(sections) && !/<NoAudioNote \/>/.test(sections),
+      'a track with no preview says so in its metadata, not in a second column');
+
     // The native select was the only thing that made the Canvas a form.
     const prim = readFileSync(p2('components', 'canvas', 'CanvasPrimitives.tsx'), 'utf8');
     r.check(/appearance: 'none'/.test(prim) && /borderBottom: `1px solid \$\{K.lineStrong\}`/.test(prim),
       'the Canvas select wears editorial clothing, not the system widget');
+    r.check(/backgroundColor: 'transparent'/.test(prim) && !/\bbackground: 'transparent',\s*\n\s*backgroundImage/.test(prim),
+      'and it does not mix a background shorthand with its long-hands (React warns)');
   }
 
   // ---------------------------------------------------------------------------

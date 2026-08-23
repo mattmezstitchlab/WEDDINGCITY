@@ -1,8 +1,8 @@
 import { weddingStore } from '../../game/weddingStore';
 import { VendorsProjection, PlacesProjection, MusicProjection, MediaProjection } from '../../projections/worldModel';
 import { typography, radius } from '../../design/tokens';
-import { M, fluid, Reveal, Rule, MetaLine } from './MirrorPrimitives';
-import { TrackArt, NoAudioNote } from './TrackArt';
+import { M, fluid, Reveal, Rule, MetaLine, plural } from './MirrorPrimitives';
+import { TrackArt } from './TrackArt';
 
 // ---------------------------------------------------------------------------
 // 03 PRESTATAIRES · 04 LIEUX · 05 MUSIQUE · 06 MÉDIAS
@@ -60,7 +60,7 @@ export function MirrorVendors({ vendors }: { vendors: VendorsProjection }) {
                       <MetaLine items={[
                         v.contactName && v.contactName !== v.companyName ? v.contactName : null,
                         VENDOR_STATUS[v.status] ?? v.status,
-                        v.documentCount > 0 ? `${v.documentCount} document(s)` : null,
+                        v.documentCount > 0 ? plural(v.documentCount, 'document') : null,
                       ]} />
 
                       {v.places.length > 0 && (
@@ -155,7 +155,7 @@ export function MirrorPlaces({ places }: { places: PlacesProjection }) {
                 <MetaLine items={[
                   p.address,
                   p.capacity ? `${p.capacity} places` : null,
-                  p.tableCount > 0 ? `${p.tableCount} table(s)` : null,
+                  p.tableCount > 0 ? plural(p.tableCount, 'table') : null,
                   p.gps,
                 ]} />
 
@@ -291,13 +291,16 @@ export function MirrorMusic({ music }: { music: MusicProjection }) {
                         <span style={songTitleStyle}>{sg.title}</span>
                         <span style={songArtistStyle}>{sg.artist}</span>
                       </span>
+                      {/* One metadata line, not a second column: the absence of
+                          a preview belongs with the duration, quietly. */}
                       <span style={songMetaStyle}>
                         {sg.duration || ''}
                         {sg.status === 'verified' ? ' · validé' : ''}
+                        {!nonePlayable && !sg.audioSource ? ' · sans extrait' : ''}
                       </span>
                     </button>
 
-                    {!sg.audioSource && !nonePlayable && <NoAudioNote />}
+
                   </div>
                 </li>
               ))}

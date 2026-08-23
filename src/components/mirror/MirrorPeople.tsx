@@ -46,13 +46,15 @@ export function MirrorPeople({ guests }: { guests: GuestsProjection }) {
               <strong style={{ color: M.textPrimary, fontVariantNumeric: 'tabular-nums' }}>
                 {guests.counts.byRsvp[s]}
               </strong>
-              {' '}{RSVP_LABEL[s].toLowerCase()}
+              {' '}{guests.counts.byRsvp[s] > 1
+                ? `${RSVP_LABEL[s].toLowerCase()}s`
+                : RSVP_LABEL[s].toLowerCase()}
             </span>
           ))}
           {guests.counts.withDietary > 0 && (
             <span style={summaryItemStyle}>
               <strong style={{ color: M.textPrimary }}>{guests.counts.withDietary}</strong>
-              {' '}régime(s) particulier(s)
+              {guests.counts.withDietary > 1 ? ' régimes particuliers' : ' régime particulier'}
             </span>
           )}
         </div>
