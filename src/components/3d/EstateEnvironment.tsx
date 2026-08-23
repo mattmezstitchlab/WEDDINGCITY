@@ -18,8 +18,28 @@ import {
   IconPhoto,
 } from '../ui/Icons';
 
+/**
+ * The places this hand-built estate actually depicts.
+ *
+ * MEASURED IN THE BROWSER (multi-project acceptance): this decor is written in
+ * JSX, not derived from the store, so a brand-new wedding — with zero places —
+ * still showed the demo estate: "Gare TGV & Navettes", "Manoir d'Honneur",
+ * "Chapelle & Oliviers"… The World was showing somebody else's venue.
+ *
+ * The decor is not rebuilt here (out of scope, and it is a real piece of
+ * craft): it simply stops claiming to represent places the active project does
+ * not have. Below three of them, the estate is not rendered at all and the
+ * World shows its ground and whatever the project really contains.
+ */
+const ESTATE_PLACE_IDS = [
+  'place_parking', 'place_manoir', 'place_ceremonie', 'place_mairie',
+  'place_cocktail', 'place_reception', 'place_dancefloor', 'place_chapelle',
+];
+
 export function EstateEnvironment() {
   const fountainWaterRef = useRef<THREE.Mesh>(null);
+  const depictedPlaces = weddingStore.places
+    .filter((p) => ESTATE_PLACE_IDS.includes(p.id)).length;
   const dancefloorRef = useRef<THREE.Group>(null);
   const lightsGroupRef = useRef<THREE.Group>(null);
 
@@ -173,6 +193,11 @@ export function EstateEnvironment() {
     transform: 'scale(0.85)',
     transition: 'all 0.15s ease',
   });
+
+
+  // The estate depicts specific places. If the active project does not have
+  // them, it is not this project's estate — so it is not drawn.
+  if (depictedPlaces < 3) return null;
 
   return (
     <group>

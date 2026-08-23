@@ -1,3 +1,4 @@
+import { getStoredProjects } from '../../game/persistence';
 import {
   weddingStore,
   BRAND_ACCENT,
@@ -33,6 +34,12 @@ export function BrandMenuModal({ isOpen, onClose }: BrandMenuModalProps) {
     onClose();
     cb();
   };
+
+  // MEASURED IN THE BROWSER (multi-project acceptance): a second wedding could
+  // be created, but nothing in the interface could ever open it again — the
+  // only way back was "Basculer vers le Mode Démo". Every stored project is
+  // now listed, and switching is one click.
+  const projects = getStoredProjects();
 
   return (
     <div style={dropdownBackdropStyle} onClick={onClose}>
@@ -100,6 +107,38 @@ export function BrandMenuModal({ isOpen, onClose }: BrandMenuModalProps) {
             <IconPlus size={14} color="#ffffff" />
             <span>Créer un Mariage (Wedding City)</span>
           </button>
+
+          {/* --- the projects that really exist in this browser --- */}
+          {projects.length > 1 && (
+            <div style={projectListStyle}>
+              <div style={projectListLabelStyle}>Mes mariages · {projects.length}</div>
+              {projects.map((p) => {
+                const isActive = p.id === project.id;
+                return (
+                  <button
+                    key={p.id}
+                    onClick={() => handleAction(() => {
+                      if (!isActive) store.loadProject(p.id);
+                    })}
+                    aria-current={isActive ? 'true' : undefined}
+                    style={{
+                      ...menuItemBtnStyle,
+                      background: isActive ? 'rgba(226,180,72,0.10)' : 'transparent',
+                      color: isActive ? BRAND_ACCENT : BRAND_TEXT_PRIMARY,
+                    }}
+                    title={isActive ? 'Mariage actuellement ouvert' : `Ouvrir ${p.coupleNames}`}
+                  >
+                    <span style={{ width: 14, textAlign: 'center' }}>{isActive ? '◆' : '◇'}</span>
+                    <span style={{ flex: 1, textAlign: 'left', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {p.coupleNames || p.title}
+                      {p.isDemo ? ' · démo' : ''}
+                    </span>
+                    {isActive && <span style={{ fontSize: 9, color: BRAND_TEXT_MUTED }}>ouvert</span>}
+                  </button>
+                );
+              })}
+            </div>
+          )}
 
           <button
             onClick={() => handleAction(() => {
@@ -252,6 +291,17 @@ const projectHeaderBoxStyle: React.CSSProperties = {
   padding: '12px 16px',
   background: 'rgba(255, 255, 255, 0.03)',
   borderBottom: `1px solid ${BRAND_BORDER}`,
+};
+
+const projectListStyle: React.CSSProperties = {
+  display: 'grid', gap: 2, padding: '6px 0',
+  borderTop: `1px solid ${BRAND_BORDER}`, borderBottom: `1px solid ${BRAND_BORDER}`,
+  margin: '4px 0',
+};
+
+const projectListLabelStyle: React.CSSProperties = {
+  fontSize: 9, letterSpacing: '0.14em', textTransform: 'uppercase',
+  color: BRAND_TEXT_MUTED, fontWeight: 700, padding: '4px 12px 2px',
 };
 
 const menuItemBtnStyle: React.CSSProperties = {

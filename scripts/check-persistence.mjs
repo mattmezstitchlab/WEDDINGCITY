@@ -206,11 +206,16 @@ try {
     storage.setItem('wedding_city_projects_v1', JSON.stringify(projects));
 
     store.loadProject(freshId);
-    // Slot 0 ships claimed by default, so assert on the campaign content:
-    // the previous project's campaign must not bleed through.
-    r.check(store.adSlots[0].currentCampaign?.title !== 'Contamination',
+    // The guarantee is unchanged — nothing from the previous project may bleed
+    // through — but it is now stronger: a real project with no snapshot starts
+    // EMPTY (multi-project acceptance), so there is no inherited slot at all.
+    const leaked = store.adSlots.filter((s) => s.currentCampaign?.title === 'Contamination');
+    r.check(leaked.length === 0,
       'a new project starts from uncontaminated ad slots',
-      `leaked campaign title=${store.adSlots[0].currentCampaign?.title}`);
+      `slots=${store.adSlots.length} leaked=${leaked.length}`);
+    r.check(store.adSlots.length === 0 && store.places.length === 0 && store.phases.length === 0,
+      'and it inherits no demo entity whatsoever',
+      `slots=${store.adSlots.length} places=${store.places.length} phases=${store.phases.length}`);
   }
 } finally {
   harness.cleanup();

@@ -1523,6 +1523,33 @@ function createDefaultDomainState(): PersistedDomainState {
   });
 }
 
+/**
+ * A brand-new project's domain: EMPTY.
+ *
+ * MEASURED IN THE BROWSER (multi-project acceptance): creating a wedding
+ * through the real form produced a project that already contained the demo —
+ * 12 places called "Hôtel de Ville & Cérémonie Civile", 35 people called
+ * "Clara Dubois"…, 10 tracks, 7 phases. A couple creating their wedding
+ * inherited somebody else's.
+ *
+ * A new project therefore starts with nothing but what its creator typed. The
+ * empty states across World, Mirror and Canvas already explain what is missing
+ * and how to add it, so an empty project is legible rather than broken.
+ */
+function createEmptyDomainState(): PersistedDomainState {
+  return clone({
+    time: 15.0,
+    userIdentity: DEFAULT_USER_IDENTITY,
+    userDmcIdentity: DEFAULT_DMC_IDENTITY,
+    places: [], agents: [], docs: [], tasks: [], conflicts: [], phases: [],
+    tracks: [], reconstructedVenues: [], placedObjects: [], adSlots: [],
+    persons: [], accounts: [], dmcIdentities: [], guests: [], vendors: [],
+    seatingTables: [], memberships: [], invitations: [], trackVotes: [],
+    media: [], relationships: [],
+    currentPersonId: null,
+  });
+}
+
 class WeddingStore {
   public version: number = 0;
   public time: number = 15.4;
@@ -1706,12 +1733,17 @@ class WeddingStore {
       if (proj) {
         this.currentProject = proj;
         const saved = loadPersistedState(proj.id);
-        if (saved) {
-          // Single restore path (shared with loadProject). Defaults are the
-          // values the store was constructed with, so a partial/legacy
-          // snapshot degrades field-by-field instead of wiping state.
-          this.lastRestoreReport = applyDomain(this, saved, serializeDomain(this));
-        }
+        // MEASURED IN THE BROWSER (multi-project acceptance): the fallback used
+        // to be `serializeDomain(this)` — the class fields, which are the DEMO.
+        // A real wedding legitimately has no places, no agents and no phases,
+        // and `emptyListMeansUnset` turns those empty lists into "absent", so
+        // after a reload the demo estate came back and 20 demo guests appeared
+        // in someone else's wedding. The fallback now depends on the project:
+        // the demo falls back to the demo, a real wedding to an empty world.
+        const fallback = proj.isDemo ? serializeDomain(this) : createEmptyDomainState();
+        // A real project with no snapshot yet must also start empty, not with
+        // the constants the class was constructed with.
+        this.lastRestoreReport = applyDomain(this, saved ?? null, fallback);
         this.ensureIdentityModel();
       }
     } catch (error) {
@@ -2980,9 +3012,17 @@ class WeddingStore {
     this.notify();
   }
 
-  public getActivePhase(): TimelinePhase {
+  /**
+   * The phase the simulated clock is inside, or the first one.
+   *
+   * MEASURED IN THE BROWSER: this used to be typed as always returning a
+   * phase, but an empty programme made it return `undefined`, and the HUD
+   * crashed on `currentPhase.name` the moment a brand-new wedding was created.
+   * The type now tells the truth and every caller handles the empty day.
+   */
+  public getActivePhase(): TimelinePhase | null {
     const current = this.phases.find((p) => this.time >= p.startHour && this.time < p.endHour);
-    return current || this.phases[0];
+    return current ?? this.phases[0] ?? null;
   }
 
   public getActiveTrack(): TrackEntity {
@@ -3233,22 +3273,18 @@ class WeddingStore {
       isCreated: true,
     };
 
-    this.time = 14.0;
-    this.places = [...INITIAL_PLACES];
-    this.agents = [...INITIAL_AGENTS];
-    this.docs = [...INITIAL_DOCS];
-    this.tasks = [...INITIAL_TASKS];
-    this.conflicts = [...INITIAL_CONFLICTS];
-    this.tracks = [...INITIAL_TRACKS];
-    this.reconstructedVenues = [...INITIAL_RECONSTRUCTED_VENUES];
-    this.placedObjects = [...INITIAL_RECONSTRUCTED_VENUES[0].objects];
+    // The new world starts EMPTY — see createEmptyDomainState. Copying the demo
+    // here also shared its objects between projects (`[...INITIAL_X]` is a
+    // shallow copy), so editing one wedding could reach into another.
+    applyDomain(this, null, createEmptyDomainState());
 
-    const names = params.coupleNames.split('&');
-    if (names.length >= 2) {
-      const bride = this.agents.find((a) => a.role === 'bride');
-      if (bride) bride.name = names[0].trim();
-      const groom = this.agents.find((a) => a.role === 'groom');
-      if (groom) groom.name = names[1].trim();
+    // The only people who exist at this point are the ones the creator typed.
+    // They are real data, so they become real Persons — but they get NO
+    // spatial projection: inventing a position in the 3D world would be
+    // fabricating. The World says so explicitly instead.
+    const names = params.coupleNames.split('&').map((n) => n.trim()).filter(Boolean);
+    for (const displayName of names.slice(0, 2)) {
+      this.createPerson({ displayName, asGuest: false });
     }
 
     this.saveCurrentState();
@@ -3333,10 +3369,20 @@ class WeddingStore {
     setActiveProjectId(projectId);
     this.currentProject = proj;
     const saved = loadPersistedState(projectId);
-    // Same single restore path as boot. When there is no snapshot, every field
-    // simply falls back to its pristine default.
-    this.lastRestoreReport = applyDomain(this, saved, createDefaultDomainState());
+    // Same single restore path as boot. With no snapshot, the fallback depends
+    // on WHICH project this is: the demo falls back to the demo, any real
+    // wedding falls back to an empty world — never to somebody else's data.
+    const fallback = proj.isDemo ? createDefaultDomainState() : createEmptyDomainState();
+    this.lastRestoreReport = applyDomain(this, saved, fallback);
     this.ensureIdentityModel();
+
+    // Nothing from the previous project may stay selected: those ids do not
+    // exist here. Measured risk from the acceptance pass.
+    this.canvasFocus = null;
+    this.canvasSection = null;
+    this.selectedEntity = null;
+    this.mirrorFocusPersonId = null;
+    this.interiorMode = false;
 
     weddingAudio.playNeuralWave();
     this.brandMenuOpen = false;
@@ -3871,6 +3917,7 @@ class WeddingStore {
 
   private updateAgentsForTime() {
     const currentPhase = this.getActivePhase();
+    if (!currentPhase) return; // an empty programme moves nobody
     const primaryPlace = this.places.find((p) => p.id === currentPhase.primaryPlaceId);
     if (!primaryPlace) return;
 

@@ -123,6 +123,33 @@ export default function App() {
           The 3D scene is never remounted, so nothing is rebuilt or lost. */}
       <ProjectionVeil projection={weddingStore.projection} />
 
+      {/* A brand-new wedding has no spaces yet, and none are invented for it.
+          The World says what is missing and where to add it, instead of
+          showing an empty grid with no explanation. */}
+      {weddingStore.projection === 'world'
+        && weddingStore.places.length === 0
+        && !weddingStore.canvasOpen
+        && !weddingStore.showIdentityModal && (
+        <div style={emptyWorldStyle}>
+          <div style={{ fontSize: 15, color: '#f5f5f7', fontWeight: 600, letterSpacing: '-0.01em' }}>
+            Ce monde n’a pas encore d’espaces
+          </div>
+          <p style={{ margin: '10px 0 0', fontSize: 12, lineHeight: 1.65, color: '#9ba1b0' }}>
+            {weddingStore.currentProject.coupleNames
+              ? `Le mariage de ${weddingStore.currentProject.coupleNames} vient d’être créé : rien n’a été inventé pour le remplir.`
+              : 'Rien n’a été inventé pour remplir ce monde.'}
+            {' '}Ajoutez un lieu, un moment ou une personne depuis le Canvas — chaque
+            élément apparaîtra ici et dans le site.
+          </p>
+          <button
+            onClick={() => weddingStore.openCanvas(undefined, 'places')}
+            style={emptyWorldBtnStyle}
+          >
+            Ouvrir le Canvas
+          </button>
+        </div>
+      )}
+
       {/* CANVAS — the composition projection. A contextual side surface, not a
           page: the World stays visible behind it so context is never lost. */}
       {weddingStore.canvasOpen && (
@@ -412,3 +439,20 @@ export default function App() {
     </div>
   );
 }
+
+const emptyWorldStyle: React.CSSProperties = {
+  position: 'fixed', left: '50%', top: '50%', transform: 'translate(-50%, -50%)',
+  zIndex: 60, width: 'min(420px, calc(100vw - 48px))',
+  background: 'rgba(18, 21, 30, 0.92)',
+  border: '1px solid rgba(255,255,255,0.09)',
+  borderRadius: 18, padding: '22px 24px',
+  fontFamily: 'ui-sans-serif, -apple-system, system-ui, sans-serif',
+  textAlign: 'center',
+};
+
+const emptyWorldBtnStyle: React.CSSProperties = {
+  marginTop: 16, appearance: 'none', cursor: 'pointer',
+  background: '#f5f5f7', color: '#12151e', border: 'none',
+  borderRadius: 999, padding: '9px 18px',
+  fontSize: 11.5, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase',
+};

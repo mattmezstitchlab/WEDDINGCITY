@@ -14,16 +14,20 @@ export function BottomOrchestrator() {
   const speed = store.speed;
   const currentTime = store.time;
 
-  const milestones = [
-    { hour: 10.0, label: 'Préparatifs', placeId: 'place_manoir' },
-    { hour: 13.5, label: 'Mairie', placeId: 'place_mairie' },
-    { hour: 15.5, label: 'Cérémonie', placeId: 'place_ceremonie' },
-    { hour: 17.0, label: 'Cocktail', placeId: 'place_cocktail' },
-    { hour: 18.5, label: 'Photos', placeId: 'place_photo_spot' },
-    { hour: 19.5, label: 'Banquet', placeId: 'place_reception' },
-    { hour: 22.5, label: 'Ouverture Bal', placeId: 'place_dancefloor' },
-    { hour: 24.0, label: 'Soirée', placeId: 'place_dancefloor' },
-  ];
+  // MEASURED IN THE BROWSER (multi-project acceptance): these were eight
+  // hardcoded milestones and six hardcoded zones — the demo's day and the
+  // demo's venue — displayed under EVERY project, including a brand-new
+  // wedding with no programme at all. They now derive from the active project.
+  const milestones = [...store.phases]
+    .sort((a, b) => a.startHour - b.startHour)
+    .map((phase) => ({
+      hour: phase.startHour,
+      label: phase.name.replace(/^\s*\d{1,2}\s*[:h]\s*\d{0,2}\s*[—–-]\s*/, '').trim() || phase.name,
+      placeId: phase.primaryPlaceId,
+    }));
+
+  // Zones are the real places of this project, in their own order.
+  const zones = store.places.slice(0, 8).map((place) => ({ id: place.id, label: place.name }));
 
   const formatHour = (h: number) => {
     const hours = Math.floor(h) % 24;
@@ -61,14 +65,13 @@ export function BottomOrchestrator() {
           <span>WORLDMAP</span>
         </button>
 
-        {[
-          { id: 'place_mairie', label: 'Mairie' },
-          { id: 'place_manoir', label: 'Manoir' },
-          { id: 'place_ceremonie', label: 'Cérémonie' },
-          { id: 'place_cocktail', label: 'Cocktail' },
-          { id: 'place_reception', label: 'Orangerie' },
-          { id: 'place_dancefloor', label: 'Bal / DJ' },
-        ].map((zone) => {
+        {zones.length === 0 && (
+          <span style={{ fontSize: 10.5, color: BRAND_TEXT_MUTED, padding: '0 6px' }}>
+            Aucun espace dans ce mariage
+          </span>
+        )}
+
+        {zones.map((zone) => {
           const isSelected = store.selectedEntity?.type === 'place' && store.selectedEntity.id === zone.id;
           return (
             <button

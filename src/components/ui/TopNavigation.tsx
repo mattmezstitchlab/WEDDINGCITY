@@ -87,7 +87,9 @@ export function TopNavigation({ onOpenImport, onOpenConflicts }: TopNavigationPr
             {formatHour(store.time)}
           </div>
           <div style={{ fontSize: 11, color: BRAND_TEXT_SECONDARY, fontWeight: 500, whiteSpace: 'nowrap' }}>
-            {currentPhase.name.split('—')[1]?.trim() || currentPhase.name}
+            {currentPhase
+              ? (currentPhase.name.split('—')[1]?.trim() || currentPhase.name)
+              : 'Journée à composer'}
           </div>
         </div>
       </div>
