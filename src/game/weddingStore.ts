@@ -3330,7 +3330,17 @@ class WeddingStore {
     setActiveProjectId(newId);
     this.currentProject = newProject;
 
-    // Load generated entities
+    // MEASURED IN THE BROWSER (World Lab acceptance): this used to overwrite
+    // only places/agents/docs/tasks/phases/tracks and leave EVERYTHING ELSE
+    // from the previously open project in place. A two-week roadtrip in Japan
+    // was therefore created carrying the wedding demo's 35 people, 27 guests,
+    // 8 vendors and 6 seating tables — and a second generated world inherited
+    // whatever had just been edited in the first one.
+    //
+    // The world is now built on an EMPTY domain, exactly like a new wedding,
+    // and only the generated entities are placed into it.
+    applyDomain(this, null, createEmptyDomainState());
+
     this.time = 12.0;
     this.places = generated.places;
     this.agents = generated.agents;
@@ -3338,9 +3348,15 @@ class WeddingStore {
     this.tasks = generated.tasks;
     this.phases = generated.phases;
     this.tracks = generated.tracks;
-    this.conflicts = [];
-    this.reconstructedVenues = [...INITIAL_RECONSTRUCTED_VENUES];
-    this.placedObjects = [...INITIAL_RECONSTRUCTED_VENUES[0].objects];
+    // `[...INITIAL_RECONSTRUCTED_VENUES]` was a shallow copy of a demo
+    // constant: two projects ended up sharing the very same objects. A
+    // generated world has no reconstructed venue until one is really built.
+    this.reconstructedVenues = [];
+    this.placedObjects = [];
+
+    // The generated agents are real entities of THIS world, so they get their
+    // identity projection (Person/Guest/DMC) derived here, from them alone.
+    this.ensureIdentityModel();
 
     this.userIdentity = {
       role: 'wedding_planner',

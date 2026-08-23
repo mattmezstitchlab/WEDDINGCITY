@@ -31,7 +31,7 @@ import {
  * not have. Below three of them, the estate is not rendered at all and the
  * World shows its ground and whatever the project really contains.
  */
-const ESTATE_PLACE_IDS = [
+export const ESTATE_PLACE_IDS = [
   'place_parking', 'place_manoir', 'place_ceremonie', 'place_mairie',
   'place_cocktail', 'place_reception', 'place_dancefloor', 'place_chapelle',
 ];
@@ -195,9 +195,21 @@ export function EstateEnvironment() {
   });
 
 
-  // The estate depicts specific places. If the active project does not have
-  // them, it is not this project's estate — so it is not drawn.
-  if (depictedPlaces < 3) return null;
+  // The estate depicts SPECIFIC places. When the active project does not have
+  // them, its buildings and badges are not drawn — but the ground is: it
+  // belongs to every world, and removing it left a generated world floating in
+  // pure black (measured in the browser during the World Lab acceptance).
+  if (depictedPlaces < 3) {
+    return (
+      <group>
+        <mesh position={[0, -0.25, 0]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
+          <planeGeometry args={[260, 220]} />
+          <meshStandardMaterial color="#121624" roughness={0.9} metalness={0.05} />
+        </mesh>
+        <gridHelper args={[120, 40, BRAND_ACCENT, '#28324a']} position={[0, 0.02, 0]} />
+      </group>
+    );
+  }
 
   return (
     <group>

@@ -6,6 +6,7 @@ import { damp3 } from 'maath/easing';
 
 import { weddingStore } from '../../game/weddingStore';
 import { EstateEnvironment } from './EstateEnvironment';
+import { PlaceMarkers } from './PlaceMarkers';
 import { VoxelAgents } from './VoxelAgents';
 import { NeuralConnections } from './NeuralConnections';
 import { AtmosphereAndEffects } from './AtmosphereAndEffects';
@@ -133,6 +134,10 @@ function WeddingWorldCanvas() {
           ) : (
             <>
               <EstateEnvironment />
+              {/* Places the hand-built estate does not depict — a generated
+                  world, or any place added from the Canvas — still exist in
+                  space and are shown at their own coordinates. */}
+              <PlaceMarkers />
               <VoxelAgents
                 agents={store.agents}
                 selectedId={store.selectedEntity?.type === 'agent' ? store.selectedEntity.id : null}

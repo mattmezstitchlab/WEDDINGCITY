@@ -157,8 +157,14 @@ try {
       'and opening one switches to it by id');
 
     const estate = readFileSync(path.join(SRC, 'components', '3d', 'EstateEnvironment.tsx'), 'utf8');
-    r.check(/depictedPlaces < 3\) return null/.test(estate),
+    // The estate's BUILDINGS are skipped for a project that does not have the
+    // places they depict; the ground and grid stay (a generated world was
+    // otherwise floating in pure black — World Lab acceptance).
+    r.check(/if \(depictedPlaces < 3\) \{/.test(estate)
+      && /ESTATE_PLACE_IDS/.test(estate),
       'the hardcoded estate is not drawn for a project that does not have those places');
+    r.check(/planeGeometry args=\{\[260, 220\]\}/.test(estate.split('if (depictedPlaces < 3) {')[1] || ''),
+      'but every project keeps a ground to stand on');
 
     const dock = readFileSync(path.join(SRC, 'components', 'ui', 'BottomOrchestrator.tsx'), 'utf8');
     r.check(/store\.phases/.test(dock) && !/hour: 10\.0, label: 'Préparatifs'/.test(dock),
