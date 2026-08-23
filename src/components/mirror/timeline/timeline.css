@@ -175,3 +175,18 @@
 @media (prefers-reduced-motion: reduce) {
   .wc-jourj-moment { transition: none; }
 }
+
+/* --- the product navigation --------------------------------------------------
+   Seven places, one line on a laptop, a scrollable line on a phone. */
+.wc-product-nav-links {
+  display: flex;
+  gap: 2px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.wc-product-nav-links::-webkit-scrollbar { display: none; }
+
+@media (max-width: 900px) {
+  .wc-product-nav-links { order: 3; width: 100%; }
+}

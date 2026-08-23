@@ -1019,7 +1019,7 @@ function MediaSurface({ model }: { model: ReturnType<typeof projectWorldModel> }
           <div style={{ fontSize: typography.size.bodyLg, color: K.textPrimary }}>Aucun média</div>
           <p style={{ margin: '8px auto 0', maxWidth: 380, fontSize: typography.size.caption, color: K.textSecondary, lineHeight: 1.6 }}>
             Rien n’est affiché à la place : ces images n’existent pas. Le premier fichier ajouté
-            apparaîtra immédiatement dans le Mirror.
+            apparaîtra immédiatement dans LE GRAND JOUR.
           </p>
         </div>
       ) : (

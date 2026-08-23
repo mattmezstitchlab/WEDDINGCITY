@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { weddingStore, CanvasSection } from '../../game/weddingStore';
 import { projectWorldModel } from '../../projections/worldModel';
 import { typography } from '../../design/tokens';
@@ -11,6 +11,8 @@ import { MirrorVendors, MirrorPlaces, MirrorMusic, MirrorGallery } from './Mirro
 import { MirrorLanding } from './MirrorLanding';
 import { TimelineStudio } from './timeline/TimelineStudio';
 import { PRODUCT_NAME, PRODUCT_MARK } from '../../design/productIdentity';
+import { OrganisationSection } from './organisation/OrganisationSection';
+import { GlobalSearch } from './GlobalSearch';
 import './mirror.css';
 
 // ---------------------------------------------------------------------------
@@ -52,6 +54,7 @@ export function MirrorSite() {
     <div id="wc-mirror" style={productPageStyle} className="wc-jourj">
       <ProductNav />
       <TimelineStudio />
+      <OrganisationSection />
       <div style={storyDividerStyle}>
         <span>Le récit</span>
         <span style={{ opacity: 0.62 }}>ce que vos invités verront de cette journée</span>
@@ -67,21 +70,47 @@ export function MirrorSite() {
  */
 function ProductNav() {
   const store = weddingStore;
+  const [searchOpen, setSearchOpen] = useState(false);
   const go = (id: string) => {
     const el = document.getElementById(id);
     el?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
+
+  // ONE navigation for the whole product. Not three surfaces, not a sidebar:
+  // the places of a wedding day, in the order one lives them.
+  const ENTRIES: { id: string; label: string; tag: string }[] = [
+    { id: 'jour-j', label: 'Aujourd’hui', tag: 'nav-today' },
+    { id: 'jour-j', label: 'Timeline', tag: 'nav-jourj' },
+    { id: 'mirror-guests', label: 'Personnes', tag: 'nav-people' },
+    { id: 'organisation', label: 'Organisation', tag: 'nav-organisation' },
+    { id: 'mirror-music', label: 'Musique', tag: 'nav-music' },
+    { id: 'organisation', label: 'Documents', tag: 'nav-documents' },
+    { id: 'mirror-gallery', label: 'Souvenirs', tag: 'nav-memories' },
+  ];
+
   return (
-    <nav style={productNavStyle} aria-label="Navigation">
-      <span style={{ fontWeight: 700, letterSpacing: '0.22em', fontSize: 12 }}>
-        {PRODUCT_NAME}
-        <span style={{ fontSize: '0.6em', verticalAlign: 'super', marginLeft: 2 }}>{PRODUCT_MARK}</span>
-      </span>
-      <span style={{ flex: 1 }} />
-      <button onClick={() => go('jour-j')} style={productNavBtn} data-jourj="nav-jourj">Jour J</button>
-      <button onClick={() => store.returnToLanding()} style={productNavBtn} data-jourj="nav-weddings">Mes mariages</button>
-      <button onClick={() => store.startWeddingCreation()} style={productNavCta} data-jourj="nav-create">Créer</button>
-    </nav>
+    <>
+      <nav style={productNavStyle} aria-label="Navigation">
+        <span style={{ fontWeight: 700, letterSpacing: '0.22em', fontSize: 12, whiteSpace: 'nowrap' }}>
+          {PRODUCT_NAME}
+          <span style={{ fontSize: '0.6em', verticalAlign: 'super', marginLeft: 2 }}>{PRODUCT_MARK}</span>
+        </span>
+        <div className="wc-product-nav-links">
+          {ENTRIES.map((e) => (
+            <button key={e.tag} onClick={() => go(e.id)} style={productNavBtn} data-jourj={e.tag}>
+              {e.label}
+            </button>
+          ))}
+        </div>
+        <span style={{ flex: 1 }} />
+        <button onClick={() => setSearchOpen(true)} style={productNavBtn} data-jourj="nav-search" aria-label="Recherche">
+          Rechercher
+        </button>
+        <button onClick={() => store.returnToLanding()} style={productNavBtn} data-jourj="nav-weddings">Mes mariages</button>
+        <button onClick={() => store.startWeddingCreation()} style={productNavCta} data-jourj="nav-create">Créer</button>
+      </nav>
+      {searchOpen && <GlobalSearch onClose={() => setSearchOpen(false)} />}
+    </>
   );
 }
 
@@ -332,7 +361,7 @@ const storyPageStyle: React.CSSProperties = {
 
 const productNavStyle: React.CSSProperties = {
   position: 'sticky', top: 0, zIndex: 900,
-  display: 'flex', alignItems: 'center', gap: 8,
+  display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap',
   padding: '14px clamp(18px, 5vw, 64px)',
   background: '#08090b', borderBottom: '1px solid rgba(246,245,243,0.12)',
   color: '#f6f5f3',

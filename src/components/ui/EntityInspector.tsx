@@ -388,7 +388,7 @@ export function EntityInspector() {
             onClick={() => store.showPersonInMirror(person.id)}
             style={{ ...actionMainBtnStyle, background: 'transparent', color: BRAND_ACCENT, border: `1px solid ${BRAND_BORDER}`, marginBottom: 6 }}
           >
-            Voir dans Mirror →
+            Voir dans LE GRAND JOUR →
           </button>
         )}
 

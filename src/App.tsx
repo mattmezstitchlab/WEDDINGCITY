@@ -185,8 +185,11 @@ export default function App() {
         </Suspense>
       )}
 
-      {/* 2. Top Navigation Spatial Island (Worldmap mode) */}
-      {!weddingStore.showIdentityModal && !weddingStore.interiorMode && (
+      {/* 2. The 3D chrome. CONVERGENCE AUDIT: it used to be rendered under the
+             product page — invisible, but its buttons (WORLDMAP 3D, WORLD LAB)
+             still existed in the document. The World keeps its own tooling,
+             and that tooling now exists only while the World is on screen. */}
+      {weddingStore.projection === 'world' && !weddingStore.showIdentityModal && !weddingStore.interiorMode && (
         <TopNavigation
           onOpenImport={() => setIsImportOpen(true)}
           onOpenConflicts={() => setIsConflictsOpen(true)}
@@ -194,15 +197,15 @@ export default function App() {
       )}
 
       {/* 3. Interior HUD (When exploring inside a reconstructed venue) */}
-      {!weddingStore.showIdentityModal && weddingStore.interiorMode && (
+      {weddingStore.projection === 'world' && !weddingStore.showIdentityModal && weddingStore.interiorMode && (
         <InteriorHUD />
       )}
 
       {/* 4. Bottom Orchestrator Spatial Dock (Worldmap mode) */}
-      {!weddingStore.showIdentityModal && !weddingStore.interiorMode && <BottomOrchestrator />}
+      {weddingStore.projection === 'world' && !weddingStore.showIdentityModal && !weddingStore.interiorMode && <BottomOrchestrator />}
 
       {/* 5. Construction Toolbar (When in # CONSTRUIRE mode) */}
-      {!weddingStore.showIdentityModal && weddingStore.constructionMode && <ConstructionToolbar />}
+      {weddingStore.projection === 'world' && !weddingStore.showIdentityModal && weddingStore.constructionMode && <ConstructionToolbar />}
 
       {/* 6. Side Entity / Object Inspector Card */}
       {!weddingStore.showIdentityModal && <EntityInspector />}

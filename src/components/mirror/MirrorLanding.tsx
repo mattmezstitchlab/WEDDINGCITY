@@ -5,6 +5,7 @@ import { typography } from '../../design/tokens';
 import { GRAND_JOUR_HERO, DEMO_DAY, MOMENT_ASSETS } from '../../design/momentImagery';
 import { PRODUCT_NAME, PRODUCT_MARK, PRODUCT_TAGLINE } from '../../design/productIdentity';
 import { LandingFilm } from './timeline/LandingFilm';
+import { IntakeStudio } from './intake/IntakeStudio';
 import './landing.css';
 
 // ---------------------------------------------------------------------------
@@ -47,6 +48,12 @@ export function MirrorLanding() {
   const [projects, setProjects] = useState<ReturnType<typeof getStoredProjects>>([]);
   const [openMoment, setOpenMoment] = useState<number | null>(null);
   const [shifted, setShifted] = useState<{ from: number; delta: number } | null>(null);
+
+  // --- the hero is a tool ---------------------------------------------------
+  const [brief, setBrief] = useState('');
+  const [files, setFiles] = useState<File[]>([]);
+  const [type, setType] = useState('Mariage');
+  const [intakeOpen, setIntakeOpen] = useState(false);
 
   useEffect(() => { setProjects(getStoredProjects()); }, []);
 
@@ -112,18 +119,68 @@ export function MirrorLanding() {
             </p>
           )}
 
-          <div className="wc-gj-hero-actions">
-            <button onClick={create} className="wc-gj-cta" data-landing="hero-create">
-              Entrer dans le grand jour <span aria-hidden>→</span>
-            </button>
-            {projects.length > 0 && (
+          {/* ---- the tool: describe, or hand over the chaos ---- */}
+          <div className="wc-gj-tool" data-landing="tool">
+            <label className="wc-gj-tool-label" htmlFor="wc-brief">Que voulez-vous organiser ?</label>
+            <textarea
+              id="wc-brief"
+              value={brief}
+              onChange={(e) => setBrief(e.target.value)}
+              placeholder="« Nous nous marions le 18 juillet 2027 au Château de Vaux, cérémonie à 14h, cocktail à 17h, dîner à 20h, environ 120 invités. »"
+              className="wc-gj-tool-field"
+              rows={3}
+              data-landing="brief"
+            />
+            <div className="wc-gj-tool-row">
+              <label className="wc-gj-plus" data-landing="import-label">
+                <span aria-hidden>+</span> Importer mes documents
+                <input
+                  type="file"
+                  multiple
+                  onChange={(e) => setFiles([...files, ...Array.from(e.target.files ?? [])])}
+                  style={{ display: 'none' }}
+                  data-landing="files"
+                />
+              </label>
+              <span className="wc-gj-tool-hint">
+                {files.length === 0
+                  ? 'PDF, photos, captures, notes, CSV, contrats — tout est lu dans votre navigateur.'
+                  : `${files.length} fichier${files.length > 1 ? 's' : ''} : ${files.map((f) => f.name).join(', ')}`}
+              </span>
+            </div>
+
+            <div className="wc-gj-types" role="group" aria-label="Type de projet">
+              {['Mariage', 'Événement', 'Anniversaire', 'Fête', 'Corporate', 'Autre'].map((t) => (
+                <button
+                  key={t}
+                  onClick={() => setType(t)}
+                  className={`wc-gj-type${type === t ? ' is-active' : ''}`}
+                  aria-pressed={type === t}
+                  data-landing="type"
+                >
+                  {t}
+                </button>
+              ))}
+            </div>
+
+            <div className="wc-gj-hero-actions">
               <button
-                onClick={() => document.getElementById('mes-mariages')?.scrollIntoView({ behavior: 'smooth' })}
-                className="wc-gj-cta-ghost"
+                onClick={() => (brief.trim() || files.length > 0 ? setIntakeOpen(true) : create())}
+                className="wc-gj-cta"
+                data-landing="hero-create"
               >
-                Mes mariages
+                {brief.trim() || files.length > 0 ? 'Construire ma journée' : 'Entrer dans le grand jour'}
+                <span aria-hidden> →</span>
               </button>
-            )}
+              {projects.length > 0 && (
+                <button
+                  onClick={() => document.getElementById('mes-mariages')?.scrollIntoView({ behavior: 'smooth' })}
+                  className="wc-gj-cta-ghost"
+                >
+                  Mes mariages
+                </button>
+              )}
+            </div>
           </div>
         </div>
       </header>
@@ -219,6 +276,15 @@ export function MirrorLanding() {
           <span style={{ opacity: 0.6 }}>{PRODUCT_TAGLINE}</span>
         </div>
       </section>
+
+      {intakeOpen && (
+        <IntakeStudio
+          description={brief}
+          files={files}
+          projectType={type}
+          onClose={() => setIntakeOpen(false)}
+        />
+      )}
 
       {/* ---- a scene, opened from the film ---- */}
       {openMoment !== null && (

@@ -215,9 +215,14 @@ try {
   r.check(!/setProjection\('world'\)/.test(site) && !/setProjection\('world'\)/.test(nav),
     'nothing in the product sends the couple into the 3D World');
   r.check(!/<ProjectionSwitcher \/>/.test(app), 'and the projection capsule is gone from the surface');
-  r.check(/data-jourj="nav-jourj"/.test(site) && /data-jourj="nav-weddings"/.test(site)
-    && /data-jourj="nav-create"/.test(site),
-    'the whole navigation is three entries: Jour J, Mes mariages, Créer');
+  // PRODUCT DECISION (convergence pass): the navigation is the definitive one —
+  // the places of a wedding day, plus search, my weddings and create. Still one
+  // bar, still no sidebar, and still nothing that leads to a 3D world.
+  for (const tag of ['nav-today', 'nav-jourj', 'nav-people', 'nav-organisation',
+    'nav-music', 'nav-documents', 'nav-memories', 'nav-search', 'nav-weddings', 'nav-create']) {
+    r.check(site.includes(`data-jourj="${tag}"`) || site.includes(`tag: '${tag}'`),
+      `the navigation carries ${tag}`);
+  }
 
   const storeSrc = read('game', 'weddingStore.ts');
   r.check(/this\.projection = 'mirror';\s*\n\s*\/\/ Opening a wedding|Opening a wedding means opening its day/.test(storeSrc),
@@ -315,6 +320,89 @@ try {
     'a person shows a real portrait, or initials — never an invented face');
   r.check(/hub-person-links/.test(hubSrc),
     'and opening a person shows where they are in the day');
+
+  // -------------------------------------------------------------------------
+  console.log('\n[8/8] Convergence — one product, one vocabulary, one truth');
+  // -------------------------------------------------------------------------
+  const intakeSrc = read('game', 'projectIntake.ts');
+  const studioSrc2 = read('components', 'mirror', 'intake', 'IntakeStudio.tsx');
+  const searchSrc = read('components', 'mirror', 'GlobalSearch.tsx');
+  const orgSrc = read('components', 'mirror', 'organisation', 'OrganisationSection.tsx');
+  const seatSrc = read('components', 'mirror', 'organisation', 'SeatingPlan.tsx');
+  const appSrc = read('App.tsx');
+
+  // The word "Mirror" must not reach a user. Comments and file names may keep
+  // it; rendered strings may not.
+  const uiStrings = [
+    read('components', 'mirror', 'MirrorLanding.tsx'),
+    read('components', 'mirror', 'MirrorSite.tsx'),
+    read('components', 'mirror', 'timeline', 'TimelineStudio.tsx'),
+    read('components', 'mirror', 'timeline', 'MomentHub.tsx'),
+    read('components', 'canvas', 'CanvasCore.tsx'),
+    read('components', 'ui', 'EntityInspector.tsx'),
+  ].map((src) => src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, ''));
+  const visibleMirror = uiStrings.filter((src) => />[^<>{}]*\bMirror\b|'[^']*\bMirror\b[^']*'/.test(src));
+  r.check(visibleMirror.length === 0, 'no user-facing string says "Mirror" any more');
+  r.check(/projection === 'world' && !weddingStore\.showIdentityModal/.test(appSrc),
+    'the 3D chrome exists only while the World is on screen — no hidden World buttons');
+
+  // Intake: reading, never inventing.
+  const plan = (await harness.load('../game/projectIntake', 'intake1')).analyseIntake({
+    description: 'Nous nous marions le 18 juillet 2027 au Château de Vaux. Cérémonie à 14h, cocktail à 17h, dîner à 20h, environ 120 invités.',
+    sources: [
+      { fileName: 'liste-invites.csv', text: 'Nom;Prenom\nDupont;Marie\nMartin;Paul' },
+      { fileName: 'contrat.txt', text: 'Photographe : Studio Aubert\nTraiteur : Table & Feu\nMontant total : 8 400 €' },
+      { fileName: 'playlist.txt', text: 'Playlist\nPerfect — Ed Sheeran' },
+    ],
+  });
+  r.check(plan.weddingDate === '2027-07-18', 'the date written in a sentence is read', String(plan.weddingDate));
+  r.check(plan.locationName === 'Château de Vaux', 'so is the venue, exactly once', String(plan.locationName));
+  r.check(plan.guestCountTarget === 120, 'so is the number of guests', String(plan.guestCountTarget));
+  r.check(plan.moments.length === 3 && plan.moments.every((m) => m.confidence === 'estimated'),
+    'each hour becomes a moment, with its estimated end declared as estimated',
+    plan.moments.map((m) => `${m.label}:${m.confidence}`).join(' '));
+  r.check(plan.people.map((p) => p.name).join('|') === 'Dupont Marie|Martin Paul',
+    'a guest list is read, and its header row is not a person', plan.people.map((p) => p.name).join('|'));
+  r.check(plan.vendors.map((v) => v.name).join('|') === 'Studio Aubert|Table & Feu',
+    'vendors carry their company name, not their trade', plan.vendors.map((v) => v.name).join('|'));
+  r.check(plan.tracks.length === 1 && plan.tracks[0].artist === 'Ed Sheeran', 'a playlist is read');
+  r.check(plan.coupleNames === null && plan.questions.some((q) => /Qui se marie/.test(q)),
+    'the couple is never guessed — it is asked');
+  r.check(/disabled={!canGenerate}/.test(studioSrc2),
+    'and the day cannot be generated until that answer exists');
+  r.check(/Votre journée prend forme/.test(studioSrc2) && /data-intake="moment-toggle"/.test(studioSrc2),
+    'everything read is shown and can be dropped before anything is created');
+  r.check(!/fetch\(|http/.test(intakeSrc), 'the reading is local: no network call anywhere in it');
+
+  // The plan really builds the project, and nothing more.
+  const beforeIntake = { phases: store.phases.length, persons: store.persons.length };
+  const applied = store.applyIntakePlan({
+    ...plan,
+    coupleNames: 'ANNA & BORIS',
+    moments: plan.moments.map((m, i) => ({ ...m, keep: i < 2 })),
+  });
+  r.check(applied.phases === 2, 'only the moments kept are created', JSON.stringify(applied));
+  r.check(store.phases.length === beforeIntake.phases + 2, 'and they land in the same timeline');
+  r.check(store.persons.length === beforeIntake.persons + plan.people.length,
+    'the people read are created once');
+
+  // Universal search and the Lab read the same store.
+  const found = store.searchEverything('Marie');
+  r.check(found.some((f) => f.kind === 'person' && /Marie/.test(f.label)),
+    'the universal search finds a person', JSON.stringify(found[0] ?? null));
+  r.check(found.every((f) => typeof f.context === 'string' && f.context.length > 0),
+    'and every result carries its context');
+  r.check(/n’interroge pas le web/.test(searchSrc), 'and it says it does not search the web');
+
+  const findings = store.projectFindings();
+  r.check(Array.isArray(findings) && findings.length > 0, 'the Lab reports on the real project');
+  r.check(findings.every((f) => ['gap', 'conflict', 'ok'].includes(f.level)),
+    'with a level on every line, and no opinion');
+  r.check(!/fetch\(|openai|gpt/i.test(orgSrc), 'the Lab calls no external intelligence');
+
+  // Seating: the guest travels, the constraint speaks.
+  r.check(/data-org="carrying"/.test(seatSrc), 'in the seating plan the guest follows the pointer');
+  r.check(/est complète/.test(seatSrc), 'and a full table says so instead of refusing silently');
 
   un();
 } finally {

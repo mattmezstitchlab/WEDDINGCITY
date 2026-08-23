@@ -22,6 +22,7 @@ import {
   AdDisplaySlot,
 } from '../types/wedding';
 import { generateWorldFromDescription } from './worldEngine';
+import type { IntakePlan } from './projectIntake';
 import { DEFAULT_DMC_IDENTITY } from './dmcPalette';
 import { INITIAL_AD_SLOTS } from './advertisingEngine';
 import { weddingAudio } from './audio';
@@ -2354,6 +2355,298 @@ class WeddingStore {
     const media = this.media.filter((m) => m.ownerKind === 'event' && m.ownerId === phase.id);
     const place = this.places.find((p) => p.id === phase.primaryPlaceId) ?? null;
     return { phase, persons, vendors, tracks, tasks, media, place };
+  }
+
+  /**
+   * Turn a validated intake plan into the project itself.
+   *
+   * The plan comes from projectIntake (pure reading) AND from the corrections
+   * the user made on screen: only the items still marked `keep` are created.
+   * One mutation, one save — so the whole "chaos → journée" step is a single
+   * undo, and a reload gives back exactly this.
+   *
+   * It creates NOTHING that is not in the plan: no default moment, no filler
+   * guest, no invented venue.
+   */
+  public applyIntakePlan(plan: IntakePlan): {
+    phases: number; people: number; vendors: number; places: number; tracks: number;
+  } {
+    this.beginMutation('Construire la journée à partir des documents');
+    const out = { phases: 0, people: 0, vendors: 0, places: 0, tracks: 0 };
+
+    for (const place of plan.places.filter((x) => x.keep)) {
+      if (this.createPlaceSilently(place.name)) out.places++;
+    }
+
+    for (const moment of plan.moments.filter((m) => m.keep)) {
+      const duration = Math.max(0.25, moment.endHour - moment.startHour);
+      if (!this.canPlacePhase(moment.startHour, duration)) continue;
+      const phase: TimelinePhase = {
+        id: freshId('phase'),
+        startHour: moment.startHour,
+        endHour: moment.startHour + duration,
+        name: moment.label,
+        subtitle: '',
+        icon: 'moment',
+        primaryPlaceId: '',
+        highlightAction: '',
+        bgAtmosphere: atmosphereForHour(moment.startHour),
+        keyAgentIds: [], keyDocIds: [], keyTaskIds: [],
+        ambientTrack: 'prep',
+      };
+      this.phases.push(phase);
+      out.phases++;
+    }
+    this.phases.sort((a, b) => a.startHour - b.startHour);
+
+    for (const person of plan.people.filter((x) => x.keep)) {
+      if (this.intakePerson(person.name)) out.people++;
+    }
+    for (const vendor of plan.vendors.filter((x) => x.keep)) {
+      if (this.createVendorSilently(vendor.name)) out.vendors++;
+    }
+    for (const track of plan.tracks.filter((x) => x.keep)) {
+      if (this.createTrackSilently(track.title, track.artist)) out.tracks++;
+    }
+
+    if (plan.guestCountTarget && this.currentProject) {
+      this.currentProject = { ...this.currentProject, guestCountTarget: plan.guestCountTarget };
+      saveWeddingProject(this.currentProject);
+    }
+
+    this.ensureIdentityModel();
+    this.saveCurrentState();
+    this.notify();
+    return out;
+  }
+
+  /**
+   * Same shape as createPlace(), minus its own undo step: the whole intake is
+   * ONE mutation. Refuses a name that already exists, so re-reading the same
+   * documents never duplicates a venue.
+   */
+  private createPlaceSilently(name: string): Place | null {
+    const clean = name?.trim();
+    if (!clean) return null;
+    if (this.places.some((p) => p.name.toLowerCase() === clean.toLowerCase())) return null;
+    const index = this.places.length;
+    const angle = (index / 12) * Math.PI * 2;
+    const place: Place = {
+      id: freshId('place'),
+      name: clean,
+      code: clean.slice(0, 12).toUpperCase(),
+      kind: 'other',
+      zone: 'manoir',
+      pos: [Math.cos(angle) * 34, 0, Math.sin(angle) * 34],
+      gpsCoordinates: '',
+      capacity: 0,
+      currentPax: 0,
+      description: '',
+      icon: 'manoir',
+      themeColor: BRAND_ACCENT,
+      activeFromHour: 10,
+      activeToHour: 24,
+      connectedAgentIds: [],
+      connectedDocIds: [],
+      connectedTaskIds: [],
+    };
+    this.places.push(place);
+    return place;
+  }
+
+  /** Reuses the existing silent person factory, and refuses a duplicate name. */
+  private intakePerson(displayName: string): Person | null {
+    const clean = displayName?.trim();
+    if (!clean) return null;
+    if (this.persons.some((p) => p.displayName.toLowerCase() === clean.toLowerCase())) return null;
+    const at = new Date().toISOString();
+    const person = this.createPersonSilently(clean);
+    this.guests.push({
+      id: freshId('guest'),
+      projectId: this.currentProject.id,
+      personId: person.id,
+      rsvp: { status: 'pending', plusOnes: 0 },
+      seating: {},
+      side: 'both',
+      origin: 'manual',
+      createdAt: at, updatedAt: at,
+    });
+    return person;
+  }
+
+  private createVendorSilently(companyName: string): Vendor | null {
+    const clean = companyName?.trim();
+    if (!clean) return null;
+    if (this.vendors.some((v) => v.companyName.toLowerCase() === clean.toLowerCase())) return null;
+    const at = new Date().toISOString();
+    const vendor: Vendor = {
+      id: freshId('vendor'),
+      projectId: this.currentProject.id,
+      companyName: clean,
+      category: 'autre',
+      status: 'prospect',
+      documentIds: [], taskIds: [], placeIds: [],
+      origin: 'manual',
+      createdAt: at, updatedAt: at,
+    };
+    this.vendors.push(vendor);
+    return vendor;
+  }
+
+  private createTrackSilently(title: string, artist: string): TrackEntity | null {
+    const t = title?.trim();
+    if (!t) return null;
+    if (this.tracks.some((x) => x.title.toLowerCase() === t.toLowerCase())) return null;
+    const track: TrackEntity = {
+      id: freshId('trk'), title: t, artist: artist?.trim() || '—',
+      moment: 'soiree', status: 'pending', bpm: 0, energy: 3, duration: '',
+      suggestedBy: 'Import', votes: 0,
+    };
+    this.tracks.push(track);
+    return track;
+  }
+
+  /**
+   * UNIVERSAL SEARCH — one query, every kind of thing in the project.
+   *
+   * Reads only what exists: no ranking model, no fuzzy magic, no web. Each
+   * result says where it lives, so a person is a door into their context.
+   */
+  public searchEverything(query: string): {
+    kind: 'person' | 'moment' | 'place' | 'vendor' | 'track' | 'document' | 'task' | 'table';
+    id: string; label: string; context: string;
+  }[] {
+    const q = query.trim().toLowerCase();
+    if (q.length < 2) return [];
+    const hit = (s?: string) => Boolean(s && s.toLowerCase().includes(q));
+    const out: {
+      kind: 'person' | 'moment' | 'place' | 'vendor' | 'track' | 'document' | 'task' | 'table';
+      id: string; label: string; context: string;
+    }[] = [];
+    const clock = (h: number) => `${String(Math.floor(h) % 24).padStart(2, '0')}:${String(Math.round((h % 1) * 60)).padStart(2, '0')}`;
+
+    for (const p of this.persons) {
+      if (!hit(p.displayName) && !hit(p.email) && !hit(p.phone)) continue;
+      const moments = this.phases.filter((ph) => (ph.personIds ?? []).includes(p.id));
+      const guest = this.guests.find((g) => g.personId === p.id);
+      const table = guest?.seating.tableId
+        ? this.seatingTables.find((t) => t.id === guest.seating.tableId)?.label
+        : null;
+      out.push({
+        kind: 'person', id: p.id, label: p.displayName,
+        context: [
+          moments.length ? `${moments.length} moment${moments.length > 1 ? 's' : ''} : ${moments.map((m) => m.name).join(', ')}` : 'aucun moment',
+          table ? `table ${table}` : 'aucune table',
+        ].join(' · '),
+      });
+    }
+    for (const ph of this.phases) {
+      if (!hit(ph.name) && !hit(ph.subtitle)) continue;
+      out.push({ kind: 'moment', id: ph.id, label: ph.name, context: `${clock(ph.startHour)} → ${clock(ph.endHour)}` });
+    }
+    for (const pl of this.places) {
+      if (!hit(pl.name) && !hit(pl.address)) continue;
+      const used = this.phases.filter((ph) => ph.primaryPlaceId === pl.id);
+      out.push({ kind: 'place', id: pl.id, label: pl.name, context: used.length ? used.map((u) => u.name).join(', ') : 'aucun moment' });
+    }
+    for (const v of this.vendors) {
+      if (!hit(v.companyName) && !hit(v.email) && !hit(v.phone)) continue;
+      const covers = this.phases.filter((ph) => (ph.vendorIds ?? []).includes(v.id));
+      out.push({
+        kind: 'vendor', id: v.id, label: v.companyName,
+        context: covers.length
+          ? `${clock(covers[0].startHour)} → ${clock(covers[covers.length - 1].endHour)} · ${covers.map((c) => c.name).join(', ')}`
+          : 'aucun moment',
+      });
+    }
+    for (const t of this.tracks) {
+      if (!hit(t.title) && !hit(t.artist)) continue;
+      const phase = this.phases.find((ph) => ph.id === t.linkedPhaseId);
+      out.push({ kind: 'track', id: t.id, label: `${t.title} · ${t.artist}`, context: phase ? phase.name : 'hors programme' });
+    }
+    for (const m of this.media) {
+      if (!hit(m.title) && !hit(m.fileName)) continue;
+      const phase = m.ownerKind === 'event' ? this.phases.find((ph) => ph.id === m.ownerId) : null;
+      out.push({ kind: 'document', id: m.id, label: m.title || m.fileName || 'Document', context: phase ? phase.name : m.ownerKind });
+    }
+    for (const t of this.tasks) {
+      if (!hit(t.title)) continue;
+      const phase = this.phases.find((ph) => ph.id === t.phaseId);
+      out.push({ kind: 'task', id: t.id, label: t.title, context: phase ? phase.name : 'sans moment' });
+    }
+    for (const t of this.seatingTables) {
+      if (!hit(t.label)) continue;
+      const { seated, capacity } = this.getTableOccupancy(t.id);
+      out.push({ kind: 'table', id: t.id, label: t.label, context: `${seated}/${capacity} places` });
+    }
+    return out.slice(0, 40);
+  }
+
+  /**
+   * PROJECT INTELLIGENCE — what is missing, what contradicts itself.
+   *
+   * Deterministic reading of the real data. No model, no guess: every line is
+   * a fact about the project, with the number that produced it.
+   */
+  public projectFindings(): { level: 'gap' | 'conflict' | 'ok'; title: string; detail: string }[] {
+    const out: { level: 'gap' | 'conflict' | 'ok'; title: string; detail: string }[] = [];
+    const clock = (h: number) => `${String(Math.floor(h) % 24).padStart(2, '0')}:${String(Math.round((h % 1) * 60)).padStart(2, '0')}`;
+    const phases = [...this.phases].sort((a, b) => a.startHour - b.startHour);
+
+    if (phases.length === 0) {
+      out.push({ level: 'gap', title: 'La journée est vide', detail: 'Aucun moment n’est posé : la pellicule attend le premier.' });
+    }
+    for (let i = 0; i < phases.length - 1; i++) {
+      if (phases[i].endHour > phases[i + 1].startHour + 1e-6) {
+        out.push({
+          level: 'conflict',
+          title: `${phases[i].name} et ${phases[i + 1].name} se chevauchent`,
+          detail: `${clock(phases[i].startHour)}–${clock(phases[i].endHour)} contre ${clock(phases[i + 1].startHour)}–${clock(phases[i + 1].endHour)}.`,
+        });
+      }
+      const gap = phases[i + 1].startHour - phases[i].endHour;
+      if (gap > 2) {
+        out.push({
+          level: 'gap',
+          title: `${Math.round(gap * 10) / 10} h sans rien entre ${phases[i].name} et ${phases[i + 1].name}`,
+          detail: `De ${clock(phases[i].endHour)} à ${clock(phases[i + 1].startHour)}, aucun moment n’est prévu.`,
+        });
+      }
+    }
+    const noPlace = phases.filter((p) => !p.primaryPlaceId);
+    if (noPlace.length > 0) {
+      out.push({ level: 'gap', title: `${noPlace.length} moment(s) sans lieu`, detail: noPlace.map((p) => p.name).join(', ') });
+    }
+    const noPeople = phases.filter((p) => (p.personIds ?? []).length === 0);
+    if (phases.length > 0 && noPeople.length === phases.length) {
+      out.push({
+        level: 'gap',
+        title: 'Personne n’est rattaché à un moment',
+        detail: 'Les personnes existent peut-être, mais aucune n’est attendue à une heure précise.',
+      });
+    }
+    const unseated = this.guests.filter((g) => !g.seating.tableId);
+    if (this.seatingTables.length > 0 && unseated.length > 0) {
+      out.push({ level: 'gap', title: `${unseated.length} invité(s) sans table`, detail: 'Le plan de table n’est pas terminé.' });
+    }
+    for (const t of this.seatingTables) {
+      const { seated, capacity } = this.getTableOccupancy(t.id);
+      if (seated > capacity) {
+        out.push({ level: 'conflict', title: `${t.label} dépasse sa capacité`, detail: `${seated} personnes pour ${capacity} places.` });
+      }
+    }
+    const unattached = this.media.filter((m) => m.ownerKind === 'wedding');
+    if (unattached.length > 0) {
+      out.push({ level: 'gap', title: `${unattached.length} document(s) non rattaché(s)`, detail: 'Ils existent, mais aucun moment ne les porte.' });
+    }
+    const pending = this.tasks.filter((t) => !t.isDone);
+    if (pending.length > 0) {
+      out.push({ level: 'gap', title: `${pending.length} tâche(s) à faire`, detail: pending.slice(0, 3).map((t) => t.title).join(' · ') });
+    }
+    if (out.length === 0 && phases.length > 0) {
+      out.push({ level: 'ok', title: 'Rien à signaler', detail: 'Aucun chevauchement, aucun trou, aucun dépassement de capacité.' });
+    }
+    return out;
   }
 
   /**

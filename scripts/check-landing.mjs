@@ -87,8 +87,13 @@ try {
       .filter((b) => /Créer mon mariage|Entrer dans le grand jour/.test(b.textContent));
     r.check(ctas.length >= 3, `the way in appears in the nav, the hero and the closing (${ctas.length})`);
     const landingSrc = readFileSync(path.join(SRC, 'components', 'mirror', 'MirrorLanding.tsx'), 'utf8');
-    r.check((landingSrc.match(/onClick=\{create\}/g) || []).length >= 3,
-      'and they all call the same single handler');
+    // LOCATOR ADAPTED (convergence pass): the hero button now routes — with a
+    // brief or files it opens the intake, otherwise it calls the same single
+    // creation handler. The guarantee is unchanged and asserted directly: the
+    // page has exactly one creation entry point, `create`, and no second one.
+    r.check((landingSrc.match(/onClick=\{create\}/g) || []).length >= 2
+      && /: create\(\)/.test(landingSrc),
+      'and every way in ends on the same single handler');
     r.check(/store\.startWeddingCreation\(\)/.test(landingSrc),
       'which is the store\u2019s one creation entry point');
 
