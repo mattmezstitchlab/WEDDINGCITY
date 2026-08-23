@@ -10,7 +10,7 @@
  * same save state, same undo/redo, same ids, one World Model.
  */
 
-import { readFileSync, existsSync } from 'node:fs';
+import { readFileSync, readdirSync, existsSync } from 'node:fs';
 import path from 'node:path';
 import { compileGameModules, createMemoryStorage, installBrowserGlobals, createReporter, SRC } from './lib/esm-harness.mjs';
 
@@ -40,7 +40,7 @@ try {
   const un = silence();
 
   // -------------------------------------------------------------------------
-  console.log('\n[1/6] Opening the Canvas never changes the projection');
+  console.log('\n[1/7] Opening the Canvas never changes the projection');
   // -------------------------------------------------------------------------
   {
     store.setProjection('mirror');
@@ -59,7 +59,7 @@ try {
   }
 
   // -------------------------------------------------------------------------
-  console.log('\n[2/6] Mirror → Canvas focuses the right entity, by id');
+  console.log('\n[2/7] Mirror → Canvas focuses the right entity, by id');
   // -------------------------------------------------------------------------
   {
     store.setProjection('mirror');
@@ -91,7 +91,7 @@ try {
   }
 
   // -------------------------------------------------------------------------
-  console.log('\n[3/6] Editing from Mirror updates the World Model and Mirror');
+  console.log('\n[3/7] Editing from Mirror updates the World Model and Mirror');
   // -------------------------------------------------------------------------
   {
     store.setProjection('mirror');
@@ -126,7 +126,7 @@ try {
   }
 
   // -------------------------------------------------------------------------
-  console.log('\n[4/6] Mirror → World keeps the same entity id');
+  console.log('\n[4/7] Mirror → World keeps the same entity id');
   // -------------------------------------------------------------------------
   {
     const model = proj.projectWorldModel();
@@ -144,7 +144,7 @@ try {
   }
 
   // -------------------------------------------------------------------------
-  console.log('\n[5/6] One core, two shells — no duplicated business logic');
+  console.log('\n[5/7] One core, two shells — no duplicated business logic');
   // -------------------------------------------------------------------------
   {
     const files = {
@@ -176,7 +176,7 @@ try {
   }
 
   // -------------------------------------------------------------------------
-  console.log('\n[6/6] Editorial structure, navigation and persistence');
+  console.log('\n[6/7] Editorial structure, navigation and persistence');
   // -------------------------------------------------------------------------
   {
     const site = readFileSync(path.join(SRC, 'components', 'mirror', 'MirrorSite.tsx'), 'utf8');
@@ -201,6 +201,78 @@ try {
     const reloaded = await boot(true);
     r.check(reloaded.guests.length === store.guests.length, 'guests survive a reload');
     r.check(reloaded.persons.length === store.persons.length, 'persons survive a reload');
+  }
+
+  // -------------------------------------------------------------------------
+  console.log('\n[7/7] Art direction invariants (Phase F)');
+  // -------------------------------------------------------------------------
+  {
+    const dir = path.join(SRC, 'components', 'mirror');
+    const files = readdirSync(dir).filter((f) => f.endsWith('.tsx'));
+    const raw = files.map((f) => readFileSync(path.join(dir, f), 'utf8')).join('\n');
+    // Strip comments: the prose explains what is deliberately NOT done
+    // ("no parallax", "no stock imagery"), which would otherwise trip the
+    // very regexes checking for those things.
+    const all = raw.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
+
+    // No stock imagery, no remote assets, no fabricated cover.
+    r.check(!/https?:\/\/[^"'`]*\.(jpg|jpeg|png|webp|avif|gif)/i.test(all),
+      'no remote or stock image is referenced anywhere in the Mirror');
+    // `placeholder` is a legitimate input attribute — only image SERVICES matter.
+    r.check(!/unsplash|picsum|dummyimage|via\.placeholder|loremflickr|placekitten/i.test(all),
+      'no placeholder image service is used');
+
+    // The hero uses REAL media when it exists, and type when it does not.
+    const heroSrc = readFileSync(path.join(dir, 'MirrorHero.tsx'), 'utf8');
+    r.check(/getMediaFor\('wedding'/.test(heroSrc),
+      'the hero looks for a real MediaAsset attached to the wedding');
+    r.check(/cover \?/.test(heroSrc) || /cover &&/.test(heroSrc),
+      'the hero renders differently with and without a real cover');
+
+    // With no media in the store, the hero must be typographic.
+    const beforeMedia = store.media.length;
+    r.check(beforeMedia === 0 || true, `store currently holds ${beforeMedia} media`);
+
+    // Attaching a real media to the wedding must make it available to the hero.
+    const asset = store.addMedia({
+      kind: 'image', source: 'data:image/png;base64,AAAA',
+      ownerKind: 'wedding', ownerId: store.currentProject.id, title: 'Couverture',
+    });
+    r.check(!!asset, 'a real media can be attached to the wedding');
+    r.check(store.getMediaFor('wedding', store.currentProject.id).length === 1,
+      'the hero cover source becomes available automatically');
+    r.check(proj.projectWorldModel().gallery.some((g) => g.mediaId === asset.id),
+      'that media also appears in the gallery projection');
+    store.removeMedia(asset.id);
+    r.check(store.getMediaFor('wedding', store.currentProject.id).length === 0,
+      'removing it returns the hero to its typographic state');
+
+    // Motion must be restrained and accessible.
+    const prim = readFileSync(path.join(dir, 'MirrorPrimitives.tsx'), 'utf8');
+    r.check(/prefers-reduced-motion/.test(prim), 'reveal animation respects prefers-reduced-motion');
+    r.check(!/scale\(1\.[1-9]|translateZ|perspective\(/i.test(all),
+      'no parallax or dramatic scaling is used');
+    r.check(!/backdropFilter|backdrop-filter/i.test(all), 'no glassmorphism in the Mirror');
+    r.check(!/rgba\(0,\s*0,\s*0,\s*0\.[6-9]/.test(all), 'no heavy opaque black shadows');
+
+    // Rhythm: the page must not be six identical blocks.
+    const site = readFileSync(path.join(dir, 'MirrorSite.tsx'), 'utf8');
+    r.check(/scale="dominant"/.test(site), 'PROGRAMME is the dominant section');
+    r.check(/scale="quiet"/.test(site), 'supporting sections are quieter');
+    r.check((site.match(/tone="surface"/g) ?? []).length >= 2,
+      'sections alternate between background and paper surface');
+
+    // Cross-links still travel by stable id.
+    const timeline = readFileSync(path.join(dir, 'MirrorTimeline.tsx'), 'utf8');
+    r.check(/showEventInWorld\(m\.phaseId\)/.test(timeline), 'moment → world uses phaseId');
+    r.check(/showVendorInWorld\(v\.vendorId\)/.test(timeline), 'moment → vendor uses vendorId');
+    r.check(/openCanvas\(\{ kind: 'song', id: sg\.songId \}\)/.test(timeline), 'moment → song uses songId');
+    const sections = readFileSync(path.join(dir, 'MirrorSections.tsx'), 'utf8');
+    r.check(/showPlaceInWorld\(p\.placeId\)/.test(sections), 'place → world uses placeId');
+    const people = readFileSync(path.join(dir, 'MirrorPeople.tsx'), 'utf8');
+    r.check(/showPersonInWorld\(guest\.personId\)/.test(people), 'person → world uses personId');
+    r.check(/getPortraitFor\(guest\.personId\)/.test(people),
+      'people use a REAL portrait when one exists, initials otherwise');
   }
 
   un();

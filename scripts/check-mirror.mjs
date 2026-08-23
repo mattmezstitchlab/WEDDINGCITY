@@ -11,7 +11,7 @@
  *   World → exactly the same person.
  */
 
-import { readFileSync, existsSync } from 'node:fs';
+import { readFileSync, readdirSync, existsSync } from 'node:fs';
 import path from 'node:path';
 import { compileGameModules, createMemoryStorage, installBrowserGlobals, createReporter, SRC } from './lib/esm-harness.mjs';
 
@@ -76,7 +76,14 @@ try {
   r.check(gallery && gallery.available === false && !!gallery.reason,
     'the gallery section is declared unavailable, with a reason');
 
-  const mirrorSrc = readFileSync(path.join(SRC, 'components', 'mirror', 'MirrorSite.tsx'), 'utf8');
+  // Phase F split the Mirror into a spine + section modules. The guarantees
+  // below are properties of the WHOLE editorial surface, so they are checked
+  // across every file in components/mirror rather than a single monolith.
+  const mirrorDir = path.join(SRC, 'components', 'mirror');
+  const mirrorSrc = readdirSync(mirrorDir)
+    .filter((f) => f.endsWith('.tsx'))
+    .map((f) => readFileSync(path.join(mirrorDir, f), 'utf8'))
+    .join('\n/* --- next mirror module --- */\n');
   r.check(/EmptyState/.test(mirrorSrc), 'Mirror renders honest empty states');
   r.check(!/https?:\/\/[^"']*\.(jpg|png|webp)/i.test(mirrorSrc),
     'Mirror embeds no stock or placeholder imagery');

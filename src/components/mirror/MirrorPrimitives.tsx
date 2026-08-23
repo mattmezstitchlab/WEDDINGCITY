@@ -1,4 +1,4 @@
-import { CSSProperties } from 'react';
+import { CSSProperties, useEffect, useRef, useState } from 'react';
 import { radius, surfaces, typography, shadowFor, dmcDotStyle } from '../../design/tokens';
 
 // ---------------------------------------------------------------------------
@@ -32,7 +32,7 @@ export function Eyebrow({ children }: { children: React.ReactNode }) {
 }
 
 export function SectionShell({
-  id, index, eyebrow, title, lead, children, tone = 'bg', action,
+  id, index, eyebrow, title, lead, children, tone = 'bg', action, scale = 'normal',
 }: {
   id: string;
   /** Editorial section number, e.g. "01". Gives the page a real spine. */
@@ -43,15 +43,24 @@ export function SectionShell({
   children?: React.ReactNode;
   tone?: 'bg' | 'surface';
   action?: React.ReactNode;
+  /** Editorial weight. Drives vertical air and title scale. */
+  scale?: 'dominant' | 'normal' | 'quiet';
 }) {
   return (
     <section
       id={`mirror-${id}`}
       style={{
         background: tone === 'surface' ? M.surface : 'transparent',
-        padding: `${fluid(64, 128)} ${fluid(20, 72)}`,
-        borderTop: `1px solid ${M.line}`,
-        scrollMarginTop: 72,
+        // Rhythm, not uniformity: a dominant section breathes more than a
+        // supporting one, so the page reads as a composition rather than a
+        // stack of identical blocks.
+        padding: scale === 'dominant'
+          ? `${fluid(96, 200)} ${fluid(20, 72)}`
+          : scale === 'quiet'
+            ? `${fluid(52, 96)} ${fluid(20, 72)}`
+            : `${fluid(72, 148)} ${fluid(20, 72)}`,
+        borderTop: tone === 'surface' ? 'none' : `1px solid ${M.line}`,
+        scrollMarginTop: 68,
       }}
     >
       <div style={{ maxWidth: 1080, margin: '0 auto' }}>
@@ -73,8 +82,8 @@ export function SectionShell({
           <h2
             style={{
               margin: '14px 0 0',
-              fontSize: fluid(34, 72),
-              lineHeight: 0.98,
+              fontSize: scale === 'dominant' ? fluid(42, 104) : scale === 'quiet' ? fluid(28, 52) : fluid(34, 72),
+              lineHeight: 0.94,
               fontWeight: typography.weight.semibold,
               letterSpacing: '-0.03em',
               color: M.textPrimary,
@@ -86,9 +95,9 @@ export function SectionShell({
         {lead && (
           <p
             style={{
-              margin: '16px 0 0',
-              maxWidth: 620,
-              fontSize: fluid(14, 17),
+              margin: `${fluid(18, 26)}px 0 0`,
+              maxWidth: 560,
+              fontSize: fluid(14, 18),
               lineHeight: typography.leading.relaxed,
               color: M.textSecondary,
             }}
@@ -200,3 +209,90 @@ export const quietLink: CSSProperties = {
   color: M.textPrimary,
   textAlign: 'left',
 };
+
+
+/**
+ * Reveal on scroll — deliberately restrained.
+ *
+ * A short fade with a few pixels of rise. No parallax, no scale, no spring:
+ * the brief asks for editorial calm, and motion here exists only to make the
+ * page feel composed as you descend, never to perform.
+ *
+ * Respects prefers-reduced-motion, and degrades to visible if the observer is
+ * unavailable — content must never depend on animation to be readable.
+ */
+export function Reveal({
+  children, delay = 0, as = 'div',
+}: {
+  children: React.ReactNode;
+  delay?: number;
+  as?: 'div' | 'li' | 'section';
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [shown, setShown] = useState(false);
+
+  useEffect(() => {
+    const reduced = typeof window !== 'undefined'
+      && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    if (reduced || typeof IntersectionObserver === 'undefined') { setShown(true); return; }
+    const el = ref.current;
+    if (!el) { setShown(true); return; }
+    const io = new IntersectionObserver(
+      (entries) => { if (entries[0].isIntersecting) { setShown(true); io.disconnect(); } },
+      { rootMargin: '0px 0px -8% 0px', threshold: 0.06 },
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, []);
+
+  const Tag = as as 'div';
+  return (
+    <Tag
+      ref={ref}
+      style={{
+        opacity: shown ? 1 : 0,
+        transform: shown ? 'none' : 'translateY(14px)',
+        transition: `opacity 620ms cubic-bezier(.22,.61,.36,1) ${delay}ms, transform 620ms cubic-bezier(.22,.61,.36,1) ${delay}ms`,
+        willChange: shown ? 'auto' : 'opacity, transform',
+      }}
+    >
+      {children}
+    </Tag>
+  );
+}
+
+/** A hairline rule with optional label — the editorial separator of the site. */
+export function Rule({ label }: { label?: string }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 14, width: '100%' }}>
+      {label && (
+        <span style={{
+          fontSize: typography.size.micro, letterSpacing: '0.16em',
+          textTransform: 'uppercase', color: M.textMuted, fontWeight: 700, whiteSpace: 'nowrap',
+        }}>
+          {label}
+        </span>
+      )}
+      <span style={{ flex: 1, height: 1, background: M.line }} />
+    </div>
+  );
+}
+
+/** Secondary metadata line: present, quiet, never competing with the title. */
+export function MetaLine({ items }: { items: (string | null | undefined)[] }) {
+  const real = items.filter((i): i is string => Boolean(i && i.trim()));
+  if (real.length === 0) return null;
+  return (
+    <div style={{
+      display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap',
+      fontSize: typography.size.caption, color: M.textMuted,
+    }}>
+      {real.map((item, i) => (
+        <span key={i} style={{ display: 'inline-flex', alignItems: 'center', gap: 10 }}>
+          {i > 0 && <span style={{ width: 2, height: 2, borderRadius: 999, background: M.textMuted, opacity: 0.7 }} />}
+          {item}
+        </span>
+      ))}
+    </div>
+  );
+}
