@@ -101,10 +101,12 @@ export interface ProgrammeMoment {
   placeName: string | null;
   /** True when the simulated clock is inside this phase. */
   isCurrent: boolean;
+  notes: string | null;
   /** Real people mobilised by this phase. */
   keyPersonIds: string[];
   /** Vendors intervening at this moment's place. Derived, never stored twice. */
-  vendors: { vendorId: string; companyName: string; category: string }[];
+  /** `explicit` = attached by the user, vs derived from the place. */
+  vendors: { vendorId: string; companyName: string; category: string; explicit: boolean }[];
   /** Tracks whose moment resolves to this phase. */
   songs: { songId: string; title: string; artist: string; duration: string }[];
   media: MediaProjection[];
@@ -138,11 +140,19 @@ export function projectProgramme(): ProgrammeProjection {
         .map((agentId) => weddingStore.getPersonForAgent(agentId)?.id)
         .filter((id): id is string => Boolean(id));
 
-      const vendors = place
-        ? weddingStore.getVendorsForPlace(place.id).map((v) => ({
-            vendorId: v.id, companyName: v.companyName, category: v.category,
-          }))
-        : [];
+      // Vendors explicitly attached in the Canvas, PLUS those derived from the
+      // moment's place. Explicit links win and are marked, so the Canvas can
+      // offer to detach only what the user actually attached.
+      const explicitIds = ph.vendorIds ?? [];
+      const derived = place ? weddingStore.getVendorsForPlace(place.id) : [];
+      const seen = new Set<string>();
+      const vendors = [
+        ...explicitIds
+          .map((id) => weddingStore.vendors.find((v) => v.id === id))
+          .filter((v): v is NonNullable<typeof v> => Boolean(v))
+          .map((v) => ({ vendorId: v.id, companyName: v.companyName, category: v.category, explicit: true })),
+        ...derived.map((v) => ({ vendorId: v.id, companyName: v.companyName, category: v.category, explicit: false })),
+      ].filter((v) => (seen.has(v.vendorId) ? false : (seen.add(v.vendorId), true)));
       const songs = weddingStore.getTracksForPhase(ph.id).map((t) => ({
         songId: t.id, title: t.title, artist: t.artist, duration: t.duration,
       }));
@@ -159,6 +169,7 @@ export function projectProgramme(): ProgrammeProjection {
         placeId: place?.id ?? null,
         placeName: place?.name ?? null,
         isCurrent: now >= ph.startHour && now < ph.endHour,
+        notes: ph.notes ?? null,
         keyPersonIds,
         vendors,
         songs,

@@ -143,10 +143,11 @@ export function setActiveProjectId(projectId: string): void {
 
 // ---------------- FULL WEDDING STATE PERSISTENCE ----------------
 
+/** Returns whether the write actually reached storage — never assumed. */
 export function savePersistedState(
   projectId: string,
   state: Omit<PersistedWeddingState, 'savedAt' | 'schemaVersion'>,
-): void {
+): boolean {
   try {
     const payload: PersistedWeddingState = {
       ...state,
@@ -154,11 +155,13 @@ export function savePersistedState(
       savedAt: new Date().toISOString(),
     };
     localStorage.setItem(`${PROJECT_STATE_PREFIX}${projectId}`, JSON.stringify(payload));
+    return true;
   } catch (err) {
     // Storage failures (quota exceeded, private mode, corrupted profile) used
     // to vanish into an empty catch. Surface them so the System Nerve can
     // report "data not persisted" instead of the user losing work silently.
     reportStorageFailure('save', projectId, err);
+    return false;
   }
 }
 

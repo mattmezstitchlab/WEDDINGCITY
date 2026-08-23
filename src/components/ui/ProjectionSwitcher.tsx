@@ -10,8 +10,8 @@ import { radius, typography, surfaces, shadowFor, BRAND_ACCENT } from '../../des
 // ---------------------------------------------------------------------------
 
 const PROJECTIONS = [
-  { id: 'world' as const, label: 'World', hint: 'Projection spatiale' },
-  { id: 'mirror' as const, label: 'Mirror', hint: 'Projection éditoriale' },
+  { id: 'world' as const, label: 'World', hint: 'Projection spatiale — explorer' },
+  { id: 'mirror' as const, label: 'Mirror', hint: 'Projection éditoriale — présenter' },
 ];
 
 export function ProjectionSwitcher() {
@@ -71,6 +71,26 @@ export function ProjectionSwitcher() {
           </button>
         );
       })}
+
+      {/* Canvas is a MODE, not a third page: it composes on top of whichever
+          projection is open, so it toggles rather than switching. */}
+      <button
+        role="tab"
+        aria-selected={weddingStore.canvasOpen}
+        title="Canvas — composer"
+        onClick={() => (weddingStore.canvasOpen ? weddingStore.closeCanvas() : weddingStore.openCanvas())}
+        style={{
+          appearance: 'none', cursor: 'pointer', border: 'none',
+          borderRadius: radius.pill, padding: '7px 16px',
+          fontFamily: typography.family.sans, fontSize: typography.size.caption,
+          fontWeight: typography.weight.semibold, letterSpacing: '0.06em',
+          textTransform: 'uppercase', transition: 'background 180ms ease, color 180ms ease',
+          background: weddingStore.canvasOpen ? (onLight ? S.textPrimary : BRAND_ACCENT) : 'transparent',
+          color: weddingStore.canvasOpen ? (onLight ? S.surface : '#08090d') : S.textSecondary,
+        }}
+      >
+        Canvas
+      </button>
     </div>
   );
 }

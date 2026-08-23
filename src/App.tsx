@@ -14,6 +14,7 @@ import { InteriorHUD } from './components/ui/InteriorHUD';
 // Heavy, on-demand surfaces are code-split: they are only fetched when the
 // user actually opens them. Each is rendered conditionally so the chunk is not
 // requested at startup.
+const CanvasSurface = lazy(() => import('./components/canvas/CanvasSurface').then((m) => ({ default: m.CanvasSurface })));
 const MirrorSite = lazy(() => import('./components/mirror/MirrorSite').then((m) => ({ default: m.MirrorSite })));
 const GuestConstellation = lazy(() => import('./components/ui/GuestConstellation').then((m) => ({ default: m.GuestConstellation })));
 const SystemNerveCenterModal = lazy(() => import('./components/ui/SystemNerveCenterModal').then((m) => ({ default: m.SystemNerveCenterModal })));
@@ -85,6 +86,9 @@ export default function App() {
         weddingStore.setDjBoothOpen(!weddingStore.djBoothModalOpen);
       } else if (e.code === 'KeyM' && e.shiftKey) {
         weddingStore.setProjection(weddingStore.projection === 'mirror' ? 'world' : 'mirror');
+      } else if (e.code === 'KeyK' && !weddingStore.showIdentityModal) {
+        if (weddingStore.canvasOpen) weddingStore.closeCanvas();
+        else weddingStore.openCanvas();
       } else if (e.code === 'KeyG' && !weddingStore.showIdentityModal) {
         // Phase B prototype surface. Deliberately a shortcut rather than a new
         // navigation entry: the permanent chrome is out of scope for now.
@@ -108,6 +112,14 @@ export default function App() {
 
       {/* Dimension selector: one World Model, several projections. */}
       <ProjectionSwitcher />
+
+      {/* CANVAS — the composition projection. A contextual side surface, not a
+          page: the World stays visible behind it so context is never lost. */}
+      {weddingStore.canvasOpen && (
+        <Suspense fallback={null}>
+          <CanvasSurface />
+        </Suspense>
+      )}
 
       {/* MIRROR — the editorial projection. Covers the world surface while
           active; the underlying world state is untouched. */}

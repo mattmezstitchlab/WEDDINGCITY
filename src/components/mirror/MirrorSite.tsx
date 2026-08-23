@@ -422,17 +422,26 @@ function GuestRow({
             </dl>
 
             {/* MIRROR → WORLD, by personId. */}
-            <button
-              style={showInWorldStyle}
-              onClick={() => {
-                const ok = weddingStore.showPersonInWorld(guest.personId);
-                if (!ok) setNotice('Cette personne n’a pas de représentation dans le monde.');
-              }}
-              disabled={!guest.canShowInWorld}
-              title={guest.canShowInWorld ? undefined : 'Aucune projection spatiale pour cette personne'}
-            >
-              Voir dans le Monde →
-            </button>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              <button
+                style={showInWorldStyle}
+                onClick={() => {
+                  const ok = weddingStore.showPersonInWorld(guest.personId);
+                  if (!ok) setNotice('Cette personne n’a pas de représentation dans le monde.');
+                }}
+                disabled={!guest.canShowInWorld}
+                title={guest.canShowInWorld ? undefined : 'Aucune projection spatiale pour cette personne'}
+              >
+                Voir dans le Monde →
+              </button>
+              {/* MIRROR → CANVAS, focused on this exact person. */}
+              <button
+                style={{ ...showInWorldStyle, background: 'transparent', color: M.textPrimary, border: `1px solid ${M.lineStrong}` }}
+                onClick={() => weddingStore.openCanvas({ kind: 'person', id: guest.personId })}
+              >
+                Modifier
+              </button>
+            </div>
             {notice && <div style={{ marginTop: 8, fontSize: 11, color: M.textMuted }}>{notice}</div>}
           </div>
         )}
@@ -500,11 +509,19 @@ function VendorCard({ vendor }: { vendor: VendorProjection }) {
 
       {vendor.notes && <p style={{ margin: 0, fontSize: typography.size.caption, color: M.textSecondary }}>{vendor.notes}</p>}
 
-      {vendor.canShowInWorld && (
-        <button style={{ ...showInWorldStyle, alignSelf: 'flex-start' }} onClick={() => store.showVendorInWorld(vendor.vendorId)}>
-          Voir dans le Monde →
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+        {vendor.canShowInWorld && (
+          <button style={showInWorldStyle} onClick={() => store.showVendorInWorld(vendor.vendorId)}>
+            Voir dans le Monde →
+          </button>
+        )}
+        <button
+          style={{ ...showInWorldStyle, background: 'transparent', color: M.textPrimary, border: `1px solid ${M.lineStrong}` }}
+          onClick={() => store.openCanvas({ kind: 'vendor', id: vendor.vendorId })}
+        >
+          Modifier
         </button>
-      )}
+      </div>
     </article>
   );
 }

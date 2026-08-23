@@ -1559,6 +1559,14 @@ class WeddingStore {
   /** Entity the user arrived on when crossing from another projection. */
   public mirrorFocusPersonId: string | null = null;
 
+  /** Real persistence state, surfaced by the Canvas. Never optimistic. */
+  public saveState: 'idle' | 'saving' | 'saved' | 'error' = 'idle';
+  public lastSavedAt: string | null = null;
+
+  // Canvas context: what the user is currently composing.
+  public canvasOpen: boolean = false;
+  public canvasFocus: { kind: 'event' | 'person' | 'vendor' | 'place' | 'song'; id: string } | null = null;
+
   // Real World -> 3D World / Interior State
   public interiorMode: boolean = false;
   public activeVenueId: string | null = null;
@@ -1692,6 +1700,357 @@ class WeddingStore {
     } catch (error) {
       reportDiagnostic({ source: 'store', severity: 'error', code: 'store_persist_failed', error });
     }
+  }
+
+  // =========================================================================
+  // CANVAS MUTATIONS
+  //
+  // Every one of these VALIDATES before touching the store, returns a
+  // structured outcome, and persists. A projection never writes its own copy.
+  // =========================================================================
+
+  public openCanvas(focus?: { kind: 'event' | 'person' | 'vendor' | 'place' | 'song'; id: string }): void {
+    this.canvasOpen = true;
+    this.projection = 'world';
+    if (focus) this.canvasFocus = focus;
+    this.notify();
+  }
+
+  public closeCanvas(): void {
+    this.canvasOpen = false;
+    this.notify();
+  }
+
+  public setCanvasFocus(focus: { kind: 'event' | 'person' | 'vendor' | 'place' | 'song'; id: string } | null): void {
+    this.canvasFocus = focus;
+    this.notify();
+  }
+
+  // --- D2: moments ---------------------------------------------------------
+
+  public setPhaseTitle(phaseId: string, name: string): boolean {
+    const phase = this.phases.find((p) => p.id === phaseId);
+    if (!phase || !name.trim()) return false;
+    this.beginMutation('Renommer le moment');
+    phase.name = name.trim();
+    this.saveCurrentState();
+    this.notify();
+    return true;
+  }
+
+  public setPhaseNotes(phaseId: string, notes: string): boolean {
+    const phase = this.phases.find((p) => p.id === phaseId);
+    if (!phase) return false;
+    this.beginMutation('Note du moment');
+    phase.notes = notes.trim() || undefined;
+    this.saveCurrentState();
+    this.notify();
+    return true;
+  }
+
+  /** Move a moment in time. Refuses an inverted or out-of-day window. */
+  public setPhaseTime(phaseId: string, startHour: number, endHour?: number): boolean {
+    const phase = this.phases.find((p) => p.id === phaseId);
+    if (!phase) return false;
+    const duration = endHour !== undefined ? endHour - startHour : phase.endHour - phase.startHour;
+    if (!Number.isFinite(startHour) || duration <= 0) return false;
+    if (startHour < 0 || startHour + duration > 30) return false;
+    this.beginMutation('Déplacer le moment');
+    phase.startHour = startHour;
+    phase.endHour = startHour + duration;
+    this.saveCurrentState();
+    this.notify();
+    return true;
+  }
+
+  /** Attach a moment to a place. `null` detaches. */
+  public setPhasePlace(phaseId: string, placeId: string | null): boolean {
+    const phase = this.phases.find((p) => p.id === phaseId);
+    if (!phase) return false;
+    if (placeId !== null && !this.places.some((p) => p.id === placeId)) return false;
+    this.beginMutation('Changer le lieu du moment');
+    phase.primaryPlaceId = placeId ?? '';
+    this.saveCurrentState();
+    this.notify();
+    return true;
+  }
+
+  public attachVendorToPhase(phaseId: string, vendorId: string): boolean {
+    const phase = this.phases.find((p) => p.id === phaseId);
+    const vendor = this.vendors.find((v) => v.id === vendorId);
+    if (!phase || !vendor) return false;
+    const current = phase.vendorIds ?? [];
+    if (current.includes(vendorId)) return true;
+    this.beginMutation('Associer un prestataire');
+    phase.vendorIds = [...current, vendorId];
+    this.saveCurrentState();
+    this.notify();
+    return true;
+  }
+
+  public detachVendorFromPhase(phaseId: string, vendorId: string): boolean {
+    const phase = this.phases.find((p) => p.id === phaseId);
+    if (!phase?.vendorIds?.includes(vendorId)) return false;
+    this.beginMutation('Retirer un prestataire');
+    phase.vendorIds = phase.vendorIds.filter((id) => id !== vendorId);
+    this.saveCurrentState();
+    this.notify();
+    return true;
+  }
+
+  // --- D3: people ----------------------------------------------------------
+
+  /**
+   * Create a real Person, optionally with its Guest facet.
+   * Returns the person, or null when the input is invalid.
+   */
+  public createPerson(input: {
+    displayName: string;
+    givenName?: string;
+    familyName?: string;
+    email?: string;
+    phone?: string;
+    notes?: string;
+    asGuest?: boolean;
+    rsvp?: RsvpStatus;
+    dietary?: string;
+    side?: Guest['side'];
+    tableId?: string | null;
+  }): Person | null {
+    const name = input.displayName?.trim();
+    if (!name) return null;
+    if (input.tableId && !this.seatingTables.some((t) => t.id === input.tableId)) return null;
+
+    this.beginMutation('Créer une personne');
+    const at = new Date().toISOString();
+    const person: Person = {
+      id: freshId('person'),
+      displayName: name,
+      givenName: input.givenName?.trim() || undefined,
+      familyName: input.familyName?.trim() || undefined,
+      email: input.email?.trim() || undefined,
+      phone: input.phone?.trim() || undefined,
+      notes: input.notes?.trim() || undefined,
+      origin: 'manual',
+      createdAt: at,
+      updatedAt: at,
+    };
+    this.persons.push(person);
+
+    if (input.asGuest !== false) {
+      const guest: Guest = {
+        id: guestIdForPerson(person.id),
+        projectId: this.currentProject.id,
+        personId: person.id,
+        rsvp: { status: input.rsvp ?? 'pending', plusOnes: 0 },
+        seating: { tableId: input.tableId ?? undefined },
+        dietary: input.dietary?.trim() || undefined,
+        side: input.side ?? 'unknown',
+        origin: 'manual',
+        createdAt: at,
+        updatedAt: at,
+      };
+      this.guests.push(guest);
+    }
+
+    this.saveCurrentState();
+    this.notify();
+    return person;
+  }
+
+  public updatePerson(personId: string, patch: {
+    displayName?: string; givenName?: string; familyName?: string;
+    email?: string; phone?: string; notes?: string;
+  }): boolean {
+    const person = this.persons.find((p) => p.id === personId);
+    if (!person) return false;
+    if (patch.displayName !== undefined && !patch.displayName.trim()) return false;
+    this.beginMutation('Modifier une personne');
+    if (patch.displayName !== undefined) person.displayName = patch.displayName.trim();
+    if (patch.givenName !== undefined) person.givenName = patch.givenName.trim() || undefined;
+    if (patch.familyName !== undefined) person.familyName = patch.familyName.trim() || undefined;
+    if (patch.email !== undefined) person.email = patch.email.trim() || undefined;
+    if (patch.phone !== undefined) person.phone = patch.phone.trim() || undefined;
+    if (patch.notes !== undefined) person.notes = patch.notes.trim() || undefined;
+    person.updatedAt = new Date().toISOString();
+    const agent = this.getAgentForPerson(personId);
+    if (agent && patch.displayName !== undefined) agent.name = person.displayName;
+    this.saveCurrentState();
+    this.notify();
+    return true;
+  }
+
+  // --- D4: vendors ---------------------------------------------------------
+
+  public createVendor(input: {
+    companyName: string;
+    category: Vendor['category'];
+    contactName?: string;
+    phone?: string;
+    email?: string;
+    websiteUrl?: string;
+    notes?: string;
+    placeIds?: string[];
+  }): Vendor | null {
+    const name = input.companyName?.trim();
+    if (!name) return null;
+    const places = (input.placeIds ?? []).filter((id) => this.places.some((p) => p.id === id));
+    if ((input.placeIds ?? []).length !== places.length) return null;
+
+    this.beginMutation('Créer un prestataire');
+    const at = new Date().toISOString();
+
+    // A named contact becomes a real Person, not a duplicated string.
+    let contactPersonId: string | undefined;
+    if (input.contactName?.trim()) {
+      const contact = this.createPersonSilently(input.contactName.trim(), input.phone, input.email);
+      contactPersonId = contact.id;
+    }
+
+    const vendor: Vendor = {
+      id: freshId('vendor'),
+      projectId: this.currentProject.id,
+      companyName: name,
+      category: input.category,
+      status: 'prospect',
+      contactPersonId,
+      documentIds: [],
+      taskIds: [],
+      placeIds: places,
+      phone: input.phone?.trim() || undefined,
+      email: input.email?.trim() || undefined,
+      websiteUrl: input.websiteUrl?.trim() || undefined,
+      notes: input.notes?.trim() || undefined,
+      origin: 'manual',
+      createdAt: at,
+      updatedAt: at,
+    };
+    this.vendors.push(vendor);
+    this.saveCurrentState();
+    this.notify();
+    return vendor;
+  }
+
+  /** Internal: a Person with no Guest facet and no extra history entry. */
+  private createPersonSilently(displayName: string, phone?: string, email?: string): Person {
+    const at = new Date().toISOString();
+    const person: Person = {
+      id: freshId('person'), displayName,
+      phone: phone?.trim() || undefined, email: email?.trim() || undefined,
+      origin: 'manual', createdAt: at, updatedAt: at,
+    };
+    this.persons.push(person);
+    return person;
+  }
+
+  public updateVendor(vendorId: string, patch: {
+    companyName?: string; category?: Vendor['category']; status?: Vendor['status'];
+    phone?: string; email?: string; websiteUrl?: string; notes?: string;
+  }): boolean {
+    const vendor = this.vendors.find((v) => v.id === vendorId);
+    if (!vendor) return false;
+    if (patch.companyName !== undefined && !patch.companyName.trim()) return false;
+    this.beginMutation('Modifier un prestataire');
+    if (patch.companyName !== undefined) vendor.companyName = patch.companyName.trim();
+    if (patch.category !== undefined) vendor.category = patch.category;
+    if (patch.status !== undefined) vendor.status = patch.status;
+    if (patch.phone !== undefined) vendor.phone = patch.phone.trim() || undefined;
+    if (patch.email !== undefined) vendor.email = patch.email.trim() || undefined;
+    if (patch.websiteUrl !== undefined) vendor.websiteUrl = patch.websiteUrl.trim() || undefined;
+    if (patch.notes !== undefined) vendor.notes = patch.notes.trim() || undefined;
+    vendor.updatedAt = new Date().toISOString();
+    this.saveCurrentState();
+    this.notify();
+    return true;
+  }
+
+  // --- D5: places ----------------------------------------------------------
+
+  public createPlace(input: {
+    name: string; code?: string; kind?: PlaceKind; address?: string;
+    gpsCoordinates?: string; capacity?: number; description?: string;
+  }): Place | null {
+    const name = input.name?.trim();
+    if (!name) return null;
+    this.beginMutation('Créer un lieu');
+    // Position derived from the existing ring so the place really exists in
+    // the 3D world instead of sitting at the origin.
+    const index = this.places.length;
+    const angle = (index / 12) * Math.PI * 2;
+    const place: Place = {
+      id: freshId('place'),
+      name,
+      code: (input.code?.trim() || name.slice(0, 12)).toUpperCase(),
+      kind: input.kind,
+      address: input.address?.trim() || undefined,
+      zone: 'manoir',
+      pos: [Math.cos(angle) * 34, 0, Math.sin(angle) * 34],
+      gpsCoordinates: input.gpsCoordinates?.trim() || '',
+      capacity: input.capacity ?? 0,
+      currentPax: 0,
+      description: input.description?.trim() || '',
+      icon: 'manoir',
+      themeColor: BRAND_ACCENT,
+      activeFromHour: 10,
+      activeToHour: 24,
+      connectedAgentIds: [],
+      connectedDocIds: [],
+      connectedTaskIds: [],
+    };
+    this.places.push(place);
+    this.saveCurrentState();
+    this.notify();
+    return place;
+  }
+
+  public updatePlace(placeId: string, patch: {
+    name?: string; address?: string; gpsCoordinates?: string;
+    capacity?: number; description?: string; kind?: PlaceKind;
+  }): boolean {
+    const place = this.places.find((p) => p.id === placeId);
+    if (!place) return false;
+    if (patch.name !== undefined && !patch.name.trim()) return false;
+    this.beginMutation('Modifier un lieu');
+    if (patch.name !== undefined) place.name = patch.name.trim();
+    if (patch.address !== undefined) place.address = patch.address.trim() || undefined;
+    if (patch.gpsCoordinates !== undefined) place.gpsCoordinates = patch.gpsCoordinates.trim();
+    if (patch.capacity !== undefined && patch.capacity >= 0) place.capacity = patch.capacity;
+    if (patch.description !== undefined) place.description = patch.description.trim();
+    if (patch.kind !== undefined) place.kind = patch.kind;
+    this.saveCurrentState();
+    this.notify();
+    return true;
+  }
+
+  // --- D6: music -----------------------------------------------------------
+
+  public createTrack(input: {
+    title: string; artist: string; duration?: string;
+    moment?: WeddingMoment; phaseId?: string | null;
+  }): TrackEntity | null {
+    const title = input.title?.trim();
+    const artist = input.artist?.trim();
+    if (!title || !artist) return null;
+    if (input.phaseId && !this.phases.some((p) => p.id === input.phaseId)) return null;
+
+    this.beginMutation('Ajouter un morceau');
+    const track: TrackEntity = {
+      id: freshId('trk'),
+      title,
+      artist,
+      moment: input.moment ?? 'soiree',
+      status: 'pending',
+      bpm: 0,
+      energy: 3,
+      duration: input.duration?.trim() || '',
+      suggestedBy: this.getCurrentPerson()?.displayName ?? 'Canvas',
+      votes: 0,
+      linkedPhaseId: input.phaseId ?? undefined,
+    };
+    this.tracks.unshift(track);
+    this.saveCurrentState();
+    this.notify();
+    return track;
   }
 
   // -------------------------------------------------------------------------
@@ -2324,18 +2683,76 @@ class WeddingStore {
     return { ok: true };
   }
 
-  public saveCurrentState() {
+  /**
+   * Persist the current state and REPORT THE REAL OUTCOME.
+   *
+   * `saveState` is driven by whether the write actually reached storage, so
+   * the Canvas can never display "Enregistré" for a mutation that was lost
+   * (Phase D §20).
+   */
+  public saveCurrentState(): boolean {
+    this.saveState = 'saving';
     try {
-      savePersistedState(this.currentProject.id, {
+      const ok = savePersistedState(this.currentProject.id, {
         project: this.currentProject,
         // Single serializer — driven by PERSISTED_FIELDS, so this can never
         // fall out of sync with the restore path again.
         ...serializeDomain(this),
       });
       saveWeddingProject(this.currentProject);
+      this.saveState = ok ? 'saved' : 'error';
+      this.lastSavedAt = ok ? new Date().toISOString() : this.lastSavedAt;
+      return ok;
     } catch (error) {
       reportDiagnostic({ source: 'store', severity: 'error', code: 'store_persist_failed', error });
+      this.saveState = 'error';
+      return false;
     }
+  }
+
+  // -------------------------------------------------------------------------
+  // MUTATION HISTORY (undo / redo at World Model level)
+  //
+  // History is kept on the DOMAIN SNAPSHOT, not per projection: one timeline
+  // of truth, exactly like the data itself. Snapshots reuse serializeDomain(),
+  // so a new persisted field is covered automatically.
+  // -------------------------------------------------------------------------
+
+  private undoStack: { label: string; snapshot: PersistedDomainState }[] = [];
+  private redoStack: { label: string; snapshot: PersistedDomainState }[] = [];
+  private readonly historyLimit = 40;
+
+  /** Capture the state BEFORE a mutation. Call at the start of a Canvas edit. */
+  public beginMutation(label: string): void {
+    this.undoStack.push({ label, snapshot: clone(serializeDomain(this)) });
+    if (this.undoStack.length > this.historyLimit) this.undoStack.shift();
+    // A new branch invalidates the redo path.
+    this.redoStack = [];
+  }
+
+  public canUndo(): boolean { return this.undoStack.length > 0; }
+  public canRedo(): boolean { return this.redoStack.length > 0; }
+  public undoLabel(): string | null { return this.undoStack[this.undoStack.length - 1]?.label ?? null; }
+  public redoLabel(): string | null { return this.redoStack[this.redoStack.length - 1]?.label ?? null; }
+
+  public undo(): boolean {
+    const entry = this.undoStack.pop();
+    if (!entry) return false;
+    this.redoStack.push({ label: entry.label, snapshot: clone(serializeDomain(this)) });
+    applyDomain(this, entry.snapshot, createDefaultDomainState());
+    this.saveCurrentState();
+    this.notify();
+    return true;
+  }
+
+  public redo(): boolean {
+    const entry = this.redoStack.pop();
+    if (!entry) return false;
+    this.undoStack.push({ label: entry.label, snapshot: clone(serializeDomain(this)) });
+    applyDomain(this, entry.snapshot, createDefaultDomainState());
+    this.saveCurrentState();
+    this.notify();
+    return true;
   }
 
   public subscribe(fn: () => void) {
@@ -3012,7 +3429,10 @@ class WeddingStore {
   }
 
   public removeTrack(trackId: string) {
+    this.beginMutation('Retirer un morceau');
     this.tracks = this.tracks.filter((t) => t.id !== trackId);
+    // Votes must not outlive their track (would break integrity).
+    this.trackVotes = this.trackVotes.filter((v) => v.trackId !== trackId);
     weddingAudio.playClick();
     this.saveCurrentState();
     this.notify();

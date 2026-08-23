@@ -376,6 +376,15 @@ export function EntityInspector() {
             exactly this person — no index, no name matching. */}
         {person && (
           <button
+            onClick={() => store.openCanvas({ kind: 'person', id: person.id })}
+            style={{ ...actionMainBtnStyle, background: 'transparent', color: BRAND_TEXT_PRIMARY, border: `1px solid ${BRAND_BORDER}`, marginBottom: 6 }}
+          >
+            Composer dans le Canvas →
+          </button>
+        )}
+
+        {person && (
+          <button
             onClick={() => store.showPersonInMirror(person.id)}
             style={{ ...actionMainBtnStyle, background: 'transparent', color: BRAND_ACCENT, border: `1px solid ${BRAND_BORDER}`, marginBottom: 6 }}
           >

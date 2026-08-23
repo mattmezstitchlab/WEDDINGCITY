@@ -444,6 +444,14 @@ export interface TimelinePhase {
   keyDocIds: string[];
   keyTaskIds: string[];
   ambientTrack: 'prep' | 'ceremony' | 'jazz' | 'dinner' | 'party';
+  /**
+   * Vendors explicitly attached to this moment by the user in the Canvas.
+   * Optional and additive: vendors are still ALSO derived from the moment's
+   * place, so existing data keeps working without migration.
+   */
+  vendorIds?: string[];
+  /** Free note written on the moment. */
+  notes?: string;
 }
 
 export interface NeuralPulse {
