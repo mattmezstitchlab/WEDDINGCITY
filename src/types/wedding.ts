@@ -21,18 +21,26 @@ export type WeddingMoment = 'ceremonie' | 'cocktail' | 'repas' | 'premiere_danse
 export type TrackStatus = 'bride_groom' | 'verified' | 'pending';
 export type VerificationLevel = 'verified_public' | 'claimed_vendor' | 'ai_estimated' | 'wedding_internal';
 
-export type WorldType =
-  | 'wedding'
-  | 'travel'
-  | 'event'
-  | 'concert'
-  | 'production'
-  | 'business'
-  | 'personal'
-  | 'family'
-  | 'ngo'
-  | 'group_trip'
-  | 'custom';
+/**
+ * Runtime list of every world archetype. Declared as a const array (with the
+ * type derived from it) so the World Engine health probe can iterate ALL of
+ * them: a new archetype cannot ship without being validated.
+ */
+export const ALL_WORLD_TYPES = [
+  'wedding',
+  'travel',
+  'event',
+  'concert',
+  'production',
+  'business',
+  'personal',
+  'family',
+  'ngo',
+  'group_trip',
+  'custom',
+] as const;
+
+export type WorldType = (typeof ALL_WORLD_TYPES)[number];
 
 export type ConnectorServiceId =
   | 'google_calendar'

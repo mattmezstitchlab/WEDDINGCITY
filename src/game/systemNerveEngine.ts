@@ -6,7 +6,7 @@ import {
   SystemHealthReport,
 } from '../types/systemNerve';
 import { weddingStore } from './weddingStore';
-import { HealthCheck, ProbeStatus } from '../types/health';
+import { HealthCheck, ProbeStatus, RepairOutcome } from '../types/health';
 import { runAllProbes, aggregate, repairViaProbe, getProbes } from './healthRegistry';
 import { weddingAudio } from './audio';
 import { connectorEngine } from './connectorEngine';
@@ -368,10 +368,10 @@ class SystemNerveEngine {
 
   /** Legacy module ids that a probe is authoritative for. */
   private static readonly PROBE_TO_MODULES: Record<string, string[]> = {
-    PERSISTENCE: ['DATABASE', 'STORAGE'],
-    DATA_INTEGRITY: ['PLACES', 'PEOPLE'],
-    STORAGE_QUOTA: ['DOCUMENTS'],
-    RENDER_3D: ['3D_ENGINE', 'WORLD', 'GRID'],
+    PERSISTENCE: ['DATABASE'],
+    STORAGE_QUOTA: ['STORAGE'],
+    DATA_INTEGRITY: ['PLACES'],
+    RENDER_3D: ['3D_ENGINE', 'GRID'],
     TIMELINE: ['TIMELINE'],
     CONNECTORS: ['CONNECTORS'],
     WEB_RESEARCH: ['WEB_RESEARCH', 'AGENT'],
@@ -379,6 +379,18 @@ class SystemNerveEngine {
     INVITATIONS: ['COLLABORATION'],
     AUTH: ['AUTH'],
     PERMISSIONS: [],
+    // Dedicated domain probes
+    DOCUMENTS: ['DOCUMENTS'],
+    DMC_ID: ['DMC_ID'],
+    PLAYLIST: ['MUSIC'],
+    ADVERTISING: ['ADVERTISING'],
+    MISSIONS: ['MISSIONS'],
+    PEOPLE: ['PEOPLE'],
+    AVATAR: ['AVATAR'],
+    WORLD_ENGINE: ['WORLD'],
+    AUDIO: [],
+    GEOGRAPHY: ['GEOGRAPHY'],
+    NARRATION: ['NARRATION'],
   };
 
   private static toLegacyStatus(status: ProbeStatus): SystemModuleHealth['status'] {
@@ -415,7 +427,13 @@ class SystemNerveEngine {
     const checks = await runAllProbes();
     this.healthChecks = checks;
     this.lastProbeRunAt = new Date().toISOString();
+    this.projectChecksOntoModules();
+    return checks;
+  }
 
+  /** Project probe results onto the legacy module table. */
+  private projectChecksOntoModules(): void {
+    const checks = this.healthChecks;
     const covered = new Set<string>();
     for (const check of checks) {
       const targets = SystemNerveEngine.PROBE_TO_MODULES[check.id] ?? [];
@@ -445,16 +463,103 @@ class SystemNerveEngine {
       mod.lastTestTimestamp = undefined;
       mod.fixable = false;
     }
-
-    return checks;
   }
 
-  /** Trigger a probe-declared repair, then re-measure to confirm it worked. */
-  public async repairFromProbe(probeId: string, actionId: string): Promise<boolean> {
-    const ok = await repairViaProbe(probeId, actionId);
-    await this.runProbes();
+  /**
+   * Run ONE probe and refresh only its entry. Used by [ANALYSER] / [RETESTER].
+   */
+  public async runSingleProbe(probeId: string): Promise<HealthCheck | null> {
+    const probe = getProbes().find((p) => p.id === probeId);
+    if (!probe) return null;
+    const started = Date.now();
+    let check: HealthCheck;
+    try {
+      check = { ...(await probe.run()), durationMs: Date.now() - started };
+    } catch (err) {
+      check = {
+        id: probe.id, name: probe.name, category: probe.category, status: 'ERROR',
+        lastCheck: new Date().toISOString(), dependencies: probe.dependencies ?? [],
+        errors: [{
+          code: 'probe_crashed',
+          message: err instanceof Error ? err.message : String(err),
+          cause: 'Exception levée pendant l’exécution de la sonde.',
+          impact: 'L’état réel de ce module est inconnu.',
+          solution: 'Corriger la sonde ou la dépendance qu’elle interroge.',
+        }],
+        warnings: [], evidence: [], repairable: false,
+        durationMs: Date.now() - started,
+        summary: 'La sonde elle-même a échoué.',
+      };
+    }
+    const idx = this.healthChecks.findIndex((c) => c.id === probeId);
+    if (idx >= 0) this.healthChecks[idx] = check; else this.healthChecks.push(check);
+    this.projectChecksOntoModules();
     weddingStore.notify();
-    return ok;
+    return check;
+  }
+
+  /**
+   * Attempt a repair, then RE-MEASURE to find out whether it actually worked.
+   *
+   * A repair never reports success on its own say-so: the outcome is decided by
+   * re-running the probe and comparing the observed status before and after.
+   * `verified` is only true when the module genuinely left its faulty state.
+   */
+  public async repairFromProbe(probeId: string, actionId: string): Promise<RepairOutcome> {
+    const before = this.healthChecks.find((c) => c.id === probeId)
+      ?? (await this.runSingleProbe(probeId));
+    const beforeStatus = before?.status ?? 'UNKNOWN';
+    const beforeErrors = before?.errors.length ?? 0;
+
+    let executed = false;
+    let executionError: string | undefined;
+    try {
+      executed = await repairViaProbe(probeId, actionId);
+    } catch (err) {
+      executionError = err instanceof Error ? err.message : String(err);
+    }
+
+    // Re-measure. This is what decides the verdict.
+    const after = await this.runSingleProbe(probeId);
+    const afterStatus = after?.status ?? 'UNKNOWN';
+    const afterErrors = after?.errors.length ?? 0;
+
+    const BAD: ProbeStatus[] = ['ERROR'];
+    const wasBroken = BAD.includes(beforeStatus) || beforeErrors > 0;
+    const stillBroken = BAD.includes(afterStatus) || afterErrors > 0;
+    const verified = executed && wasBroken && !stillBroken;
+
+    let message: string;
+    if (!executed) {
+      message = executionError
+        ? `La réparation n’a pas pu s’exécuter : ${executionError}`
+        : 'Aucune action de réparation n’a été exécutée pour ce module.';
+    } else if (!wasBroken) {
+      message = 'Action exécutée, mais le module n’était pas en défaut : rien à corriger.';
+    } else if (verified) {
+      message = `Réparation vérifiée : statut passé de ${beforeStatus} à ${afterStatus}.`;
+    } else {
+      message = `Action exécutée mais le défaut persiste (${afterStatus}, ${afterErrors} erreur(s)). Aucune correction n’est revendiquée.`;
+    }
+
+    return {
+      probeId, actionId, executed, verified,
+      beforeStatus, afterStatus, beforeErrors, afterErrors,
+      message, checkedAt: new Date().toISOString(),
+    };
+  }
+
+  /** The probe that is authoritative for a legacy module id, if any. */
+  public getCheckForModule(moduleId: string): HealthCheck | null {
+    const probeId = Object.keys(SystemNerveEngine.PROBE_TO_MODULES)
+      .find((pid) => (SystemNerveEngine.PROBE_TO_MODULES[pid] ?? []).includes(moduleId));
+    if (!probeId) return null;
+    return this.healthChecks.find((c) => c.id === probeId) ?? null;
+  }
+
+  public getProbeIdForModule(moduleId: string): string | null {
+    return Object.keys(SystemNerveEngine.PROBE_TO_MODULES)
+      .find((pid) => (SystemNerveEngine.PROBE_TO_MODULES[pid] ?? []).includes(moduleId)) ?? null;
   }
 
   public getProbeCoverage(): { probed: number; total: number; unprobed: string[] } {

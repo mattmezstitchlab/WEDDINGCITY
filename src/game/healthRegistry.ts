@@ -22,6 +22,7 @@ import { checkReferentialIntegrity, describeBrokenReferences } from './integrity
 import { getDiagnostics, getDiagnosticsBySource, clearDiagnostics } from './diagnostics';
 import { CONNECTOR_CAPABILITIES } from './connectorEngine';
 import { RESEARCH_CAPABILITIES } from './researchEngine';
+import { extraProbes } from './probes';
 
 const now = () => new Date().toISOString();
 
@@ -639,6 +640,7 @@ const probes: HealthProbe[] = [
   invitationsProbe,
   authProbe,
   permissionsProbe,
+  ...extraProbes,
 ];
 
 export function getProbes(): readonly HealthProbe[] {

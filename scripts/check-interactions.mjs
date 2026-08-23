@@ -122,7 +122,7 @@ try {
     for (const worldType of ['wedding', 'travel', 'concert', 'corporate']) {
       const world = generateWorldFromDescription({
         worldType,
-        description: `Test world ${worldType}`,
+        prompt: `Test world ${worldType}`,
         title: `Projet ${worldType}`,
         location: 'Paris',
         budget: 30000,

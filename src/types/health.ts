@@ -141,3 +141,24 @@ export interface AggregateHealth {
   totalErrors: number;
   totalWarnings: number;
 }
+
+/**
+ * Result of a repair attempt.
+ *
+ * `executed` = the action ran. `verified` = the module was re-measured AFTER
+ * the action and genuinely left its faulty state. The two are deliberately
+ * separate: an action that runs but fixes nothing must never be reported as a
+ * successful repair.
+ */
+export interface RepairOutcome {
+  probeId: string;
+  actionId: string;
+  executed: boolean;
+  verified: boolean;
+  beforeStatus: ProbeStatus;
+  afterStatus: ProbeStatus;
+  beforeErrors: number;
+  afterErrors: number;
+  message: string;
+  checkedAt: string;
+}

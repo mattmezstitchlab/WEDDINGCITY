@@ -1,32 +1,38 @@
-import { useState, useEffect, useSyncExternalStore } from 'react';
+import { useState, useEffect, useSyncExternalStore, lazy, Suspense } from 'react';
 import { weddingStore } from './game/weddingStore';
 import { isTypingTarget } from './game/input';
 import { WeddingWorld } from './components/3d/WeddingWorld';
 import { TopNavigation } from './components/ui/TopNavigation';
 import { BottomOrchestrator } from './components/ui/BottomOrchestrator';
 import { EntityInspector } from './components/ui/EntityInspector';
-import { ImportChaosModal } from './components/ui/ImportChaosModal';
-import { ConflictCenterModal } from './components/ui/ConflictCenterModal';
 import { LivingTimelineView } from './components/ui/LivingTimelineView';
 import { IdentityEntryFlow } from './components/entry/IdentityEntryFlow';
-import { DjZoneModal } from './components/ui/DjZoneModal';
-import { BrandMenuModal } from './components/ui/BrandMenuModal';
-import { CreateWeddingModal } from './components/ui/CreateWeddingModal';
-import { LandingPageModal } from './components/ui/LandingPageModal';
-import { GuideDocModal } from './components/ui/GuideDocModal';
-import { InviteShareModal } from './components/ui/InviteShareModal';
-import { AuthModal } from './components/ui/AuthModal';
-import { ProjectSettingsModal } from './components/ui/ProjectSettingsModal';
-import { ImportLocationModal } from './components/ui/ImportLocationModal';
 import { ConstructionToolbar } from './components/ui/ConstructionToolbar';
 import { InteriorHUD } from './components/ui/InteriorHUD';
-import { WorldResearchModal } from './components/ui/WorldResearchModal';
-import { SpatialAiAgentDrawer } from './components/ui/SpatialAiAgentDrawer';
-import { ClaimVendorModal } from './components/ui/ClaimVendorModal';
-import { WorldLabModal } from './components/ui/WorldLabModal';
-import { ConnectorsHubModal } from './components/ui/ConnectorsHubModal';
-import { AdSlotModal } from './components/ui/AdSlotModal';
-import { SystemNerveCenterModal } from './components/ui/SystemNerveCenterModal';
+
+// Heavy, on-demand surfaces are code-split: they are only fetched when the
+// user actually opens them. Each is rendered conditionally so the chunk is not
+// requested at startup.
+const SystemNerveCenterModal = lazy(() => import('./components/ui/SystemNerveCenterModal').then((m) => ({ default: m.SystemNerveCenterModal })));
+const WorldResearchModal = lazy(() => import('./components/ui/WorldResearchModal').then((m) => ({ default: m.WorldResearchModal })));
+const ConnectorsHubModal = lazy(() => import('./components/ui/ConnectorsHubModal').then((m) => ({ default: m.ConnectorsHubModal })));
+const WorldLabModal = lazy(() => import('./components/ui/WorldLabModal').then((m) => ({ default: m.WorldLabModal })));
+const DjZoneModal = lazy(() => import('./components/ui/DjZoneModal').then((m) => ({ default: m.DjZoneModal })));
+const GuideDocModal = lazy(() => import('./components/ui/GuideDocModal').then((m) => ({ default: m.GuideDocModal })));
+const LandingPageModal = lazy(() => import('./components/ui/LandingPageModal').then((m) => ({ default: m.LandingPageModal })));
+const AdSlotModal = lazy(() => import('./components/ui/AdSlotModal').then((m) => ({ default: m.AdSlotModal })));
+const ClaimVendorModal = lazy(() => import('./components/ui/ClaimVendorModal').then((m) => ({ default: m.ClaimVendorModal })));
+const ImportChaosModal = lazy(() => import('./components/ui/ImportChaosModal').then((m) => ({ default: m.ImportChaosModal })));
+const ImportLocationModal = lazy(() => import('./components/ui/ImportLocationModal').then((m) => ({ default: m.ImportLocationModal })));
+const ProjectSettingsModal = lazy(() => import('./components/ui/ProjectSettingsModal').then((m) => ({ default: m.ProjectSettingsModal })));
+const InviteShareModal = lazy(() => import('./components/ui/InviteShareModal').then((m) => ({ default: m.InviteShareModal })));
+const AuthModal = lazy(() => import('./components/ui/AuthModal').then((m) => ({ default: m.AuthModal })));
+const CreateWeddingModal = lazy(() => import('./components/ui/CreateWeddingModal').then((m) => ({ default: m.CreateWeddingModal })));
+const ConflictCenterModal = lazy(() => import('./components/ui/ConflictCenterModal').then((m) => ({ default: m.ConflictCenterModal })));
+const BrandMenuModal = lazy(() => import('./components/ui/BrandMenuModal').then((m) => ({ default: m.BrandMenuModal })));
+const SpatialAiAgentDrawer = lazy(() => import('./components/ui/SpatialAiAgentDrawer').then((m) => ({ default: m.SpatialAiAgentDrawer })));
+
+
 
 export default function App() {
   const [isImportOpen, setIsImportOpen] = useState(false);
@@ -113,156 +119,228 @@ export default function App() {
       {!weddingStore.showIdentityModal && weddingStore.viewMode === 'timeline' && <LivingTimelineView />}
 
       {/* 8. Permanent Spatial AI Agent Copilot Drawer */}
-      <SpatialAiAgentDrawer
-        isOpen={weddingStore.spatialAgentDrawerOpen}
-        onClose={() => {
-          weddingStore.spatialAgentDrawerOpen = false;
-          weddingStore.notify();
-        }}
-        onOpenResearch={(category) => {
-          weddingStore.worldResearchModalOpen = true;
-          weddingStore.notify();
-        }}
-      />
+      {weddingStore.spatialAgentDrawerOpen && (
+        <Suspense fallback={null}>
+        <SpatialAiAgentDrawer
+          isOpen={weddingStore.spatialAgentDrawerOpen}
+          onClose={() => {
+            weddingStore.spatialAgentDrawerOpen = false;
+            weddingStore.notify();
+          }}
+          onOpenResearch={(category) => {
+            weddingStore.worldResearchModalOpen = true;
+            weddingStore.notify();
+          }}
+        />
+        </Suspense>
+      )}
 
       {/* 9. System Nerve Center (Autodiagnostic & Santé Technique) */}
-      <SystemNerveCenterModal
-        isOpen={weddingStore.systemNerveModalOpen}
-        onClose={() => {
-          weddingStore.systemNerveModalOpen = false;
-          weddingStore.notify();
-        }}
-      />
+      {weddingStore.systemNerveModalOpen && (
+        <Suspense fallback={null}>
+        <SystemNerveCenterModal
+          isOpen={weddingStore.systemNerveModalOpen}
+          onClose={() => {
+            weddingStore.systemNerveModalOpen = false;
+            weddingStore.notify();
+          }}
+        />
+        </Suspense>
+      )}
 
       {/* 10. Connectors Hub Modal */}
-      <ConnectorsHubModal
-        isOpen={weddingStore.connectorsModalOpen}
-        onClose={() => {
-          weddingStore.connectorsModalOpen = false;
-          weddingStore.notify();
-        }}
-      />
+      {weddingStore.connectorsModalOpen && (
+        <Suspense fallback={null}>
+        <ConnectorsHubModal
+          isOpen={weddingStore.connectorsModalOpen}
+          onClose={() => {
+            weddingStore.connectorsModalOpen = false;
+            weddingStore.notify();
+          }}
+        />
+        </Suspense>
+      )}
 
       {/* 11. Advertising Grid 3D Slot Modal */}
-      <AdSlotModal
-        isOpen={weddingStore.adSlotModalOpen}
-        onClose={() => {
-          weddingStore.adSlotModalOpen = false;
-          weddingStore.notify();
-        }}
-        slotId={weddingStore.selectedAdSlotId}
-      />
+      {weddingStore.adSlotModalOpen && (
+        <Suspense fallback={null}>
+        <AdSlotModal
+          isOpen={weddingStore.adSlotModalOpen}
+          onClose={() => {
+            weddingStore.adSlotModalOpen = false;
+            weddingStore.notify();
+          }}
+          slotId={weddingStore.selectedAdSlotId}
+        />
+        </Suspense>
+      )}
 
       {/* 12. Modals Ecosystem */}
-      <WorldLabModal
-        isOpen={weddingStore.worldLabModalOpen}
-        onClose={() => {
-          weddingStore.worldLabModalOpen = false;
-          weddingStore.notify();
-        }}
-      />
+      {weddingStore.worldLabModalOpen && (
+        <Suspense fallback={null}>
+        <WorldLabModal
+          isOpen={weddingStore.worldLabModalOpen}
+          onClose={() => {
+            weddingStore.worldLabModalOpen = false;
+            weddingStore.notify();
+          }}
+        />
+        </Suspense>
+      )}
 
-      <WorldResearchModal
-        isOpen={weddingStore.worldResearchModalOpen}
-        onClose={() => {
-          weddingStore.worldResearchModalOpen = false;
-          weddingStore.notify();
-        }}
-        onClaimVendor={(vendor) => {
-          weddingStore.claimedVendorTarget = vendor;
-          weddingStore.claimVendorModalOpen = true;
-          weddingStore.notify();
-        }}
-      />
+      {weddingStore.worldResearchModalOpen && (
+        <Suspense fallback={null}>
+        <WorldResearchModal
+          isOpen={weddingStore.worldResearchModalOpen}
+          onClose={() => {
+            weddingStore.worldResearchModalOpen = false;
+            weddingStore.notify();
+          }}
+          onClaimVendor={(vendor) => {
+            weddingStore.claimedVendorTarget = vendor;
+            weddingStore.claimVendorModalOpen = true;
+            weddingStore.notify();
+          }}
+        />
+        </Suspense>
+      )}
 
-      <ClaimVendorModal
-        isOpen={weddingStore.claimVendorModalOpen}
-        onClose={() => {
-          weddingStore.claimVendorModalOpen = false;
-          weddingStore.claimedVendorTarget = null;
-          weddingStore.notify();
-        }}
-        vendor={weddingStore.claimedVendorTarget}
-      />
+      {weddingStore.claimVendorModalOpen && (
+        <Suspense fallback={null}>
+        <ClaimVendorModal
+          isOpen={weddingStore.claimVendorModalOpen}
+          onClose={() => {
+            weddingStore.claimVendorModalOpen = false;
+            weddingStore.claimedVendorTarget = null;
+            weddingStore.notify();
+          }}
+          vendor={weddingStore.claimedVendorTarget}
+        />
+        </Suspense>
+      )}
 
-      <ImportChaosModal
-        isOpen={isImportOpen}
-        onClose={() => setIsImportOpen(false)}
-      />
+      {isImportOpen && (
+        <Suspense fallback={null}>
+        <ImportChaosModal
+          isOpen={isImportOpen}
+          onClose={() => setIsImportOpen(false)}
+        />
+        </Suspense>
+      )}
 
-      <ConflictCenterModal
-        isOpen={isConflictsOpen}
-        onClose={() => setIsConflictsOpen(false)}
-      />
+      {isConflictsOpen && (
+        <Suspense fallback={null}>
+        <ConflictCenterModal
+          isOpen={isConflictsOpen}
+          onClose={() => setIsConflictsOpen(false)}
+        />
+        </Suspense>
+      )}
 
-      <DjZoneModal
-        isOpen={weddingStore.djBoothModalOpen}
-        onClose={() => weddingStore.setDjBoothOpen(false)}
-      />
+      {weddingStore.djBoothModalOpen && (
+        <Suspense fallback={null}>
+        <DjZoneModal
+          isOpen={weddingStore.djBoothModalOpen}
+          onClose={() => weddingStore.setDjBoothOpen(false)}
+        />
+        </Suspense>
+      )}
 
-      <BrandMenuModal
-        isOpen={weddingStore.brandMenuOpen}
-        onClose={() => {
-          weddingStore.brandMenuOpen = false;
-          weddingStore.notify();
-        }}
-      />
+      {weddingStore.brandMenuOpen && (
+        <Suspense fallback={null}>
+        <BrandMenuModal
+          isOpen={weddingStore.brandMenuOpen}
+          onClose={() => {
+            weddingStore.brandMenuOpen = false;
+            weddingStore.notify();
+          }}
+        />
+        </Suspense>
+      )}
 
-      <CreateWeddingModal
-        isOpen={weddingStore.createWeddingModalOpen}
-        onClose={() => {
-          weddingStore.createWeddingModalOpen = false;
-          weddingStore.notify();
-        }}
-      />
+      {weddingStore.createWeddingModalOpen && (
+        <Suspense fallback={null}>
+        <CreateWeddingModal
+          isOpen={weddingStore.createWeddingModalOpen}
+          onClose={() => {
+            weddingStore.createWeddingModalOpen = false;
+            weddingStore.notify();
+          }}
+        />
+        </Suspense>
+      )}
 
-      <ImportLocationModal
-        isOpen={weddingStore.importLocationModalOpen}
-        onClose={() => {
-          weddingStore.importLocationModalOpen = false;
-          weddingStore.notify();
-        }}
-      />
+      {weddingStore.importLocationModalOpen && (
+        <Suspense fallback={null}>
+        <ImportLocationModal
+          isOpen={weddingStore.importLocationModalOpen}
+          onClose={() => {
+            weddingStore.importLocationModalOpen = false;
+            weddingStore.notify();
+          }}
+        />
+        </Suspense>
+      )}
 
-      <LandingPageModal
-        isOpen={weddingStore.landingPageModalOpen}
-        onClose={() => {
-          weddingStore.landingPageModalOpen = false;
-          weddingStore.notify();
-        }}
-      />
+      {weddingStore.landingPageModalOpen && (
+        <Suspense fallback={null}>
+        <LandingPageModal
+          isOpen={weddingStore.landingPageModalOpen}
+          onClose={() => {
+            weddingStore.landingPageModalOpen = false;
+            weddingStore.notify();
+          }}
+        />
+        </Suspense>
+      )}
 
-      <GuideDocModal
-        isOpen={weddingStore.guideDocModalOpen}
-        onClose={() => {
-          weddingStore.guideDocModalOpen = false;
-          weddingStore.notify();
-        }}
-      />
+      {weddingStore.guideDocModalOpen && (
+        <Suspense fallback={null}>
+        <GuideDocModal
+          isOpen={weddingStore.guideDocModalOpen}
+          onClose={() => {
+            weddingStore.guideDocModalOpen = false;
+            weddingStore.notify();
+          }}
+        />
+        </Suspense>
+      )}
 
-      <InviteShareModal
-        isOpen={weddingStore.inviteModalOpen}
-        onClose={() => {
-          weddingStore.inviteModalOpen = false;
-          weddingStore.notify();
-        }}
-      />
+      {weddingStore.inviteModalOpen && (
+        <Suspense fallback={null}>
+        <InviteShareModal
+          isOpen={weddingStore.inviteModalOpen}
+          onClose={() => {
+            weddingStore.inviteModalOpen = false;
+            weddingStore.notify();
+          }}
+        />
+        </Suspense>
+      )}
 
-      <AuthModal
-        isOpen={weddingStore.authModalOpen}
-        onClose={() => {
-          weddingStore.authModalOpen = false;
-          weddingStore.notify();
-        }}
-      />
+      {weddingStore.authModalOpen && (
+        <Suspense fallback={null}>
+        <AuthModal
+          isOpen={weddingStore.authModalOpen}
+          onClose={() => {
+            weddingStore.authModalOpen = false;
+            weddingStore.notify();
+          }}
+        />
+        </Suspense>
+      )}
 
-      <ProjectSettingsModal
-        isOpen={weddingStore.projectSettingsModalOpen}
-        onClose={() => {
-          weddingStore.projectSettingsModalOpen = false;
-          weddingStore.notify();
-        }}
-      />
+      {weddingStore.projectSettingsModalOpen && (
+        <Suspense fallback={null}>
+        <ProjectSettingsModal
+          isOpen={weddingStore.projectSettingsModalOpen}
+          onClose={() => {
+            weddingStore.projectSettingsModalOpen = false;
+            weddingStore.notify();
+          }}
+        />
+        </Suspense>
+      )}
 
       {/* 13. Profile & Identity Editor (DMC ID & Symbol) */}
       {weddingStore.showIdentityModal && (

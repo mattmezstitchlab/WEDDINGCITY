@@ -31,7 +31,7 @@ try {
   const registry = await harness.load('healthRegistry', 'hr1');
 
   // -------------------------------------------------------------------------
-  console.log('\n[1/5] Probes return measured results with evidence');
+  console.log('\n[1/6] Probes return measured results with evidence');
   // -------------------------------------------------------------------------
   const checks = await registry.runAllProbes();
   r.check(checks.length > 0, `${checks.length} probes executed`);
@@ -70,7 +70,7 @@ try {
     incomplete.map((i) => i.code).join(', '));
 
   // -------------------------------------------------------------------------
-  console.log('\n[2/5] Real measurements actually happen');
+  console.log('\n[2/6] Real measurements actually happen');
   // -------------------------------------------------------------------------
   {
     const byId = Object.fromEntries(checks.map((c) => [c.id, c]));
@@ -91,7 +91,7 @@ try {
   }
 
   // -------------------------------------------------------------------------
-  console.log('\n[3/5] Simulated and absent modules are labelled truthfully');
+  console.log('\n[3/6] Simulated and absent modules are labelled truthfully');
   // -------------------------------------------------------------------------
   {
     const byId = Object.fromEntries(checks.map((c) => [c.id, c]));
@@ -110,7 +110,7 @@ try {
   }
 
   // -------------------------------------------------------------------------
-  console.log('\n[4/5] Unprobed modules are forced to UNKNOWN, never left "OK"');
+  console.log('\n[4/6] Unprobed modules are forced to UNKNOWN, never left "OK"');
   // -------------------------------------------------------------------------
   {
     const { systemNerveEngine } = await harness.load('systemNerveEngine', 'sne1');
@@ -136,7 +136,7 @@ try {
   }
 
   // -------------------------------------------------------------------------
-  console.log('\n[5/5] Self-declared capabilities match the actual source');
+  console.log('\n[5/6] Self-declared capabilities match the actual source');
   // -------------------------------------------------------------------------
   {
     // An engine may only claim `network: true` if it really performs requests.
@@ -163,6 +163,56 @@ try {
     r.check(networkUsers.length === 0,
       'no engine silently performs network calls (would contradict the MOCK labels)',
       networkUsers.join(', '));
+  }
+  // -------------------------------------------------------------------------
+  console.log('\n[6/6] Repairs are verified by re-measurement, never self-declared');
+  // -------------------------------------------------------------------------
+  {
+    const { systemNerveEngine } = await harness.load('systemNerveEngine', 'sne2');
+    // No cache-bust: must be the SAME store instance the engine's probes read.
+    const { weddingStore } = await harness.load('weddingStore');
+    await systemNerveEngine.runProbes();
+
+    // A) An unknown repair action must fail honestly.
+    const unknown = await systemNerveEngine.repairFromProbe('PERSISTENCE', 'no_such_action');
+    r.check(unknown.executed === false && unknown.verified === false,
+      'an unknown repair action reports executed=false, verified=false',
+      JSON.stringify({ executed: unknown.executed, verified: unknown.verified }));
+    r.check(!!unknown.beforeStatus && !!unknown.afterStatus && !!unknown.checkedAt,
+      'every repair outcome records before/after status and a timestamp');
+
+    // B) Inject a REAL fault and confirm the probe detects it.
+    weddingStore.places[0].connectedDocIds = [
+      ...weddingStore.places[0].connectedDocIds, 'doc_injected_ghost',
+    ];
+    const broken = await systemNerveEngine.runSingleProbe('DATA_INTEGRITY');
+    r.check(broken.status === 'ERROR', 'injected dangling reference is detected as ERROR', broken.summary);
+    r.check(broken.repairable === true && !!broken.repairAction,
+      'a faulty module exposes a concrete repairAction',
+      JSON.stringify(broken.repairAction));
+
+    // C) The repair runs AND is confirmed by re-measurement.
+    const fixed = await systemNerveEngine.repairFromProbe('DATA_INTEGRITY', 'prune_broken_refs');
+    r.check(fixed.executed && fixed.verified,
+      'a genuine repair is executed AND verified by re-measurement',
+      `${fixed.beforeStatus} → ${fixed.afterStatus} · ${fixed.message}`);
+    r.check(fixed.beforeStatus === 'ERROR' && fixed.afterStatus === 'VERIFIED',
+      'the status transition is recorded', `${fixed.beforeStatus} → ${fixed.afterStatus}`);
+    r.check(!weddingStore.places[0].connectedDocIds.includes('doc_injected_ghost'),
+      'the repair really removed the dangling reference from the data');
+
+    // D) Repairing again, now that nothing is broken, must NOT claim a fix.
+    const again = await systemNerveEngine.repairFromProbe('DATA_INTEGRITY', 'prune_broken_refs');
+    r.check(again.verified === false,
+      'repairing a healthy module does NOT report a verified fix',
+      `verified=${again.verified} — ${again.message}`);
+    r.check(/pas en défaut|rien à corriger/i.test(again.message),
+      'the message explains that nothing needed fixing', again.message);
+
+    // E) Single-probe run refreshes only that probe.
+    const single = await systemNerveEngine.runSingleProbe('TIMELINE');
+    r.check(single?.id === 'TIMELINE' && !!single.lastCheck,
+      '[RETESTER] re-runs a single probe with a fresh timestamp');
   }
 } finally {
   harness.cleanup();
