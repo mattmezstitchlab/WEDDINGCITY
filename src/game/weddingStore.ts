@@ -42,9 +42,11 @@ import {
 // Values now live in ./brand (dependency-free) to avoid the module cycle that
 // crashed startup. Re-exported here so every existing import keeps working.
 import { BRAND_ACCENT } from './brand';
+import { PlaceKind } from '../types/wedding';
 import {
   Person, UserAccountV2, DmcIdentityRecord, Guest, Vendor, SeatingTable,
   ProjectMembership, Invitation, TrackVote, Capability, MembershipRole, RsvpStatus,
+  MediaAsset, MediaKind, MediaOwnerKind, PersonRelationship, RelationshipKind,
 } from '../types/identity';
 import {
   migrateIdentityModel, MigrationReport, emptyIdentityState, capabilitiesForRole,
@@ -1512,6 +1514,7 @@ function createDefaultDomainState(): PersistedDomainState {
     // agents right after restore, so a fresh project is populated too.
     persons: [], accounts: [], dmcIdentities: [], guests: [], vendors: [],
     seatingTables: [], memberships: [], invitations: [], trackVotes: [],
+    media: [], relationships: [],
     currentPersonId: null,
   });
 }
@@ -1587,6 +1590,13 @@ class WeddingStore {
   public memberships: ProjectMembership[] = [];
   public invitations: Invitation[] = [];
   public trackVotes: TrackVote[] = [];
+  /**
+   * Media assets. Starts EMPTY and is never seeded: the architecture is ready,
+   * but no photo is invented to make the product look finished.
+   */
+  public media: MediaAsset[] = [];
+  /** First-order edges between people. */
+  public relationships: PersonRelationship[] = [];
   /** The person this session acts as. Replaces role-based avatar matching. */
   public currentPersonId: string | null = null;
   /** Result of the last identity migration, surfaced by the System Nerve. */
@@ -1685,6 +1695,210 @@ class WeddingStore {
   }
 
   // -------------------------------------------------------------------------
+  // MEDIA
+  //
+  // Attached to a real entity, by stable id. No seeding, no placeholder.
+  // -------------------------------------------------------------------------
+
+  public addMedia(input: {
+    kind: MediaKind;
+    source: string;
+    ownerKind: MediaOwnerKind;
+    ownerId: string;
+    title?: string;
+    caption?: string;
+    fileName?: string;
+    byteSize?: number;
+  }): MediaAsset | null {
+    // A media must belong to something that exists.
+    if (!this.mediaOwnerExists(input.ownerKind, input.ownerId)) return null;
+    const at = new Date().toISOString();
+    const asset: MediaAsset = {
+      id: freshId('media'),
+      kind: input.kind,
+      source: input.source,
+      title: input.title,
+      caption: input.caption,
+      ownerKind: input.ownerKind,
+      ownerId: input.ownerId,
+      fileName: input.fileName,
+      byteSize: input.byteSize,
+      origin: 'manual',
+      createdAt: at,
+      updatedAt: at,
+    };
+    this.media.push(asset);
+    this.saveCurrentState();
+    this.notify();
+    return asset;
+  }
+
+  public removeMedia(mediaId: string): boolean {
+    const idx = this.media.findIndex((m) => m.id === mediaId);
+    if (idx < 0) return false;
+    this.media.splice(idx, 1);
+    for (const p of this.persons) {
+      if (p.portraitMediaId === mediaId) p.portraitMediaId = undefined;
+    }
+    this.saveCurrentState();
+    this.notify();
+    return true;
+  }
+
+  public mediaOwnerExists(kind: MediaOwnerKind, id: string): boolean {
+    switch (kind) {
+      case 'person': return this.persons.some((p) => p.id === id);
+      case 'place': return this.places.some((p) => p.id === id);
+      case 'vendor': return this.vendors.some((v) => v.id === id);
+      case 'event': return this.phases.some((p) => p.id === id);
+      case 'song': return this.tracks.some((t) => t.id === id);
+      case 'wedding': return this.currentProject.id === id;
+      default: return false;
+    }
+  }
+
+  public getMediaFor(kind: MediaOwnerKind, id: string): MediaAsset[] {
+    return this.media.filter((m) => m.ownerKind === kind && m.ownerId === id);
+  }
+
+  public getPortraitFor(personId: string): MediaAsset | null {
+    const person = this.getPerson(personId);
+    if (person?.portraitMediaId) {
+      return this.media.find((m) => m.id === person.portraitMediaId) ?? null;
+    }
+    return this.media.find((m) => m.ownerKind === 'person' && m.ownerId === personId && m.kind === 'image') ?? null;
+  }
+
+  // -------------------------------------------------------------------------
+  // RELATIONSHIPS between people
+  // -------------------------------------------------------------------------
+
+  public linkPersons(fromPersonId: string, toPersonId: string, kind: RelationshipKind, note?: string): PersonRelationship | null {
+    if (fromPersonId === toPersonId) return null;
+    if (!this.getPerson(fromPersonId) || !this.getPerson(toPersonId)) return null;
+    const existing = this.relationships.find(
+      (r) => r.fromPersonId === fromPersonId && r.toPersonId === toPersonId && r.kind === kind,
+    );
+    if (existing) return existing;
+    const rel: PersonRelationship = {
+      id: freshId('rel'), fromPersonId, toPersonId, kind, note,
+      createdAt: new Date().toISOString(),
+    };
+    this.relationships.push(rel);
+    this.saveCurrentState();
+    this.notify();
+    return rel;
+  }
+
+  public unlinkPersons(relationshipId: string): boolean {
+    const idx = this.relationships.findIndex((r) => r.id === relationshipId);
+    if (idx < 0) return false;
+    this.relationships.splice(idx, 1);
+    this.saveCurrentState();
+    this.notify();
+    return true;
+  }
+
+  /** Both directions: a relationship is readable from either end. */
+  public getRelationshipsFor(personId: string): { relationship: PersonRelationship; otherPersonId: string }[] {
+    return this.relationships
+      .filter((r) => r.fromPersonId === personId || r.toPersonId === personId)
+      .map((r) => ({
+        relationship: r,
+        otherPersonId: r.fromPersonId === personId ? r.toPersonId : r.fromPersonId,
+      }));
+  }
+
+  public setPersonNotes(personId: string, notes: string): boolean {
+    const person = this.persons.find((p) => p.id === personId);
+    if (!person) return false;
+    person.notes = notes.trim() || undefined;
+    person.updatedAt = new Date().toISOString();
+    this.saveCurrentState();
+    this.notify();
+    return true;
+  }
+
+  public setVendorNotes(vendorId: string, notes: string): boolean {
+    const vendor = this.vendors.find((v) => v.id === vendorId);
+    if (!vendor) return false;
+    vendor.notes = notes.trim() || undefined;
+    vendor.updatedAt = new Date().toISOString();
+    this.saveCurrentState();
+    this.notify();
+    return true;
+  }
+
+  // -------------------------------------------------------------------------
+  // MUSIC ↔ TIMELINE
+  //
+  // A track is a temporal component of the world, not just a playlist row.
+  // -------------------------------------------------------------------------
+
+  /** Deterministic mapping from a musical moment to a real timeline phase. */
+  public getPhaseForTrack(trackId: string): TimelinePhase | null {
+    const track = this.tracks.find((t) => t.id === trackId);
+    if (!track) return null;
+    if (track.linkedPhaseId) {
+      return this.phases.find((p) => p.id === track.linkedPhaseId) ?? null;
+    }
+    // Fall back to the moment, matched against real phase ids.
+    const byMoment = this.phases.find((p) => p.id === `phase_${track.moment}`);
+    if (byMoment) return byMoment;
+    const MOMENT_TO_AMBIENT: Record<string, string> = {
+      ceremonie: 'ceremony', cocktail: 'jazz', repas: 'dinner',
+      premiere_danse: 'party', soiree: 'party',
+    };
+    const ambient = MOMENT_TO_AMBIENT[track.moment];
+    return ambient ? this.phases.find((p) => p.ambientTrack === ambient) ?? null : null;
+  }
+
+  public linkTrackToPhase(trackId: string, phaseId: string | null): boolean {
+    const track = this.tracks.find((t) => t.id === trackId);
+    if (!track) return false;
+    if (phaseId !== null && !this.phases.some((p) => p.id === phaseId)) return false;
+    track.linkedPhaseId = phaseId ?? undefined;
+    this.saveCurrentState();
+    this.notify();
+    return true;
+  }
+
+  public getTracksForPhase(phaseId: string): TrackEntity[] {
+    return this.tracks.filter((t) => this.getPhaseForTrack(t.id)?.id === phaseId);
+  }
+
+  // -------------------------------------------------------------------------
+  // PLACES
+  // -------------------------------------------------------------------------
+
+  /** Functional classification, derived from the zone when not explicitly set. */
+  public getPlaceKind(placeId: string): PlaceKind {
+    const place = this.places.find((p) => p.id === placeId);
+    if (!place) return 'other';
+    if (place.kind) return place.kind;
+    const ZONE_TO_KIND: Record<string, PlaceKind> = {
+      mairie: 'civil',
+      ceremonie: 'ceremony',
+      cocktail: 'cocktail',
+      reception: 'dinner',
+      dancefloor: 'dancefloor',
+      manoir: 'main_venue',
+      parking: 'parking',
+      hotel: 'accommodation',
+    };
+    return ZONE_TO_KIND[place.zone] ?? 'other';
+  }
+
+  /** Vendors that declared this place among their zones of intervention. */
+  public getVendorsForPlace(placeId: string): Vendor[] {
+    return this.vendors.filter((v) => v.placeIds.includes(placeId));
+  }
+
+  public getPhasesForPlace(placeId: string): TimelinePhase[] {
+    return this.phases.filter((p) => p.primaryPlaceId === placeId);
+  }
+
+  // -------------------------------------------------------------------------
   // CROSS-PROJECTION NAVIGATION
   //
   // Every hop travels by STABLE ENTITY ID (personId), never by visual index.
@@ -1729,6 +1943,45 @@ class WeddingStore {
     return true;
   }
 
+  /** Mirror → World for a place. Only succeeds if the place really exists. */
+  public showPlaceInWorld(placeId: string): boolean {
+    if (!this.places.some((p) => p.id === placeId)) return false;
+    this.projection = 'world';
+    this.constellationOpen = false;
+    this.showIdentityModal = false;
+    this.focusPlace(placeId);
+    return true;
+  }
+
+  /** Mirror → World for a vendor, via its spatial projection. */
+  public showVendorInWorld(vendorId: string): boolean {
+    const vendor = this.vendors.find((v) => v.id === vendorId);
+    if (!vendor) return false;
+    if (vendor.agentId && this.agents.some((a) => a.id === vendor.agentId)) {
+      const person = this.getPersonForAgent(vendor.agentId);
+      if (person) return this.showPersonInWorld(person.id);
+    }
+    // No agent: fall back to its first real zone rather than doing nothing.
+    const zone = vendor.placeIds.find((id) => this.places.some((p) => p.id === id));
+    return zone ? this.showPlaceInWorld(zone) : false;
+  }
+
+  /** Mirror → World for a timeline moment: move the clock AND the camera. */
+  public showEventInWorld(phaseId: string): boolean {
+    const phase = this.phases.find((p) => p.id === phaseId);
+    if (!phase) return false;
+    this.projection = 'world';
+    this.constellationOpen = false;
+    this.showIdentityModal = false;
+    this.setTime(phase.startHour + 0.05);
+    if (phase.primaryPlaceId && this.places.some((p) => p.id === phase.primaryPlaceId)) {
+      this.focusPlace(phase.primaryPlaceId);
+    } else {
+      this.notify();
+    }
+    return true;
+  }
+
   public clearMirrorFocus(): void {
     if (this.mirrorFocusPersonId === null) return;
     this.mirrorFocusPersonId = null;
@@ -1767,7 +2020,8 @@ class WeddingStore {
         persons: this.persons, accounts: this.accounts, dmcIdentities: this.dmcIdentities,
         guests: this.guests, vendors: this.vendors, seatingTables: this.seatingTables,
         memberships: this.memberships, invitations: this.invitations,
-        trackVotes: this.trackVotes, currentPersonId: this.currentPersonId,
+        trackVotes: this.trackVotes, media: this.media,
+        relationships: this.relationships, currentPersonId: this.currentPersonId,
       },
     });
 
@@ -1780,6 +2034,8 @@ class WeddingStore {
     this.memberships = state.memberships;
     this.invitations = state.invitations;
     this.trackVotes = state.trackVotes;
+    this.media = state.media ?? this.media;
+    this.relationships = state.relationships ?? this.relationships;
     this.currentPersonId = state.currentPersonId;
 
     // Link agents back to their person, without touching anything else.

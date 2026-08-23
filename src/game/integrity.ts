@@ -23,6 +23,7 @@
 import {
   Guest, Person, Vendor, UserAccountV2, DmcIdentityRecord,
   SeatingTable, ProjectMembership, Invitation, TrackVote,
+  MediaAsset, PersonRelationship,
 } from '../types/identity';
 import {
   Agent,
@@ -55,7 +56,12 @@ export interface IntegrityInput {
   memberships?: ProjectMembership[];
   invitations?: Invitation[];
   trackVotes?: TrackVote[];
+  media?: MediaAsset[];
+  relationships?: PersonRelationship[];
   tracks?: { id: string }[];
+  /** Full tracks, when link integrity must also be verified. */
+  tracksFull?: { id: string; linkedPhaseId?: string }[];
+  projectId?: string;
   currentPersonId?: string | null;
   // --- world model ---
   places?: Place[];
@@ -218,6 +224,30 @@ export function checkReferentialIntegrity(input: IntegrityInput): IntegrityRepor
   }
   for (const a of input.agents ?? []) {
     verifySet(`agent:${a.id}`, 'personId', 'person', personIds, a.personId);
+  }
+
+  // Media must belong to an entity that exists, and portraits must resolve.
+  const mediaIds = new Set((input.media ?? []).map((m) => m.id));
+  const ownerSets: Record<string, Set<string>> = {
+    person: personIds, place: ids.place, vendor: new Set((input.vendors ?? []).map((v) => v.id)),
+    event: new Set((input.phases ?? []).map((p) => p.id)), song: trackIds,
+    wedding: new Set(input.projectId ? [input.projectId] : []),
+  };
+  for (const m of input.media ?? []) {
+    const known = ownerSets[m.ownerKind];
+    if (known && known.size > 0) verifySet(`media:${m.id}`, 'ownerId', m.ownerKind, known, m.ownerId);
+  }
+  for (const p of persons) {
+    verifySet(`person:${p.id}`, 'portraitMediaId', 'media', mediaIds, p.portraitMediaId);
+  }
+  for (const rel of input.relationships ?? []) {
+    verifySet(`relationship:${rel.id}`, 'fromPersonId', 'person', personIds, rel.fromPersonId);
+    verifySet(`relationship:${rel.id}`, 'toPersonId', 'person', personIds, rel.toPersonId);
+  }
+  // A track linked to a phase must point at a phase that exists.
+  const phaseIds = new Set((input.phases ?? []).map((p) => p.id));
+  for (const t of (input.tracksFull ?? [])) {
+    verifySet(`track:${t.id}`, 'linkedPhaseId', 'phase', phaseIds, t.linkedPhaseId);
   }
   if (input.currentPersonId) {
     verifySet('session', 'currentPersonId', 'person', personIds, input.currentPersonId);

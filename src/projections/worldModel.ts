@@ -31,7 +31,8 @@
 // ---------------------------------------------------------------------------
 
 import { weddingStore } from '../game/weddingStore';
-import { RsvpStatus } from '../types/identity';
+import { RsvpStatus, MediaAsset, RelationshipKind } from '../types/identity';
+import { PlaceKind } from '../types/wedding';
 
 // --- Hero -------------------------------------------------------------------
 
@@ -102,6 +103,11 @@ export interface ProgrammeMoment {
   isCurrent: boolean;
   /** Real people mobilised by this phase. */
   keyPersonIds: string[];
+  /** Vendors intervening at this moment's place. Derived, never stored twice. */
+  vendors: { vendorId: string; companyName: string; category: string }[];
+  /** Tracks whose moment resolves to this phase. */
+  songs: { songId: string; title: string; artist: string; duration: string }[];
+  media: MediaProjection[];
 }
 
 export interface ProgrammeProjection {
@@ -132,6 +138,15 @@ export function projectProgramme(): ProgrammeProjection {
         .map((agentId) => weddingStore.getPersonForAgent(agentId)?.id)
         .filter((id): id is string => Boolean(id));
 
+      const vendors = place
+        ? weddingStore.getVendorsForPlace(place.id).map((v) => ({
+            vendorId: v.id, companyName: v.companyName, category: v.category,
+          }))
+        : [];
+      const songs = weddingStore.getTracksForPhase(ph.id).map((t) => ({
+        songId: t.id, title: t.title, artist: t.artist, duration: t.duration,
+      }));
+
       return {
         phaseId: ph.id,
         time: formatHour(ph.startHour),
@@ -145,6 +160,9 @@ export function projectProgramme(): ProgrammeProjection {
         placeName: place?.name ?? null,
         isCurrent: now >= ph.startHour && now < ph.endHour,
         keyPersonIds,
+        vendors,
+        songs,
+        media: projectMedia('event', ph.id),
       };
     });
 
@@ -273,6 +291,283 @@ export function projectGuests(): GuestsProjection {
   };
 }
 
+// --- Media ------------------------------------------------------------------
+
+export interface MediaProjection {
+  mediaId: string;
+  kind: MediaAsset['kind'];
+  source: string;
+  title: string | null;
+  caption: string | null;
+}
+
+export function projectMedia(ownerKind: MediaAsset['ownerKind'], ownerId: string): MediaProjection[] {
+  return weddingStore.getMediaFor(ownerKind, ownerId).map((m) => ({
+    mediaId: m.id,
+    kind: m.kind,
+    source: m.source,
+    title: m.title ?? null,
+    caption: m.caption ?? null,
+  }));
+}
+
+// --- Vendors ----------------------------------------------------------------
+
+export interface VendorProjection {
+  vendorId: string;
+  companyName: string;
+  category: string;
+  status: string;
+  contactPersonId: string | null;
+  contactName: string | null;
+  agentId: string | null;
+  phone: string | null;
+  email: string | null;
+  websiteUrl: string | null;
+  notes: string | null;
+  documentCount: number;
+  taskCount: number;
+  places: { placeId: string; name: string }[];
+  /** Timeline moments this vendor is involved in, via its zones. */
+  moments: { phaseId: string; time: string; title: string }[];
+  media: MediaProjection[];
+  canShowInWorld: boolean;
+}
+
+export interface VendorsProjection {
+  vendors: VendorProjection[];
+  /** Grouped by category for editorial presentation. */
+  byCategory: { category: string; vendors: VendorProjection[] }[];
+  counts: { total: number; contracted: number; withContact: number };
+  hasData: boolean;
+}
+
+export function projectVendors(): VendorsProjection {
+  const phases = weddingStore.phases;
+
+  const vendors: VendorProjection[] = weddingStore.vendors.map((v) => {
+    const contact = v.contactPersonId ? weddingStore.getPerson(v.contactPersonId) : null;
+    const places = v.placeIds
+      .map((id) => weddingStore.places.find((p) => p.id === id))
+      .filter((p): p is NonNullable<typeof p> => Boolean(p))
+      .map((p) => ({ placeId: p.id, name: p.name }));
+    const placeIdSet = new Set(places.map((p) => p.placeId));
+    const moments = phases
+      .filter((ph) => ph.primaryPlaceId && placeIdSet.has(ph.primaryPlaceId))
+      .sort((a, b) => a.startHour - b.startHour)
+      .map((ph) => ({ phaseId: ph.id, time: formatHour(ph.startHour), title: stripLeadingTime(ph.name) }));
+
+    const hasAgent = Boolean(v.agentId && weddingStore.agents.some((a) => a.id === v.agentId));
+
+    return {
+      vendorId: v.id,
+      companyName: v.companyName,
+      category: v.category,
+      status: v.status,
+      contactPersonId: v.contactPersonId ?? null,
+      contactName: contact?.displayName ?? null,
+      agentId: v.agentId ?? null,
+      phone: v.phone ?? null,
+      email: v.email ?? null,
+      websiteUrl: v.websiteUrl ?? null,
+      notes: v.notes ?? null,
+      documentCount: v.documentIds.length,
+      taskCount: v.taskIds.length,
+      places,
+      moments,
+      media: projectMedia('vendor', v.id),
+      canShowInWorld: hasAgent || places.length > 0,
+    };
+  }).sort((a, b) => a.companyName.localeCompare(b.companyName, 'fr'));
+
+  const categories = [...new Set(vendors.map((v) => v.category))].sort();
+
+  return {
+    vendors,
+    byCategory: categories.map((category) => ({
+      category, vendors: vendors.filter((v) => v.category === category),
+    })),
+    counts: {
+      total: vendors.length,
+      contracted: vendors.filter((v) => v.status === 'contracted').length,
+      withContact: vendors.filter((v) => v.phone || v.email || v.websiteUrl).length,
+    },
+    hasData: vendors.length > 0,
+  };
+}
+
+// --- Places -----------------------------------------------------------------
+
+export interface PlaceProjection {
+  placeId: string;
+  name: string;
+  code: string;
+  kind: PlaceKind;
+  address: string | null;
+  gps: string | null;
+  description: string | null;
+  capacity: number | null;
+  /** Active window as stored on the place. */
+  window: string | null;
+  moments: { phaseId: string; time: string; title: string }[];
+  vendors: { vendorId: string; companyName: string; category: string }[];
+  tableCount: number;
+  media: MediaProjection[];
+  /** Places always have a spatial representation in this product. */
+  canShowInWorld: boolean;
+}
+
+export interface PlacesProjection {
+  places: PlaceProjection[];
+  /** Only places that actually host a timeline moment. */
+  keyPlaces: PlaceProjection[];
+  counts: { total: number; withMoments: number; totalCapacity: number };
+  hasData: boolean;
+}
+
+export function projectPlaces(): PlacesProjection {
+  const places: PlaceProjection[] = weddingStore.places.map((p) => {
+    const moments = weddingStore.getPhasesForPlace(p.id)
+      .sort((a, b) => a.startHour - b.startHour)
+      .map((ph) => ({ phaseId: ph.id, time: formatHour(ph.startHour), title: stripLeadingTime(ph.name) }));
+
+    return {
+      placeId: p.id,
+      name: p.name,
+      code: p.code,
+      kind: weddingStore.getPlaceKind(p.id),
+      address: p.address ?? null,
+      gps: p.gpsCoordinates ?? null,
+      description: p.description ?? null,
+      capacity: typeof p.capacity === 'number' ? p.capacity : null,
+      window: typeof p.activeFromHour === 'number' && typeof p.activeToHour === 'number'
+        ? `${formatHour(p.activeFromHour)} – ${formatHour(p.activeToHour)}`
+        : null,
+      moments,
+      vendors: weddingStore.getVendorsForPlace(p.id).map((v) => ({
+        vendorId: v.id, companyName: v.companyName, category: v.category,
+      })),
+      tableCount: weddingStore.seatingTables.filter((t) => t.placeId === p.id).length,
+      media: projectMedia('place', p.id),
+      canShowInWorld: true,
+    };
+  });
+
+  const keyPlaces = places.filter((p) => p.moments.length > 0);
+
+  return {
+    places,
+    keyPlaces,
+    counts: {
+      total: places.length,
+      withMoments: keyPlaces.length,
+      totalCapacity: places.reduce((n, p) => n + (p.capacity ?? 0), 0),
+    },
+    hasData: places.length > 0,
+  };
+}
+
+// --- Music ------------------------------------------------------------------
+
+export interface SongProjection {
+  songId: string;
+  title: string;
+  artist: string;
+  duration: string;
+  moment: string;
+  status: string;
+  votes: number;
+  bpm: number | null;
+  /** Timeline anchor, explicit or deterministically derived from the moment. */
+  phaseId: string | null;
+  phaseTitle: string | null;
+  phaseTime: string | null;
+  media: MediaProjection[];
+  /** Cover art only when a real media exists. Never a generated placeholder. */
+  coverSource: string | null;
+}
+
+export interface MusicProjection {
+  songs: SongProjection[];
+  /** Songs grouped under the timeline moment they belong to. */
+  byMoment: { phaseId: string | null; phaseTitle: string; phaseTime: string | null; songs: SongProjection[] }[];
+  counts: { total: number; scheduled: number; validated: number };
+  hasData: boolean;
+}
+
+export function projectMusic(): MusicProjection {
+  const songs: SongProjection[] = weddingStore.tracks.map((t) => {
+    const phase = weddingStore.getPhaseForTrack(t.id);
+    const media = projectMedia('song', t.id);
+    return {
+      songId: t.id,
+      title: t.title,
+      artist: t.artist,
+      duration: t.duration,
+      moment: t.moment,
+      status: t.status,
+      votes: t.votes,
+      bpm: typeof t.bpm === 'number' ? t.bpm : null,
+      phaseId: phase?.id ?? null,
+      phaseTitle: phase ? stripLeadingTime(phase.name) : null,
+      phaseTime: phase ? formatHour(phase.startHour) : null,
+      media,
+      coverSource: media.find((m) => m.kind === 'image')?.source ?? null,
+    };
+  });
+
+  // Grouped in real timeline order.
+  const phaseOrder = new Map(
+    [...weddingStore.phases].sort((a, b) => a.startHour - b.startHour).map((p, i) => [p.id, i]),
+  );
+  const groups = new Map<string, SongProjection[]>();
+  for (const s of songs) {
+    const key = s.phaseId ?? '__unscheduled__';
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key)!.push(s);
+  }
+
+  const byMoment = [...groups.entries()]
+    .sort((a, b) => (phaseOrder.get(a[0]) ?? 999) - (phaseOrder.get(b[0]) ?? 999))
+    .map(([key, list]) => ({
+      phaseId: key === '__unscheduled__' ? null : key,
+      phaseTitle: key === '__unscheduled__' ? 'Hors programme' : (list[0].phaseTitle ?? key),
+      phaseTime: key === '__unscheduled__' ? null : list[0].phaseTime,
+      songs: list,
+    }));
+
+  return {
+    songs,
+    byMoment,
+    counts: {
+      total: songs.length,
+      scheduled: songs.filter((s) => s.phaseId).length,
+      validated: songs.filter((s) => s.status === 'verified').length,
+    },
+    hasData: songs.length > 0,
+  };
+}
+
+// --- Person relationships ---------------------------------------------------
+
+export interface RelationshipProjection {
+  relationshipId: string;
+  kind: RelationshipKind;
+  otherPersonId: string;
+  otherName: string;
+  note: string | null;
+}
+
+export function projectRelationships(personId: string): RelationshipProjection[] {
+  return weddingStore.getRelationshipsFor(personId).map(({ relationship, otherPersonId }) => ({
+    relationshipId: relationship.id,
+    kind: relationship.kind,
+    otherPersonId,
+    otherName: weddingStore.getPerson(otherPersonId)?.displayName ?? otherPersonId,
+    note: relationship.note ?? null,
+  }));
+}
+
 // --- Sections not yet backed by data ----------------------------------------
 
 export interface SectionAvailability {
@@ -291,18 +586,26 @@ export function projectAvailability(): SectionAvailability[] {
   const hero = projectHero();
   const programme = projectProgramme();
   const guests = projectGuests();
+  const vendors = projectVendors();
+  const places = projectPlaces();
+  const music = projectMusic();
+  const mediaCount = weddingStore.media.length;
 
   return [
     { id: 'hero', label: 'Identité', available: hero.hasData },
     { id: 'programme', label: 'Programme', available: programme.hasData },
     { id: 'guests', label: 'Invités', available: guests.hasData },
+    { id: 'vendors', label: 'Prestataires', available: vendors.hasData },
+    { id: 'places', label: 'Lieux', available: places.hasData },
+    { id: 'music', label: 'Musique', available: music.hasData },
     {
       id: 'story', label: 'Notre histoire', available: false,
       reason: 'Aucun champ de récit n’existe dans le modèle de données.',
     },
     {
-      id: 'gallery', label: 'Galerie', available: false,
-      reason: 'Aucun média n’est stocké : les documents importés ne contiennent pas d’images.',
+      id: 'gallery', label: 'Galerie', available: mediaCount > 0,
+      reason: mediaCount > 0 ? undefined
+        : 'Aucun média n’a encore été ajouté. L’architecture Media existe et attend un premier fichier.',
     },
   ];
 }
@@ -312,6 +615,10 @@ export interface WorldModelProjection {
   hero: HeroProjection;
   programme: ProgrammeProjection;
   guests: GuestsProjection;
+  vendors: VendorsProjection;
+  places: PlacesProjection;
+  music: MusicProjection;
+  gallery: MediaProjection[];
   availability: SectionAvailability[];
   /** Store version, so renderers can memoise on real mutations. */
   version: number;
@@ -322,6 +629,14 @@ export function projectWorldModel(): WorldModelProjection {
     hero: projectHero(),
     programme: projectProgramme(),
     guests: projectGuests(),
+    vendors: projectVendors(),
+    places: projectPlaces(),
+    music: projectMusic(),
+    // Every media in the project, whatever it is attached to.
+    gallery: weddingStore.media.map((m) => ({
+      mediaId: m.id, kind: m.kind, source: m.source,
+      title: m.title ?? null, caption: m.caption ?? null,
+    })),
     availability: projectAvailability(),
     version: weddingStore.version,
   };

@@ -39,6 +39,8 @@ import {
   ProjectMembership,
   Invitation,
   TrackVote,
+  MediaAsset,
+  PersonRelationship,
 } from '../types/identity';
 import {
   Agent,
@@ -64,8 +66,10 @@ import {
  *       records, seating tables, memberships, invitations and per-person track
  *       votes. Derived from legacy agents by migrateIdentityModel(); nothing
  *       from v2 is dropped, so v2 snapshots keep loading.
+ *  v4 — media assets and person relationships. Purely additive: both start
+ *       empty and are never seeded, so older snapshots load unchanged.
  */
-export const SCHEMA_VERSION = 3;
+export const SCHEMA_VERSION = 4;
 
 /** Every piece of project state that survives a reload. */
 export interface PersistedDomainState {
@@ -94,6 +98,8 @@ export interface PersistedDomainState {
   memberships: ProjectMembership[];
   invitations: Invitation[];
   trackVotes: TrackVote[];
+  media: MediaAsset[];
+  relationships: PersonRelationship[];
   currentPersonId: string | null;
 }
 
@@ -147,6 +153,10 @@ export const PERSISTED_FIELDS = [
   { key: 'memberships', kind: 'list' },
   { key: 'invitations', kind: 'list' },
   { key: 'trackVotes', kind: 'list' },
+  // Media and relationships legitimately start empty and are never seeded:
+  // emptyListMeansUnset stays off so "no media" persists as "no media".
+  { key: 'media', kind: 'list' },
+  { key: 'relationships', kind: 'list' },
   { key: 'currentPersonId', kind: 'value' },
 ] as const satisfies readonly FieldSpec[];
 
@@ -214,6 +224,12 @@ export function applyDomain(
 export function migrateSnapshot<T extends Record<string, unknown>>(raw: T): T & { schemaVersion: number } {
   const version = typeof raw.schemaVersion === 'number' ? raw.schemaVersion : 1;
   const migrated: Record<string, unknown> = { ...raw };
+
+  if (version < 4) {
+    // v3 -> v4: additive only. `media` and `relationships` are absent, so
+    // applyDomain fills them with empty arrays. No v3 field is touched.
+    migrated.schemaVersion = 4;
+  }
 
   if (version < 3) {
     // v2 → v3: purely additive. The identity entities are absent, so

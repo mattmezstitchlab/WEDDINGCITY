@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { weddingStore } from '../../game/weddingStore';
-import { projectWorldModel, GuestProjection } from '../../projections/worldModel';
+import {
+  projectWorldModel, GuestProjection, VendorProjection, PlaceProjection,
+} from '../../projections/worldModel';
 import { radius, typography, shadowFor, dmcTint } from '../../design/tokens';
 import {
   M, fluid, SectionShell, EmptyState, BigFigure, DmcMark, editorialCard, quietLink, Eyebrow,
@@ -30,7 +32,7 @@ const RSVP_COLOR: Record<string, string> = {
 export function MirrorSite() {
   const store = weddingStore;
   const model = useMemo(() => projectWorldModel(), [store.version]);
-  const { hero, programme, guests, availability } = model;
+  const { hero, programme, guests, vendors, places, music, gallery, availability } = model;
 
   const [openGuestId, setOpenGuestId] = useState<string | null>(null);
   const focusRef = useRef<HTMLDivElement>(null);
@@ -116,16 +118,36 @@ export function MirrorSite() {
                     {m.placeName && (
                       <button
                         style={{ ...quietLink, ...momentPlaceStyle }}
-                        onClick={() => {
-                          store.setProjection('world');
-                          if (m.placeId) store.focusPlace(m.placeId);
-                        }}
+                        onClick={() => store.showEventInWorld(m.phaseId)}
+                        title="Ouvrir ce moment dans le Monde"
                       >
                         {m.placeName} →
                       </button>
                     )}
                     {m.highlight && <span style={momentHighlightStyle}>{m.highlight}</span>}
                   </div>
+
+                  {/* Vendors and music attached to this moment, derived from
+                      the same World Model — not a second list. */}
+                  {(m.vendors.length > 0 || m.songs.length > 0) && (
+                    <div style={momentLinksStyle}>
+                      {m.vendors.map((v) => (
+                        <button
+                          key={v.vendorId}
+                          style={{ ...quietLink, ...tagStyle }}
+                          onClick={() => store.showVendorInWorld(v.vendorId)}
+                          title={`${v.category} · voir dans le Monde`}
+                        >
+                          {v.companyName}
+                        </button>
+                      ))}
+                      {m.songs.map((sg) => (
+                        <span key={sg.songId} style={{ ...tagStyle, borderStyle: 'dashed' }}>
+                          ♪ {sg.title} — {sg.artist}
+                        </span>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </li>
             ))}
@@ -224,6 +246,94 @@ export function MirrorSite() {
         </SectionShell>
       )}
 
+      {/* ---------------------------------------------------------- PRESTATAIRES */}
+      {vendors.hasData && (
+        <SectionShell
+          id="vendors"
+          eyebrow="Celles et ceux qui font"
+          title="Les prestataires"
+          lead={`${vendors.counts.total} intervenants, dont ${vendors.counts.contracted} contractualisés.`}
+        >
+          <div style={{ display: 'grid', gap: fluid(28, 44) }}>
+            {vendors.byCategory.map((group) => (
+              <div key={group.category}>
+                <Eyebrow>{group.category}</Eyebrow>
+                <div style={{ ...tableGridStyle, marginTop: 14 }}>
+                  {group.vendors.map((v) => <VendorCard key={v.vendorId} vendor={v} />)}
+                </div>
+              </div>
+            ))}
+          </div>
+        </SectionShell>
+      )}
+
+      {/* ----------------------------------------------------------------- LIEUX */}
+      {places.hasData && (
+        <SectionShell
+          id="places"
+          eyebrow="Les espaces"
+          title="Le lieu"
+          lead={`${places.counts.withMoments} espaces accueillent un moment du programme, sur ${places.counts.total} référencés.`}
+          tone="surface"
+        >
+          <div style={{ display: 'grid', gap: fluid(16, 22) }}>
+            {(places.keyPlaces.length > 0 ? places.keyPlaces : places.places).map((p) => (
+              <PlaceRow key={p.placeId} place={p} />
+            ))}
+          </div>
+
+          {places.keyPlaces.length > 0 && places.places.length > places.keyPlaces.length && (
+            <div style={{ marginTop: fluid(20, 30), fontSize: typography.size.caption, color: M.textMuted }}>
+              {places.places.length - places.keyPlaces.length} autres espaces référencés dans le monde
+              (logistique, stationnement, zones prestataires).
+            </div>
+          )}
+        </SectionShell>
+      )}
+
+      {/* --------------------------------------------------------------- MUSIQUE */}
+      {music.hasData && (
+        <SectionShell
+          id="music"
+          eyebrow="La bande-son"
+          title="Musique"
+          lead={`${music.counts.total} titres, ${music.counts.scheduled} rattachés à un moment du programme.`}
+        >
+          <div style={{ display: 'grid', gap: fluid(24, 38) }}>
+            {music.byMoment.map((group) => (
+              <div key={group.phaseId ?? 'unscheduled'}>
+                <div style={musicMomentHeadStyle}>
+                  {group.phaseTime && <span style={musicTimeStyle}>{group.phaseTime}</span>}
+                  <span style={musicMomentTitleStyle}>{group.phaseTitle}</span>
+                  {group.phaseId && (
+                    <button
+                      style={{ ...quietLink, ...momentPlaceStyle, marginLeft: 'auto' }}
+                      onClick={() => store.showEventInWorld(group.phaseId!)}
+                    >
+                      Voir le moment →
+                    </button>
+                  )}
+                </div>
+                <ul style={{ listStyle: 'none', margin: '12px 0 0', padding: 0 }}>
+                  {group.songs.map((sg) => (
+                    <li key={sg.songId} style={songRowStyle}>
+                      <div style={{ minWidth: 0 }}>
+                        <div style={songTitleStyle}>{sg.title}</div>
+                        <div style={songArtistStyle}>{sg.artist}</div>
+                      </div>
+                      <div style={songMetaStyle}>
+                        {sg.duration}
+                        {sg.status === 'verified' ? ' · validé' : ''}
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
+        </SectionShell>
+      )}
+
       {/* --------------------------------------- SECTIONS WITHOUT DATA (honest) */}
       {storySection && !storySection.available && (
         <SectionShell id="story" eyebrow="Le récit" title="Notre histoire">
@@ -235,13 +345,28 @@ export function MirrorSite() {
         </SectionShell>
       )}
 
-      {gallerySection && !gallerySection.available && (
+      {gallerySection && (
         <SectionShell id="gallery" eyebrow="Les images" title="Galerie" tone="surface">
-          <EmptyState
-            title="Votre histoire visuelle commencera ici"
-            body="Aucune photo n’est encore rattachée au projet. Rien n’est affiché à la place : ces images n’existent pas."
-            note={gallerySection.reason}
-          />
+          {gallery.length > 0 ? (
+            <div style={galleryGridStyle}>
+              {gallery.filter((g) => g.kind === 'image').map((g) => (
+                <figure key={g.mediaId} style={{ margin: 0 }}>
+                  <img
+                    src={g.source}
+                    alt={g.title ?? ''}
+                    style={{ width: '100%', height: 'auto', display: 'block', borderRadius: radius.md }}
+                  />
+                  {g.caption && <figcaption style={captionStyle}>{g.caption}</figcaption>}
+                </figure>
+              ))}
+            </div>
+          ) : (
+            <EmptyState
+              title="Aucun média n’a encore été ajouté"
+              body="L’architecture est prête : un fichier peut être rattaché à une personne, un lieu, un prestataire, un moment ou un morceau. Rien n’est affiché à la place, car ces images n’existent pas."
+              note={gallerySection.reason}
+            />
+          )}
         </SectionShell>
       )}
 
@@ -313,6 +438,123 @@ function GuestRow({
         )}
       </div>
     </li>
+  );
+}
+
+// --- Vendor: an editorial card, typographic when no photo exists ------------
+
+function VendorCard({ vendor }: { vendor: VendorProjection }) {
+  const store = weddingStore;
+  const cover = vendor.media.find((m) => m.kind === 'image');
+
+  return (
+    <article style={{ ...editorialCard, padding: '22px 24px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+      {/* No photo is fabricated: without a real media, the card is purely typographic. */}
+      {cover && (
+        <img
+          src={cover.source}
+          alt={vendor.companyName}
+          style={{ width: '100%', borderRadius: radius.md, display: 'block' }}
+        />
+      )}
+
+      <div>
+        <div style={vendorRoleStyle}>{vendor.category}</div>
+        <h3 style={{ margin: '6px 0 0', fontSize: fluid(17, 21), fontWeight: typography.weight.medium, color: M.textPrimary }}>
+          {vendor.companyName}
+        </h3>
+        {vendor.contactName && vendor.contactName !== vendor.companyName && (
+          <div style={{ marginTop: 4, fontSize: typography.size.caption, color: M.textSecondary }}>
+            {vendor.contactName}
+          </div>
+        )}
+      </div>
+
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+        <span style={{ ...tagStyle, borderStyle: 'solid' }}>{VENDOR_STATUS[vendor.status] ?? vendor.status}</span>
+        {vendor.documentCount > 0 && <span style={tagStyle}>{vendor.documentCount} document(s)</span>}
+        {vendor.taskCount > 0 && <span style={tagStyle}>{vendor.taskCount} tâche(s)</span>}
+      </div>
+
+      {vendor.moments.length > 0 && (
+        <div style={{ fontSize: typography.size.caption, color: M.textSecondary, lineHeight: 1.7 }}>
+          {vendor.moments.map((mo) => (
+            <div key={mo.phaseId}>
+              <span style={{ fontFamily: typography.family.mono, color: M.textMuted }}>{mo.time}</span>{' '}
+              {mo.title}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Contact details only when they really exist. */}
+      {(vendor.phone || vendor.email || vendor.websiteUrl) && (
+        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', fontSize: typography.size.caption }}>
+          {vendor.phone && <a href={`tel:${vendor.phone}`} style={contactLinkStyle}>{vendor.phone}</a>}
+          {vendor.email && <a href={`mailto:${vendor.email}`} style={contactLinkStyle}>{vendor.email}</a>}
+          {vendor.websiteUrl && (
+            <a href={vendor.websiteUrl} target="_blank" rel="noreferrer" style={contactLinkStyle}>Site</a>
+          )}
+        </div>
+      )}
+
+      {vendor.notes && <p style={{ margin: 0, fontSize: typography.size.caption, color: M.textSecondary }}>{vendor.notes}</p>}
+
+      {vendor.canShowInWorld && (
+        <button style={{ ...showInWorldStyle, alignSelf: 'flex-start' }} onClick={() => store.showVendorInWorld(vendor.vendorId)}>
+          Voir dans le Monde →
+        </button>
+      )}
+    </article>
+  );
+}
+
+// --- Place: a wide editorial row --------------------------------------------
+
+function PlaceRow({ place }: { place: PlaceProjection }) {
+  const store = weddingStore;
+  return (
+    <article style={{ ...editorialCard, padding: `${fluid(20, 28)} ${fluid(20, 30)}` }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap', alignItems: 'baseline' }}>
+        <div style={{ minWidth: 0 }}>
+          <div style={vendorRoleStyle}>{PLACE_KIND_LABEL[place.kind] ?? place.kind}</div>
+          <h3 style={{ margin: '6px 0 0', fontSize: fluid(19, 26), fontWeight: typography.weight.medium, letterSpacing: '-0.015em', color: M.textPrimary }}>
+            {place.name}
+          </h3>
+        </div>
+        <button style={{ ...quietLink, ...momentPlaceStyle }} onClick={() => store.showPlaceInWorld(place.placeId)}>
+          Explorer dans le Monde →
+        </button>
+      </div>
+
+      {place.description && (
+        <p style={{ margin: '12px 0 0', maxWidth: 620, fontSize: fluid(13, 15), lineHeight: typography.leading.relaxed, color: M.textSecondary }}>
+          {place.description}
+        </p>
+      )}
+
+      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 14 }}>
+        {place.address && <span style={tagStyle}>{place.address}</span>}
+        {place.gps && <span style={tagStyle}>{place.gps}</span>}
+        {place.capacity !== null && <span style={tagStyle}>{place.capacity} places</span>}
+        {place.window && <span style={tagStyle}>{place.window}</span>}
+        {place.tableCount > 0 && <span style={tagStyle}>{place.tableCount} table(s)</span>}
+      </div>
+
+      {place.moments.length > 0 && (
+        <div style={{ marginTop: 14, display: 'flex', gap: 14, flexWrap: 'wrap' }}>
+          {place.moments.map((mo) => (
+            <button
+              key={mo.phaseId}
+              style={{ ...quietLink, fontSize: typography.size.caption, color: M.textSecondary }}
+              onClick={() => store.showEventInWorld(mo.phaseId)}
+            >
+              <span style={{ fontFamily: typography.family.mono, color: M.textPrimary }}>{mo.time}</span> {mo.title}
+            </button>
+          ))}
+        </div>
+      )}
+    </article>
   );
 }
 
@@ -511,4 +753,77 @@ const footerStyle: React.CSSProperties = {
   padding: `${fluid(28, 40)} ${fluid(20, 72)}`,
   borderTop: `1px solid ${M.line}`,
   fontSize: typography.size.caption, color: M.textSecondary,
+};
+
+const VENDOR_STATUS: Record<string, string> = {
+  prospect: 'Prospect', quoted: 'Devis', contracted: 'Contractualisé', cancelled: 'Annulé',
+};
+
+const PLACE_KIND_LABEL: Record<string, string> = {
+  main_venue: 'Lieu principal', ceremony: 'Cérémonie', civil: 'Cérémonie civile',
+  cocktail: 'Cocktail', dinner: 'Dîner', dancefloor: 'Dancefloor',
+  accommodation: 'Hébergement', parking: 'Accès & stationnement',
+  vendor_space: 'Espace prestataire', other: 'Autre',
+};
+
+const momentLinksStyle: React.CSSProperties = {
+  display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 12,
+};
+
+const tagStyle: React.CSSProperties = {
+  display: 'inline-flex', alignItems: 'center',
+  fontSize: typography.size.caption, color: M.textSecondary,
+  border: `1px solid ${M.line}`, borderRadius: 999, padding: '4px 11px',
+  background: 'transparent', cursor: 'inherit',
+};
+
+const vendorRoleStyle: React.CSSProperties = {
+  fontSize: 9, letterSpacing: '0.16em', textTransform: 'uppercase',
+  color: M.textMuted, fontWeight: 700,
+};
+
+const contactLinkStyle: React.CSSProperties = {
+  color: M.textPrimary, textDecoration: 'none',
+  borderBottom: `1px solid ${M.lineStrong}`, paddingBottom: 1,
+};
+
+const musicMomentHeadStyle: React.CSSProperties = {
+  display: 'flex', alignItems: 'baseline', gap: 12,
+  paddingBottom: 10, borderBottom: `1px solid ${M.line}`,
+};
+
+const musicTimeStyle: React.CSSProperties = {
+  fontFamily: typography.family.mono, fontSize: fluid(15, 19), color: M.textPrimary,
+};
+
+const musicMomentTitleStyle: React.CSSProperties = {
+  fontSize: fluid(13, 16), letterSpacing: '0.1em', textTransform: 'uppercase',
+  color: M.textSecondary, fontWeight: 600,
+};
+
+const songRowStyle: React.CSSProperties = {
+  display: 'flex', justifyContent: 'space-between', gap: 16, alignItems: 'center',
+  padding: '11px 0', borderBottom: `1px solid ${M.line}`,
+};
+
+const songTitleStyle: React.CSSProperties = {
+  fontSize: typography.size.bodyLg, color: M.textPrimary,
+  overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+};
+
+const songArtistStyle: React.CSSProperties = {
+  fontSize: typography.size.caption, color: M.textMuted, marginTop: 2,
+};
+
+const songMetaStyle: React.CSSProperties = {
+  fontSize: typography.size.caption, color: M.textMuted,
+  fontFamily: typography.family.mono, whiteSpace: 'nowrap',
+};
+
+const galleryGridStyle: React.CSSProperties = {
+  display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 16,
+};
+
+const captionStyle: React.CSSProperties = {
+  marginTop: 8, fontSize: typography.size.caption, color: M.textSecondary,
 };

@@ -236,6 +236,14 @@ export interface TrackEntity {
   note?: string;
   votes: number;
   hasVoted?: boolean;
+  /**
+   * Explicit link to a timeline phase. When absent, the phase is derived
+   * deterministically from `moment` — a song is a temporal component of the
+   * world, not just a playlist row.
+   */
+  linkedPhaseId?: string;
+  /** Exact minute this track is meant to play, when decided. */
+  scheduledHour?: number;
   sourceOrigin?: DataSourceOrigin;
 }
 
@@ -331,8 +339,20 @@ export interface ReconstructedVenue {
   createdAt: string;
 }
 
+/**
+ * Functional classification of a place, derived from its zone when not set.
+ * Lets Mirror group venues editorially without a second model.
+ */
+export type PlaceKind =
+  | 'main_venue' | 'ceremony' | 'civil' | 'cocktail' | 'dinner'
+  | 'dancefloor' | 'accommodation' | 'parking' | 'vendor_space' | 'other';
+
 export interface Place {
   id: string;
+  /** Optional override; otherwise derived from `zone`. */
+  kind?: PlaceKind;
+  /** Postal address, when it has really been entered. */
+  address?: string;
   name: string;
   code: string;
   zone: 'mairie' | 'manoir' | 'ceremonie' | 'cocktail' | 'reception' | 'dancefloor' | 'parking';

@@ -42,6 +42,8 @@ export type VendorId = string;
 export type DmcIdentityId = string;
 export type InvitationId = string;
 export type MembershipId = string;
+export type MediaId = string;
+export type RelationshipId = string;
 export type SeatingTableId = string;
 export type ProjectId = string;
 export type AgentId = string;
@@ -60,6 +62,53 @@ export interface Timestamped {
 }
 
 // ---------------------------------------------------------------------------
+// Media — a real asset attached to a real entity
+// ---------------------------------------------------------------------------
+// Deliberately introduced BEFORE any media exists. The architecture must be
+// ready so that the day a photo is added it can be attached to a Person, a
+// Place, a Vendor, an Event or a Song without inventing a parallel model.
+//
+// NOTHING is seeded: there are no demo media, and no placeholder URLs.
+// ---------------------------------------------------------------------------
+export type MediaKind = 'image' | 'video' | 'audio' | 'document';
+
+/** What a media item can be attached to. Always by stable id. */
+export type MediaOwnerKind = 'person' | 'place' | 'vendor' | 'event' | 'song' | 'wedding';
+
+export interface MediaAsset extends Timestamped {
+  id: MediaId;
+  kind: MediaKind;
+  /** Object URL, data URL or remote source. Never a stock placeholder. */
+  source: string;
+  title?: string;
+  caption?: string;
+  /** Owner entity kind + id. A media is always attached to something real. */
+  ownerKind: MediaOwnerKind;
+  ownerId: string;
+  /** Original file name when it came from an upload. */
+  fileName?: string;
+  byteSize?: number;
+  origin: EntityOrigin;
+}
+
+// ---------------------------------------------------------------------------
+// Relationships between people — a first-order edge, not a visual line
+// ---------------------------------------------------------------------------
+export type RelationshipKind =
+  | 'partner' | 'parent' | 'child' | 'sibling'
+  | 'family' | 'friend' | 'colleague' | 'witness' | 'works_with';
+
+export interface PersonRelationship {
+  id: RelationshipId;
+  fromPersonId: PersonId;
+  toPersonId: PersonId;
+  kind: RelationshipKind;
+  /** Free note, only when the user actually wrote one. */
+  note?: string;
+  createdAt: string;
+}
+
+// ---------------------------------------------------------------------------
 // Person — the identity of a human being, independent of any role
 // ---------------------------------------------------------------------------
 export interface Person extends Timestamped {
@@ -75,6 +124,10 @@ export interface Person extends Timestamped {
   dmcIdentityId?: DmcIdentityId;
   /** Account this person signs in with, when they have one. */
   accountId?: AccountId;
+  /** Portrait, when one has really been added. Never defaulted to an avatar. */
+  portraitMediaId?: MediaId;
+  /** Free-form note written by a human. Absent until then. */
+  notes?: string;
   origin: EntityOrigin;
 }
 
@@ -168,6 +221,8 @@ export interface Vendor extends Timestamped {
   phone?: string;
   email?: string;
   websiteUrl?: string;
+  /** Free-form note. */
+  notes?: string;
   origin: EntityOrigin;
 }
 
@@ -250,6 +305,8 @@ export interface IdentityState {
   memberships: ProjectMembership[];
   invitations: Invitation[];
   trackVotes: TrackVote[];
+  media: MediaAsset[];
+  relationships: PersonRelationship[];
   /** The person the current session acts as. Replaces role-based matching. */
   currentPersonId: PersonId | null;
 }

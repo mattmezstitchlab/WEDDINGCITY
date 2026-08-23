@@ -255,6 +255,7 @@ export function emptyIdentityState(): IdentityState {
   return {
     persons: [], accounts: [], dmcIdentities: [], guests: [], vendors: [],
     seatingTables: [], memberships: [], invitations: [], trackVotes: [],
+    media: [], relationships: [],
     currentPersonId: null,
   };
 }
@@ -294,6 +295,8 @@ export function migrateIdentityModel(input: MigrationInput): {
         memberships: [...(input.existing.memberships ?? [])],
         invitations: [...(input.existing.invitations ?? [])],
         trackVotes: [...(input.existing.trackVotes ?? [])],
+        media: [...(input.existing.media ?? [])],
+        relationships: [...(input.existing.relationships ?? [])],
       }
     : emptyIdentityState();
 
