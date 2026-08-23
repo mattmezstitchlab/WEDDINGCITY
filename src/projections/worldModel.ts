@@ -320,6 +320,11 @@ export interface MediaProjection {
   caption: string | null;
   /** 'manual' = uploaded by the user, 'research' = confirmed enrichment. */
   origin?: MediaAsset['origin'];
+  /**
+   * Where a non-manual asset came from. Consumed by the CANVAS only — the
+   * Mirror shows the wedding, never its supply chain.
+   */
+  provenance?: MediaAsset['provenance'];
 }
 
 export function projectMedia(ownerKind: MediaAsset['ownerKind'], ownerId: string): MediaProjection[] {
@@ -335,6 +340,7 @@ export function projectMedia(ownerKind: MediaAsset['ownerKind'], ownerId: string
       title: m.title ?? null,
       caption: m.caption ?? null,
       origin: m.origin,
+      provenance: m.provenance,
     }));
 }
 

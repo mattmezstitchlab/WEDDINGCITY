@@ -49,7 +49,7 @@ async function checkNativeEsmStartup() {
     // Transpile file-by-file. NO bundling: module boundaries and evaluation
     // order are preserved exactly as the browser/Vite would see them.
     const inputs = [];
-    for (const dir of ['game', 'types']) {
+    for (const dir of ['game', 'game/enrichment', 'types']) {
       const abs = path.join(SRC, dir);
       if (!existsSync(abs)) continue;
       for (const f of readdirSync(abs)) if (f.endsWith('.ts')) inputs.push(path.join(abs, f));
@@ -66,13 +66,17 @@ async function checkNativeEsmStartup() {
     });
 
     // Node needs explicit extensions on relative specifiers.
-    for (const dir of ['game', 'types']) {
+    for (const dir of ['game', 'game/enrichment', 'types']) {
       const abs = path.join(out, dir);
       if (!existsSync(abs)) continue;
       for (const f of readdirSync(abs)) {
         const fp = path.join(abs, f);
-        writeFileSync(fp, readFileSync(fp, 'utf8').replace(
-          /from\s*"(\.[^"]+)"/g, (m, spec) => (spec.endsWith('.mjs') ? m : `from "${spec}.mjs"`)));
+        if (!f.endsWith('.mjs')) continue;
+        const addExt = (m, spec, wrap) => (spec.endsWith('.mjs') ? m : wrap(`${spec}.mjs`));
+        writeFileSync(fp, readFileSync(fp, 'utf8')
+          .replace(/from\s*"(\.[^"]+)"/g, (m, spec) => addExt(m, spec, (x) => `from "${x}"`))
+          // dynamic import of the lazily loaded enrichment provider
+          .replace(/import\(\s*"(\.[^"]+)"\s*\)/g, (m, spec) => addExt(m, spec, (x) => `import("${x}")`)));
       }
     }
 

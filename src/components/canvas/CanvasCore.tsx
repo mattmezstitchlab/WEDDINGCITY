@@ -7,7 +7,8 @@ import {
 } from './CanvasPrimitives';
 import {
   searchEnrichment, confirmEnrichment, removeEnrichment, getEnrichmentState,
-  getCachedResult, getEnabledProviders, EnrichmentCandidate,
+  getCachedResult, isEnrichmentAvailable, isItunesEnabled, setItunesEnabled,
+  describeActivation, EnrichmentCandidate,
 } from '../../game/enrichment';
 
 // ---------------------------------------------------------------------------
@@ -505,7 +506,17 @@ function MediaField({ ownerKind, ownerId, existing }: {
           {m.kind === 'image' && (
             <img src={m.source} alt={m.title ?? ''} style={{ width: 34, height: 34, objectFit: 'cover', borderRadius: radius.xs }} />
           )}
-          <Chip label={m.title ?? m.kind} onRemove={() => store.removeMedia(m.id)} />
+          <span style={{ display: 'inline-grid', gap: 2 }}>
+            <Chip label={m.title ?? m.kind} onRemove={() => store.removeMedia(m.id)} />
+            {/* PROVENANCE — Canvas only. The Mirror never shows this. */}
+            <span style={{ fontSize: 9.5, color: K.textMuted }}>
+              {m.origin === 'manual'
+                ? 'Import manuel'
+                : m.origin === 'research'
+                  ? `Enrichi automatiquement${m.provenance?.providerName ? ` · ${m.provenance.providerName}` : ''}`
+                  : m.origin}
+            </span>
+          </span>
         </span>
       ))}
       <label style={{ ...addBtnStyle, display: 'inline-block' }}>
@@ -685,6 +696,8 @@ function MusicSurface({ model }: { model: ReturnType<typeof projectWorldModel> }
         + Ajouter un morceau
       </button>
 
+      <EnrichmentActivation />
+
       {model.music.songs.map((sg) => {
         const track = store.tracks.find((t) => t.id === sg.songId);
         if (!track) return null;
@@ -816,6 +829,44 @@ function MediaSurface({ model }: { model: ReturnType<typeof projectWorldModel> }
 // human picks. When no provider is enabled (the default in this build), the
 // field says so plainly instead of offering a button that cannot work.
 
+function formatMs(ms: number | undefined): string | null {
+  if (!ms || ms <= 0) return null;
+  const total = Math.round(ms / 1000);
+  return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, '0')}`;
+}
+
+/**
+ * ACTIVATION SWITCH — the one place a human turns the external search on.
+ *
+ * It grants permission; it proves nothing. Reachability is only ever
+ * demonstrated by a search that actually returns candidates, so the copy here
+ * never claims the service works.
+ */
+function EnrichmentActivation() {
+  const [, setTick] = useState(0);
+  const on = isItunesEnabled();
+  return (
+    <div style={{ ...canvasCard, padding: '10px 14px', display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+      <span style={{ fontSize: 10.5, color: K.textSecondary, letterSpacing: '0.06em', textTransform: 'uppercase' }}>
+        Recherche automatique
+      </span>
+      <button
+        onClick={() => { setItunesEnabled(!on); setTick((n) => n + 1); }}
+        aria-pressed={on}
+        style={{ ...addBtnStyle, borderStyle: 'solid' }}
+      >
+        {on ? 'Désactiver iTunes Search' : 'Activer iTunes Search'}
+      </button>
+      <span style={{ fontSize: 10, color: K.textMuted, flex: 1, minWidth: 220 }}>
+        {describeActivation()}
+        {' '}
+        La connexion à Apple n’a pas pu être vérifiée depuis l’environnement de
+        développement : si elle échoue, l’import manuel reste disponible.
+      </span>
+    </div>
+  );
+}
+
 function EnrichmentField({ songId, title, artist }: { songId: string; title: string; artist: string }) {
   const store = weddingStore;
   const [busy, setBusy] = useState(false);
@@ -824,7 +875,7 @@ function EnrichmentField({ songId, title, artist }: { songId: string; title: str
 
   const state = getEnrichmentState(songId);
   const cached = getCachedResult(songId);
-  const providersOn = getEnabledProviders().length > 0;
+  const available = isEnrichmentAvailable();
   void tick;
 
   const runSearch = async () => {
@@ -834,9 +885,12 @@ function EnrichmentField({ songId, title, artist }: { songId: string; title: str
     setBusy(false);
     setTick((n) => n + 1);
     if (result.state === 'unavailable') {
-      setMessage('Aucun service d’enrichissement activé dans cette version.');
+      // Never an exception, never a stack trace: one calm sentence.
+      setMessage('Enrichissement automatique indisponible — import manuel disponible.');
     } else if (result.state === 'not_found') {
-      setMessage('Aucune correspondance trouvée pour ce titre.');
+      setMessage('Aucune correspondance fiable. Le morceau reste tel quel — import manuel disponible.');
+    } else if (result.exact === null && result.candidates.length > 1) {
+      setMessage('Plusieurs correspondances proches : à vous de choisir, rien n’est appliqué automatiquement.');
     }
   };
 
@@ -857,15 +911,30 @@ function EnrichmentField({ songId, title, artist }: { songId: string; title: str
   };
 
   if (state === 'enriched') {
+    const enriched = store.getMediaFor('song', songId).find((m) => m.origin === 'research');
+    const prov = enriched?.provenance;
     return (
-      <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-        <span style={{ fontSize: 10.5, color: '#4c7a63' }}>Enrichi</span>
-        <button
-          onClick={() => { removeEnrichment(songId); setTick((n) => n + 1); setMessage(null); }}
-          style={{ ...addBtnStyle, border: 'none', color: '#b4536b' }}
-        >
-          Retirer l’enrichissement
-        </button>
+      <div style={{ display: 'grid', gap: 4 }}>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+          <span style={{ fontSize: 10.5, color: '#4c7a63' }}>
+            Enrichi automatiquement{prov?.providerName ? ` · ${prov.providerName}` : ''}
+          </span>
+          {prov?.externalUrl && (
+            <a href={prov.externalUrl} target="_blank" rel="noreferrer noopener"
+              style={{ ...linkBtnStyle, textDecoration: 'none' }}>
+              voir la source ↗
+            </a>
+          )}
+          <button
+            onClick={() => { removeEnrichment(songId); setTick((n) => n + 1); setMessage(null); }}
+            style={{ ...addBtnStyle, border: 'none', color: '#b4536b' }}
+          >
+            Retirer l’enrichissement
+          </button>
+        </div>
+        {prov?.attribution && (
+          <span style={{ fontSize: 9.5, color: K.textMuted }}>{prov.attribution}</span>
+        )}
         {message && <span style={{ fontSize: 10, color: K.textMuted }}>{message}</span>}
       </div>
     );
@@ -874,42 +943,61 @@ function EnrichmentField({ songId, title, artist }: { songId: string; title: str
   return (
     <div style={{ display: 'grid', gap: 8 }}>
       <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-        <button onClick={runSearch} disabled={busy || !providersOn} style={{
+        <button onClick={runSearch} disabled={busy || !available} style={{
           ...addBtnStyle,
           borderStyle: 'solid',
-          opacity: providersOn ? 1 : 0.45,
-          cursor: providersOn ? 'pointer' : 'not-allowed',
+          opacity: available ? 1 : 0.45,
+          cursor: available ? 'pointer' : 'not-allowed',
         }}>
           {busy ? 'Recherche…' : 'Enrichir le morceau'}
         </button>
-        {!providersOn && (
+        {!available && (
           <span style={{ fontSize: 10, color: K.textMuted }}>
-            Service non activé — import manuel disponible ci-dessus.
+            Enrichissement automatique indisponible — import manuel disponible ci-dessus.
           </span>
         )}
       </div>
 
-      {/* Candidates: a human always chooses. */}
+      {/* PROPOSITION — a human always confirms. Nothing is applied on its own. */}
       {cached && cached.candidates.length > 0 && (
         <div style={{ display: 'grid', gap: 6 }}>
-          {cached.candidates.map((c) => (
-            <div key={c.externalId} style={candidateStyle}>
-              {c.artworkUrl && (
-                <img src={c.artworkUrl} alt="" loading="lazy" decoding="async"
-                  style={{ width: 34, height: 34, objectFit: 'cover', borderRadius: radius.xs }} />
-              )}
-              <span style={{ flex: 1, minWidth: 0 }}>
-                <span style={{ display: 'block', fontSize: 11.5, color: K.textPrimary }}>{c.title}</span>
-                <span style={{ display: 'block', fontSize: 10, color: K.textMuted }}>
-                  {c.artist}
-                  {c.previewUrl ? ' · extrait disponible' : ' · sans extrait'}
+          {cached.candidates.map((c) => {
+            const exact = cached.exact?.externalId === c.externalId;
+            const duration = formatMs(c.durationMs);
+            return (
+              <div key={c.externalId} style={{
+                ...candidateStyle,
+                boxShadow: exact ? `inset 0 0 0 1px ${K.lineStrong}` : 'none',
+              }}>
+                {c.artworkUrl && (
+                  <img src={c.artworkUrl} alt="" loading="lazy" decoding="async"
+                    style={{ width: 44, height: 44, objectFit: 'cover', borderRadius: radius.xs }} />
+                )}
+                <span style={{ flex: 1, minWidth: 0 }}>
+                  <span style={{ display: 'block', fontSize: 11.5, color: K.textPrimary }}>
+                    {c.title}
+                    {exact && (
+                      <span style={{ marginLeft: 6, fontSize: 9.5, color: '#4c7a63' }}>
+                        correspondance exacte
+                      </span>
+                    )}
+                  </span>
+                  <span style={{ display: 'block', fontSize: 10, color: K.textMuted }}>
+                    {c.artist}
+                    {c.album ? ` · ${c.album}` : ''}
+                    {duration ? ` · ${duration}` : ''}
+                  </span>
+                  <span style={{ display: 'block', fontSize: 9.5, color: K.textMuted }}>
+                    {c.artworkUrl ? 'pochette' : 'sans pochette'}
+                    {c.previewUrl ? ' · extrait écoutable' : ' · sans extrait'}
+                  </span>
                 </span>
-              </span>
-              <button onClick={() => apply(c)} style={{ ...addBtnStyle, borderStyle: 'solid' }}>
-                Associer
-              </button>
-            </div>
-          ))}
+                <button onClick={() => apply(c)} style={{ ...addBtnStyle, borderStyle: 'solid' }}>
+                  Confirmer
+                </button>
+              </div>
+            );
+          })}
           {cached.attribution && (
             <span style={{ fontSize: 9.5, color: K.textMuted }}>{cached.attribution}</span>
           )}

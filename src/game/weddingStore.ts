@@ -46,7 +46,8 @@ import { PlaceKind } from '../types/wedding';
 import {
   Person, UserAccountV2, DmcIdentityRecord, Guest, Vendor, SeatingTable,
   ProjectMembership, Invitation, TrackVote, Capability, MembershipRole, RsvpStatus,
-  MediaAsset, MediaKind, MediaOwnerKind, PersonRelationship, RelationshipKind,
+  MediaAsset, MediaKind, MediaOwnerKind, MediaProvenance, EntityOrigin,
+  PersonRelationship, RelationshipKind,
 } from '../types/identity';
 import {
   migrateIdentityModel, MigrationReport, emptyIdentityState, capabilitiesForRole,
@@ -2081,6 +2082,14 @@ class WeddingStore {
     caption?: string;
     fileName?: string;
     byteSize?: number;
+    /**
+     * Defaults to 'manual' — an upload. Enrichment passes 'research' at
+     * creation time (Phase F.3) rather than patching the asset afterwards, so
+     * an asset is never briefly mislabelled as manual.
+     */
+    origin?: EntityOrigin;
+    /** Required in practice for non-manual assets: where it came from. */
+    provenance?: MediaProvenance;
   }): MediaAsset | null {
     // A media must belong to something that exists.
     if (!this.mediaOwnerExists(input.ownerKind, input.ownerId)) return null;
@@ -2095,7 +2104,8 @@ class WeddingStore {
       ownerId: input.ownerId,
       fileName: input.fileName,
       byteSize: input.byteSize,
-      origin: 'manual',
+      origin: input.origin ?? 'manual',
+      provenance: input.provenance,
       createdAt: at,
       updatedAt: at,
     };

@@ -217,7 +217,9 @@ export function MirrorMusic({ music }: { music: MusicProjection }) {
                       artist={sg.artist}
                       coverSource={sg.coverSource}
                       audioSource={sg.audioSource}
-                      size={64}
+                      /* 05 MUSIQUE: the cover is a graphic element in its own
+                         right. In 01 PROGRAMME it stays contextual (38px). */
+                      size={92}
                     />
 
                     <button

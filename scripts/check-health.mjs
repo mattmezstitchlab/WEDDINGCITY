@@ -19,7 +19,7 @@
 
 import { readFileSync, readdirSync, existsSync } from 'node:fs';
 import path from 'node:path';
-import { compileGameModules, createMemoryStorage, installBrowserGlobals, createReporter, SRC } from './lib/esm-harness.mjs';
+import { compileGameModules, createMemoryStorage, installBrowserGlobals, createReporter, SRC, ROOT } from './lib/esm-harness.mjs';
 
 const r = createReporter();
 console.log('\u001b[1mWedding City — System Nerve honesty guard\u001b[0m');
@@ -164,21 +164,32 @@ try {
     }
 
     // ------------------------------------------------------------------
-    // NETWORK POLICY — updated explicitly in Phase F.2, not bypassed.
+    // NETWORK POLICY — revised in Phase F.3, never bypassed.
     //
-    // The rule was "no engine performs network calls". Music enrichment
-    // introduces the app's first legitimate outbound call, so the rule is now:
+    // Phase F.2 rule: "no engine performs network calls, and the only
+    // provider ships hard-disabled".
+    // Phase F.3 decision: the iTunes provider MAY be activated. The rule
+    // therefore becomes, and is asserted below:
     //
     //   1. No engine at the ROOT of src/game may call the network.
-    //   2. src/game/enrichment/ may, because that is its declared purpose.
-    //   3. Any such provider must be DISABLED BY DEFAULT, so a default build
-    //      still makes zero network calls — which is asserted below.
+    //   2. Only src/game/enrichment/ may, because that is its declared purpose.
+    //   3. The switch lives in a network-free leaf (enrichment/activation.ts)
+    //      and its resolved DEFAULT is OFF: a default build makes zero
+    //      outbound requests. Turning it on requires either the build-time
+    //      env var VITE_ENRICHMENT_ITUNES or a deliberate user action.
+    //   4. The provider module is reached only through a DYNAMIC import, so
+    //      the code that owns `fetch` is neither bundled into the initial
+    //      chunk nor evaluated in a default build.
+    //   5. Even enabled, a request happens only on an explicit user action —
+    //      never at import time, never during a render.
+    //   6. A failed request must be reported as "unreachable", never as
+    //      "no match found".
     //
-    // Reason it ships disabled: the Phase F.2 audit could not reach a single
-    // music metadata host from the build environment (itunes, spotify,
-    // musicbrainz, coverartarchive, deezer all refused; npm and github
-    // answered 200). The integration is therefore UNVERIFIED, and unverified
-    // code must not run by default.
+    // Why it still ships off: the build environment cannot reach any music
+    // host (itunes, spotify, musicbrainz, coverartarchive, deezer all refuse;
+    // npm and github answer 200). The integration remains UNVERIFIED from
+    // here, and unverified code must not run by default.
+    // Full rationale: docs/NETWORK-POLICY.md
     // ------------------------------------------------------------------
     const gameFiles = readdirSync(path.join(SRC, 'game')).filter((f) => f.endsWith('.ts'));
     const networkUsers = gameFiles.filter((f) => {
@@ -189,18 +200,63 @@ try {
       'no root engine performs network calls (would contradict the MOCK labels)',
       networkUsers.join(', '));
 
-    // The enrichment provider may call out, but only when explicitly enabled.
     const enrichDir = path.join(SRC, 'game', 'enrichment');
     if (existsSync(enrichDir)) {
       const provider = readFileSync(path.join(enrichDir, 'itunesProvider.ts'), 'utf8');
+      const activation = readFileSync(path.join(enrichDir, 'activation.ts'), 'utf8');
+      const index = readFileSync(path.join(enrichDir, 'index.ts'), 'utf8');
+
       r.check(/\bfetch\s*\(/.test(provider),
         'the enrichment provider is a real implementation, not a stub');
-      r.check(/let enabled = false;/.test(provider),
-        'the enrichment provider is DISABLED by default (unverified integration)');
-      r.check(/if \(!enabled\) return \[\];/.test(provider),
-        'it returns no candidates and makes no request while disabled');
       r.check(/UNVERIFIED/.test(provider),
         'its unverified status is documented in the source');
+
+      // 3 — the resolved default is OFF, in a file that cannot call out.
+      r.check(!/\bfetch\s*\(/.test(activation.replace(/\/\*[\s\S]*?\*\//g, '')),
+        'the activation switch itself performs no network call');
+      r.check(/return \{ enabled: false, source: 'default' \};/.test(activation),
+        'enrichment is DISABLED by default when nothing was configured');
+      r.check(/VITE_ENRICHMENT_ITUNES/.test(activation),
+        'activation is possible at build time through an explicit env var');
+
+      // 4 — no static path to the provider: only a dynamic import.
+      const staticImporters = [];
+      const walk = (dir) => {
+        for (const entry of readdirSync(dir, { withFileTypes: true })) {
+          const fp = path.join(dir, entry.name);
+          if (entry.isDirectory()) { walk(fp); continue; }
+          if (!/\.(ts|tsx)$/.test(entry.name)) continue;
+          const body = readFileSync(fp, 'utf8');
+          if (/(?:import|export)[^\n]*from\s*['"][^'"]*itunesProvider['"]/.test(body)) {
+            staticImporters.push(path.relative(SRC, fp));
+          }
+        }
+      };
+      walk(SRC);
+      r.check(staticImporters.length === 0,
+        'the provider is never imported statically (kept out of the initial bundle)',
+        staticImporters.join(', '));
+      r.check(/import\(\s*'\.\/itunesProvider'\s*\)/.test(index),
+        'the provider is reached through a dynamic import, on demand only');
+
+      // 5 — the provider re-checks the flag before doing anything.
+      r.check(/if \(!isItunesEnabled\(\)\) return \[\];/.test(provider),
+        'it returns no candidates and makes no request while disabled');
+      r.check(/await ensureProvidersReady\(\);/.test(index),
+        'loading the provider happens inside searchEnrichment, not at import time');
+
+      // 6 — an unreachable service is never reported as an empty result.
+      r.check(/ProviderUnreachableError/.test(provider) && /provider_unreachable/.test(index),
+        'a failed request is reported as unreachable, not as "no match found"');
+
+      // The policy is written down, not just enforced.
+      const policy = path.join(ROOT, 'docs', 'NETWORK-POLICY.md');
+      r.check(existsSync(policy), 'the network policy is documented in docs/NETWORK-POLICY.md');
+      if (existsSync(policy)) {
+        const text = readFileSync(policy, 'utf8');
+        r.check(/VITE_ENRICHMENT_ITUNES/.test(text) && /itunes\.apple\.com/.test(text),
+          'the document names the flag and the single host that may be contacted');
+      }
     }
   }
   // -------------------------------------------------------------------------

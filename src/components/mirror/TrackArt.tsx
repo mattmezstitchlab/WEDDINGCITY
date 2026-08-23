@@ -47,21 +47,29 @@ export function TrackArt({
     setReduced(Boolean(window.matchMedia?.('(prefers-reduced-motion: reduce)').matches));
   }, []);
 
+  // An enriched cover is hosted by the provider. If it cannot be fetched
+  // (offline, dead URL), we fall back to the typographic tile rather than
+  // leaving a broken image: the Mirror keeps working without the network.
+  const [broken, setBroken] = useState(false);
+  useEffect(() => { setBroken(false); }, [coverSource]);
+  const cover = broken ? null : coverSource;
+
   return (
     <div
       style={{
         position: 'relative', width: size, height: size, flex: '0 0 auto',
-        borderRadius: radius.sm, overflow: 'hidden',
-        background: coverSource ? 'transparent' : 'rgba(16,18,24,0.045)',
+        borderRadius: size >= 80 ? radius.md : radius.sm, overflow: 'hidden',
+        background: cover ? 'transparent' : 'rgba(16,18,24,0.045)',
         boxShadow: `inset 0 0 0 1px ${M.line}`,
       }}
     >
-      {coverSource ? (
+      {cover ? (
         <img
-          src={coverSource}
+          src={cover}
           alt=""
           loading="lazy"
           decoding="async"
+          onError={() => setBroken(true)}
           style={{
             width: '100%', height: '100%', objectFit: 'cover', display: 'block',
             transition: reduced ? 'none' : 'opacity 420ms ease',
@@ -94,7 +102,7 @@ export function TrackArt({
             position: 'absolute', inset: 0, display: 'flex',
             alignItems: 'center', justifyContent: 'center',
             border: 'none', cursor: 'pointer', padding: 0,
-            background: coverSource
+            background: cover
               ? (playing ? 'rgba(12,10,8,0.30)' : 'rgba(12,10,8,0.16)')
               : 'transparent',
             transition: reduced ? 'none' : 'background 240ms ease',
@@ -105,8 +113,8 @@ export function TrackArt({
               width: Math.round(size * 0.42), height: Math.round(size * 0.42),
               borderRadius: 999,
               display: 'flex', alignItems: 'center', justifyContent: 'center',
-              background: coverSource ? 'rgba(255,253,250,0.92)' : M.surface,
-              boxShadow: coverSource ? 'none' : `inset 0 0 0 1px ${M.lineStrong}`,
+              background: cover ? 'rgba(255,253,250,0.92)' : M.surface,
+              boxShadow: cover ? 'none' : `inset 0 0 0 1px ${M.lineStrong}`,
               color: M.textPrimary,
               fontSize: Math.round(size * 0.2), lineHeight: 1,
             }}

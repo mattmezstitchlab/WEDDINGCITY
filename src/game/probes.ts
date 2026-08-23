@@ -17,6 +17,8 @@ import { generateWorldFromDescription } from './worldEngine';
 import { ALL_WORLD_TYPES } from '../types/wedding';
 import { checkReferentialIntegrity, describeBrokenReferences } from './integrity';
 import { getDiagnosticsBySource } from './diagnostics';
+// Network-free leaf: reading the flag never loads, let alone runs, a provider.
+import { isItunesEnabled, getActivationSource } from './enrichment/activation';
 
 const now = () => new Date().toISOString();
 
@@ -180,6 +182,16 @@ export const playlistProbe: HealthProbe = {
     const voters = new Set(votes.map((v) => v.personId));
     const orphanVotes = votes.filter((v) => !tracks.some((t) => t.id === v.trackId));
 
+    // Measured, not assumed: what can actually be heard and seen right now.
+    const songMedia = weddingStore.media.filter((m) => m.ownerKind === 'song');
+    const withAudio = tracks.filter(
+      (t) => songMedia.some((m) => m.ownerId === t.id && m.kind === 'audio'),
+    ).length;
+    const withCover = tracks.filter(
+      (t) => songMedia.some((m) => m.ownerId === t.id && m.kind === 'image'),
+    ).length;
+    const enrichedMedia = songMedia.filter((m) => m.origin === 'research').length;
+
     const evidence = [
       { label: 'Morceaux', value: String(tracks.length) },
       { label: 'Moments couverts', value: `${moments.size} (${[...moments].join(', ')})` },
@@ -188,7 +200,15 @@ export const playlistProbe: HealthProbe = {
       { label: 'Votants distincts', value: String(voters.size) },
       { label: 'Modèle de vote', value: 'un vote par personne et par morceau (personId)' },
       { label: 'Votes orphelins', value: String(orphanVotes.length) },
-      { label: 'Lecture audio réelle', value: 'aucune (synthèse procédurale uniquement)' },
+      { label: 'Sources audio réelles rattachées', value: `${withAudio}/${tracks.length}` },
+      { label: 'Pochettes réelles rattachées', value: `${withCover}/${tracks.length}` },
+      { label: 'Médias issus d’un enrichissement', value: String(enrichedMedia) },
+      {
+        label: 'Recherche automatique (iTunes)',
+        value: isItunesEnabled()
+          ? `activée (${getActivationSource()}) — connexion non vérifiée depuis cet environnement`
+          : 'désactivée par défaut — import manuel disponible',
+      },
     ];
 
     if (tracks.length === 0) {
@@ -226,15 +246,21 @@ export const playlistProbe: HealthProbe = {
 
     return mk('PLAYLIST', playlistProbe.name, 'audio', ['IDENTITY'], {
       status: 'PARTIAL',
-      summary: `${tracks.length} morceaux ; votes nominatifs opérationnels, aucune lecture audio réelle.`,
+      summary: withAudio === 0
+        ? `${tracks.length} morceaux ; votes nominatifs opérationnels, aucune source audio rattachée.`
+        : `${tracks.length} morceaux ; ${withAudio} réellement écoutable(s), ${withCover} avec pochette.`,
       evidence,
-      warnings: [{
-        code: 'playlist_no_playback',
-        message: 'Aucun morceau n’est réellement joué : il n’y a ni fichier ni service de streaming.',
-        cause: 'Le moteur audio ne fait que de la synthèse procédurale.',
-        impact: 'La playlist est une liste de décisions, pas une lecture.',
-        solution: 'Brancher un service de streaming avec les droits associés (hors périmètre actuel).',
-      }],
+      warnings: withAudio === 0
+        ? [{
+          code: 'playlist_no_playback',
+          message: `Aucun des ${tracks.length} morceaux n’a de source audio : le bouton Écouter n’est affiché nulle part.`,
+          cause: isItunesEnabled()
+            ? 'Aucun fichier importé et aucun extrait externe confirmé pour l’instant.'
+            : 'Aucun fichier importé ; la recherche automatique est désactivée par défaut.',
+          impact: 'La playlist est une liste de décisions, pas une lecture.',
+          solution: 'Importer un fichier audio dans le Canvas, ou activer puis confirmer un extrait externe.',
+        }]
+        : [],
     });
   },
   repair: (actionId) => {

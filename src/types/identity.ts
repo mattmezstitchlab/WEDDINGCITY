@@ -75,6 +75,28 @@ export type MediaKind = 'image' | 'video' | 'audio' | 'document';
 /** What a media item can be attached to. Always by stable id. */
 export type MediaOwnerKind = 'person' | 'place' | 'vendor' | 'event' | 'song' | 'wedding';
 
+/**
+ * Where a non-manual asset came from (Phase F.3).
+ *
+ * Recorded so that an externally sourced artwork can always be traced back to
+ * its provider and public page. Displayed in the Canvas only: the Mirror shows
+ * the wedding, not its supply chain.
+ */
+export interface MediaProvenance {
+  /** Provider id, e.g. 'itunes'. */
+  providerId: string;
+  /** Human name of the provider, e.g. 'iTunes Search'. */
+  providerName?: string;
+  /** Provider-scoped identifier of the matched item, e.g. 'itunes:1440857781'. */
+  externalId: string;
+  /** Public page for the item, usable as an attribution link. */
+  externalUrl?: string;
+  /** Attribution text required by the provider's terms of use. */
+  attribution?: string;
+  /** When the match was confirmed by a human. */
+  fetchedAt: string;
+}
+
 export interface MediaAsset extends Timestamped {
   id: MediaId;
   kind: MediaKind;
@@ -89,6 +111,8 @@ export interface MediaAsset extends Timestamped {
   fileName?: string;
   byteSize?: number;
   origin: EntityOrigin;
+  /** Set only for assets obtained from an external provider. */
+  provenance?: MediaProvenance;
 }
 
 // ---------------------------------------------------------------------------

@@ -54,8 +54,33 @@ export interface EnrichmentProvider {
    * Disabled providers are never invoked — the pipeline reports 'unavailable'.
    */
   isEnabled(): boolean;
-  /** Must never throw: return [] on failure. */
+  /**
+   * Returns the candidates it found, possibly none.
+   *
+   * It MAY throw `ProviderUnreachableError` when the service could not be
+   * reached at all — that is a different answer from "no match", and the
+   * pipeline reports it differently. Any other throw is swallowed by the
+   * pipeline and treated as "no candidates": enrichment never breaks the app.
+   */
   search(query: EnrichmentQuery, signal?: AbortSignal): Promise<EnrichmentCandidate[]>;
+}
+
+/**
+ * The provider could not be reached (offline, refused, CORS, bad payload).
+ *
+ * Distinguished from an empty result on purpose: telling a user "aucune
+ * correspondance" when the truth is "je n'ai pas pu demander" would be a lie.
+ */
+export class ProviderUnreachableError extends Error {
+  readonly providerId: string;
+  readonly cause?: unknown;
+
+  constructor(providerId: string, cause?: unknown) {
+    super(`enrichment provider "${providerId}" is unreachable`);
+    this.name = 'ProviderUnreachableError';
+    this.providerId = providerId;
+    this.cause = cause;
+  }
 }
 
 /**

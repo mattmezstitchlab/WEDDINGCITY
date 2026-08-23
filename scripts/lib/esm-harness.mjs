@@ -53,8 +53,12 @@ export async function compileGameModules() {
       const fp = path.join(abs, f);
       // Skip nested directories: they are handled by their own entry above.
       if (!f.endsWith('.mjs')) continue;
-      writeFileSync(fp, readFileSync(fp, 'utf8').replace(
-        /from\s*"(\.[^"]+)"/g, (m, spec) => (spec.endsWith('.mjs') ? m : `from "${spec}.mjs"`)));
+      const addExt = (m, spec, wrap) => (spec.endsWith('.mjs') ? m : wrap(`${spec}.mjs`));
+      writeFileSync(fp, readFileSync(fp, 'utf8')
+        // static imports/re-exports
+        .replace(/from\s*"(\.[^"]+)"/g, (m, spec) => addExt(m, spec, (x) => `from "${x}"`))
+        // dynamic imports — used by the lazily loaded enrichment provider
+        .replace(/import\(\s*"(\.[^"]+)"\s*\)/g, (m, spec) => addExt(m, spec, (x) => `import("${x}")`)));
     }
   }
 
