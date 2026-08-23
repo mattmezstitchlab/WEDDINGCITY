@@ -1,4 +1,5 @@
 import { UserAccount, WeddingProject } from '../types/wedding';
+import { reportDiagnostic } from './diagnostics';
 import {
   PersistedDomainState,
   SCHEMA_VERSION,
@@ -28,7 +29,8 @@ export function getStoredAccounts(): UserAccount[] {
   try {
     const raw = localStorage.getItem(ACCOUNTS_KEY);
     return raw ? JSON.parse(raw) : [];
-  } catch {
+  } catch (err) {
+    reportStorageFailure('load', ACCOUNTS_KEY, err);
     return [];
   }
 }
@@ -44,8 +46,8 @@ export function saveUserAccount(account: UserAccount): void {
     }
     localStorage.setItem(ACCOUNTS_KEY, JSON.stringify(accounts));
     setActiveAccount(account);
-  } catch {
-    // safe fallback
+  } catch (err) {
+    reportStorageFailure('save', ACCOUNTS_KEY, err);
   }
 }
 
@@ -53,7 +55,8 @@ export function getActiveAccount(): UserAccount | null {
   try {
     const raw = localStorage.getItem(ACTIVE_ACCOUNT_KEY);
     return raw ? JSON.parse(raw) : null;
-  } catch {
+  } catch (err) {
+    reportStorageFailure('load', ACTIVE_ACCOUNT_KEY, err);
     return null;
   }
 }
@@ -65,8 +68,8 @@ export function setActiveAccount(account: UserAccount | null): void {
     } else {
       localStorage.removeItem(ACTIVE_ACCOUNT_KEY);
     }
-  } catch {
-    // safe fallback
+  } catch (err) {
+    reportStorageFailure('save', ACTIVE_ACCOUNT_KEY, err);
   }
 }
 
@@ -99,7 +102,8 @@ export function getStoredProjects(): WeddingProject[] {
       return [demoProject];
     }
     return JSON.parse(raw);
-  } catch {
+  } catch (err) {
+    reportStorageFailure('load', PROJECTS_KEY, err);
     return [];
   }
 }
@@ -114,8 +118,8 @@ export function saveWeddingProject(project: WeddingProject): void {
       projects.unshift({ ...project, updatedAt: new Date().toISOString() });
     }
     localStorage.setItem(PROJECTS_KEY, JSON.stringify(projects));
-  } catch {
-    // safe fallback
+  } catch (err) {
+    reportStorageFailure('save', PROJECTS_KEY, err);
   }
 }
 
@@ -123,7 +127,8 @@ export function getActiveProjectId(): string {
   try {
     const raw = localStorage.getItem(ACTIVE_PROJECT_ID_KEY);
     return raw || 'proj_demo_clara_alexandre';
-  } catch {
+  } catch (err) {
+    reportStorageFailure('load', ACTIVE_PROJECT_ID_KEY, err);
     return 'proj_demo_clara_alexandre';
   }
 }
@@ -131,8 +136,8 @@ export function getActiveProjectId(): string {
 export function setActiveProjectId(projectId: string): void {
   try {
     localStorage.setItem(ACTIVE_PROJECT_ID_KEY, projectId);
-  } catch {
-    // safe fallback
+  } catch (err) {
+    reportStorageFailure('save', ACTIVE_PROJECT_ID_KEY, err);
   }
 }
 
@@ -178,8 +183,8 @@ export function deleteStoredProject(projectId: string): void {
     if (getActiveProjectId() === projectId) {
       setActiveProjectId('proj_demo_clara_alexandre');
     }
-  } catch {
-    // safe fallback
+  } catch (err) {
+    reportStorageFailure('save', projectId, err);
   }
 }
 
@@ -205,11 +210,13 @@ function reportStorageFailure(op: 'save' | 'load', projectId: string, err: unkno
   };
   storageFailures.push(failure);
   if (storageFailures.length > 25) storageFailures.shift();
-  try {
-    console.error(`[WeddingCity/persistence] ${op} failed for ${projectId}:`, err);
-  } catch {
-    /* console unavailable */
-  }
+  reportDiagnostic({
+    source: 'persistence',
+    severity: 'error',
+    code: op === 'save' ? 'storage_write_failed' : 'storage_read_failed',
+    error: err,
+    detail: { projectId, op },
+  });
 }
 
 /** Consumed by the System Nerve to turn silent data loss into a visible status. */

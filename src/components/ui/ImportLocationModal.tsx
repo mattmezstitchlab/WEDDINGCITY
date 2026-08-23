@@ -186,7 +186,21 @@ export function ImportLocationModal({ isOpen, onClose }: ImportLocationModalProp
                   <div style={{ fontSize: 10, color: BRAND_ACCENT }}>
                     ⚡ {preset.detectedTables} tables • Scène & Bar
                   </div>
-                  <button style={reconstructBtnStyle}>
+                  <button
+                    type="button"
+                    // This button had NO onClick: only the parent card carried
+                    // the handler, so the visibly-clickable target did nothing
+                    // by itself and was unreachable by keyboard. It now owns
+                    // the action, and stops propagation so the card handler
+                    // does not fire the same import twice.
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (!isScanning) handleSelectPreset(preset);
+                    }}
+                    disabled={isScanning}
+                    aria-label={`Reconstruire ${preset.name}`}
+                    style={{ ...reconstructBtnStyle, cursor: isScanning ? 'default' : 'pointer', opacity: isScanning ? 0.5 : 1 }}
+                  >
                     <IconSparkles size={11} color="#08090d" />
                     <span>Reconstruire →</span>
                   </button>

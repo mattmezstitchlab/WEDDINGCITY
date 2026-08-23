@@ -6,6 +6,8 @@ import {
   SystemHealthReport,
 } from '../types/systemNerve';
 import { weddingStore } from './weddingStore';
+import { HealthCheck, ProbeStatus } from '../types/health';
+import { runAllProbes, aggregate, repairViaProbe, getProbes } from './healthRegistry';
 import { weddingAudio } from './audio';
 import { connectorEngine } from './connectorEngine';
 import { DMC_PALETTE, DMC_SYMBOLS } from './dmcPalette';
@@ -352,8 +354,125 @@ class SystemNerveEngine {
   }
 
   // Real Executable Health Checks on the codebase
+  // -------------------------------------------------------------------------
+  // Probe-driven health (roadmap 1.10)
+  //
+  // The 22 module statuses used to be string literals in this file. They are
+  // now derived from probes that actually measure something, and — critically —
+  // any module WITHOUT a probe is forced to UNKNOWN rather than left at its
+  // hardcoded 'OK'. Nothing claims to work unless it was observed working.
+  // -------------------------------------------------------------------------
+
+  public healthChecks: HealthCheck[] = [];
+  public lastProbeRunAt: string | null = null;
+
+  /** Legacy module ids that a probe is authoritative for. */
+  private static readonly PROBE_TO_MODULES: Record<string, string[]> = {
+    PERSISTENCE: ['DATABASE', 'STORAGE'],
+    DATA_INTEGRITY: ['PLACES', 'PEOPLE'],
+    STORAGE_QUOTA: ['DOCUMENTS'],
+    RENDER_3D: ['3D_ENGINE', 'WORLD', 'GRID'],
+    TIMELINE: ['TIMELINE'],
+    CONNECTORS: ['CONNECTORS'],
+    WEB_RESEARCH: ['WEB_RESEARCH', 'AGENT'],
+    OCR: ['OCR'],
+    INVITATIONS: ['COLLABORATION'],
+    AUTH: ['AUTH'],
+    PERMISSIONS: [],
+  };
+
+  private static toLegacyStatus(status: ProbeStatus): SystemModuleHealth['status'] {
+    switch (status) {
+      case 'VERIFIED': return 'OK';
+      case 'PARTIAL': return 'PARTIAL';
+      case 'MOCK': return 'MOCK';
+      case 'ERROR': return 'ERROR';
+      case 'NOT_IMPLEMENTED': return 'NOT_IMPLEMENTED';
+      default: return 'UNKNOWN';
+    }
+  }
+
+  private static toMaturity(status: ProbeStatus): SystemModuleHealth['maturity'] {
+    switch (status) {
+      case 'VERIFIED': return 'REAL';
+      case 'PARTIAL': return 'PARTIAL';
+      case 'MOCK': return 'SIMULATED';
+      case 'NOT_IMPLEMENTED': return 'MISSING';
+      default: return 'UNKNOWN';
+    }
+  }
+
+  public getHealthChecks(): HealthCheck[] {
+    return this.healthChecks;
+  }
+
+  public getAggregate() {
+    return aggregate(this.healthChecks, this.lastProbeRunAt, this.isScanning);
+  }
+
+  /** Run every registered probe and project the results onto the module table. */
+  public async runProbes(): Promise<HealthCheck[]> {
+    const checks = await runAllProbes();
+    this.healthChecks = checks;
+    this.lastProbeRunAt = new Date().toISOString();
+
+    const covered = new Set<string>();
+    for (const check of checks) {
+      const targets = SystemNerveEngine.PROBE_TO_MODULES[check.id] ?? [];
+      for (const moduleId of targets) {
+        const mod = this.modules.find((m) => m.id === moduleId);
+        if (!mod) continue;
+        covered.add(moduleId);
+        mod.status = SystemNerveEngine.toLegacyStatus(check.status);
+        mod.maturity = SystemNerveEngine.toMaturity(check.status);
+        mod.testResultSummary = check.summary;
+        mod.errorsCount = check.errors.length;
+        mod.lastTestTimestamp = 'À l’instant';
+        if (check.durationMs !== undefined) mod.latencyMs = check.durationMs;
+        mod.fixable = check.repairable;
+        if (check.repairAction) mod.activeActionLabel = check.repairAction.label;
+      }
+    }
+
+    // THE HONESTY RULE: no probe → no claim.
+    for (const mod of this.modules) {
+      if (covered.has(mod.id)) continue;
+      mod.status = 'UNKNOWN';
+      mod.maturity = 'UNKNOWN';
+      mod.errorsCount = 0;
+      mod.testResultSummary =
+        'Aucune sonde ne mesure encore ce module — statut non vérifié.';
+      mod.lastTestTimestamp = undefined;
+      mod.fixable = false;
+    }
+
+    return checks;
+  }
+
+  /** Trigger a probe-declared repair, then re-measure to confirm it worked. */
+  public async repairFromProbe(probeId: string, actionId: string): Promise<boolean> {
+    const ok = await repairViaProbe(probeId, actionId);
+    await this.runProbes();
+    weddingStore.notify();
+    return ok;
+  }
+
+  public getProbeCoverage(): { probed: number; total: number; unprobed: string[] } {
+    const covered = new Set<string>();
+    for (const probe of getProbes()) {
+      for (const m of SystemNerveEngine.PROBE_TO_MODULES[probe.id] ?? []) covered.add(m);
+    }
+    return {
+      probed: covered.size,
+      total: this.modules.length,
+      unprobed: this.modules.filter((m) => !covered.has(m.id)).map((m) => m.id),
+    };
+  }
+
   public async runFullDiagnostics(): Promise<void> {
     this.isScanning = true;
+    // Probes are authoritative; the legacy per-module code below is kept for
+    // the checks it genuinely performs, then overwritten by runProbes().
     weddingAudio.playNeuralWave();
     weddingStore.notify();
 
@@ -423,6 +542,11 @@ class SystemNerveEngine {
       connMod.status = connectedCount >= 4 ? 'OK' : 'CONFIGURATION_REQUIRED';
       connMod.lastTestTimestamp = 'À l’instant';
     }
+
+    // Probes run LAST and are authoritative. They overwrite every module they
+    // cover with a measured status, and force every uncovered module to
+    // UNKNOWN — this is what removes the old "everything is green" illusion.
+    await this.runProbes();
 
     this.isScanning = false;
     this.lastScanTimestamp = new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });

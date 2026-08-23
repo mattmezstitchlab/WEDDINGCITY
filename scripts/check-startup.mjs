@@ -38,7 +38,7 @@ const fail = (m) => { failures++; console.log(`  \u001b[31m✗\u001b[0m ${m}`); 
 // CHECK 1 — native ESM evaluation (reproduces `vite dev`)
 // ---------------------------------------------------------------------------
 async function checkNativeEsmStartup() {
-  console.log('\n[1/3] Native ESM startup (reproduces `vite dev` evaluation order)');
+  console.log('\n[1/4] Native ESM startup (reproduces `vite dev` evaluation order)');
 
   // Emit INSIDE the project so bare specifiers (react, three, ...) resolve
   // through the real node_modules, exactly as Vite would resolve them.
@@ -115,7 +115,7 @@ async function checkNativeEsmStartup() {
 // CHECK 2 — no import cycles between engine modules
 // ---------------------------------------------------------------------------
 function checkNoCycles() {
-  console.log('\n[2/3] Import cycles in src/game');
+  console.log('\n[2/4] Import cycles in src/game');
 
   const dir = path.join(SRC, 'game');
   const graph = new Map();
@@ -150,7 +150,7 @@ function checkNoCycles() {
 // CHECK 3 — brand.ts must stay dependency-free
 // ---------------------------------------------------------------------------
 function checkBrandIsLeaf() {
-  console.log('\n[3/3] src/game/brand.ts is dependency-free');
+  console.log('\n[3/4] src/game/brand.ts is dependency-free');
   const p = path.join(SRC, 'game', 'brand.ts');
   if (!existsSync(p)) { fail('src/game/brand.ts is missing — the TDZ fix was reverted'); return; }
   const bad = [...readFileSync(p, 'utf8').matchAll(/from\s*['"]([^'"]+)['"]/g)].map((m) => m[1]);
@@ -158,10 +158,69 @@ function checkBrandIsLeaf() {
   else pass('brand.ts imports nothing');
 }
 
+// ---------------------------------------------------------------------------
+// CHECK 4 — dead modules (roadmap 1.11)
+// Files unreachable from the real entry point are reported, not deleted:
+// they may hold logic worth recovering (input.ts was exactly that case).
+// ---------------------------------------------------------------------------
+function checkDeadModules() {
+  console.log('\n[4/4] Unreachable modules under src/');
+
+  const resolve = (fromFile, spec) => {
+    if (!spec.startsWith('.')) return null;
+    const abs = path.resolve(path.dirname(fromFile), spec);
+    for (const cand of [abs, `${abs}.ts`, `${abs}.tsx`, path.join(abs, 'index.ts'), path.join(abs, 'index.tsx')]) {
+      if (existsSync(cand) && !cand.endsWith(path.sep)) {
+        try { if (readFileSync(cand)) return cand; } catch { /* dir */ }
+      }
+    }
+    return null;
+  };
+
+  const allFiles = [];
+  const walk = (dir) => {
+    for (const e of readdirSync(dir, { withFileTypes: true })) {
+      const fp = path.join(dir, e.name);
+      if (e.isDirectory()) walk(fp);
+      else if (/\.tsx?$/.test(e.name)) allFiles.push(fp);
+    }
+  };
+  walk(SRC);
+
+  const entry = path.join(SRC, 'main.tsx');
+  const reached = new Set();
+  const stack = [entry];
+  while (stack.length) {
+    const f = stack.pop();
+    if (!f || reached.has(f)) continue;
+    reached.add(f);
+    const src = readFileSync(f, 'utf8');
+    for (const re of [/(?:import|export)[\s\S]*?from\s*['"]([^'"]+)['"]/g, /import\s*\(\s*['"]([^'"]+)['"]\s*\)/g]) {
+      let m; while ((m = re.exec(src))) {
+        const target = resolve(f, m[1]);
+        if (target) stack.push(target);
+      }
+    }
+  }
+
+  const dead = allFiles.filter((f) => !reached.has(f)).map((f) => path.relative(SRC, f)).sort();
+  const KNOWN_DEAD = ['SceneShell.tsx', 'game/ChaseCamera.tsx', 'game/GameFlow.tsx', 'game/loop.ts', 'game/mouseLook.ts'];
+  const unexpected = dead.filter((f) => !KNOWN_DEAD.includes(f));
+  const revived = KNOWN_DEAD.filter((f) => !dead.includes(f));
+
+  console.log(`      reachable: ${reached.size} · dead: ${dead.length}`);
+  for (const f of dead) console.log(`      \u001b[33m·\u001b[0m ${f} (unreachable from main.tsx)`);
+  if (revived.length) console.log(`      \u001b[32m·\u001b[0m now reachable again: ${revived.join(', ')}`);
+
+  if (unexpected.length === 0) pass(`dead-module inventory matches the documented list (${dead.length})`);
+  else fail(`new unreachable module(s) appeared: ${unexpected.join(', ')}`);
+}
+
 console.log('\u001b[1mWedding City — startup & module-graph guard\u001b[0m');
 await checkNativeEsmStartup();
 checkNoCycles();
 checkBrandIsLeaf();
+checkDeadModules();
 
 if (failures) { console.log(`\n\u001b[31m${failures} check(s) failed.\u001b[0m\n`); process.exit(1); }
 console.log('\n\u001b[32mAll startup checks passed.\u001b[0m\n');

@@ -1,5 +1,6 @@
 import { useState, useEffect, useSyncExternalStore } from 'react';
 import { weddingStore } from './game/weddingStore';
+import { isTypingTarget } from './game/input';
 import { WeddingWorld } from './components/3d/WeddingWorld';
 import { TopNavigation } from './components/ui/TopNavigation';
 import { BottomOrchestrator } from './components/ui/BottomOrchestrator';
@@ -39,6 +40,9 @@ export default function App() {
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      // Global single-letter shortcuts (E/I/N/C/L/M/T) must not fire while the
+      // user is typing a guest name, a budget amount or an invite code.
+      if (isTypingTarget(e.target)) return;
       if (weddingStore.showIdentityModal && (e.code === 'Space' || e.code === 'Enter' || e.code === 'KeyW' || e.code === 'ArrowUp')) {
         weddingStore.showIdentityModal = false;
         weddingStore.isPlaying = true;

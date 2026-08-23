@@ -10,6 +10,7 @@ import { VoxelAgents } from './VoxelAgents';
 import { NeuralConnections } from './NeuralConnections';
 import { AtmosphereAndEffects } from './AtmosphereAndEffects';
 import { InteriorVenueView } from './InteriorVenueView';
+import { ErrorBoundary } from '../ui/ErrorBoundary';
 
 function PreviewAndSimRig() {
   const { camera } = useThree();
@@ -44,7 +45,7 @@ function PreviewAndSimRig() {
   );
 }
 
-export function WeddingWorld() {
+function WeddingWorldCanvas() {
   const store = weddingStore;
 
   return (
@@ -96,5 +97,39 @@ export function WeddingWorld() {
         </Suspense>
       </Canvas>
     </div>
+  );
+}
+
+/**
+ * The 3D scene is the single heaviest failure surface (WebGL context loss,
+ * driver issues, shader compilation). Scoping a boundary here means a 3D
+ * failure degrades to a readable background instead of taking the entire
+ * interface — timeline, documents, budget — down with it.
+ *
+ * The fallback keeps the canvas container's own layout (fixed, z-index 0) so
+ * the surrounding UI stays interactive and unchanged.
+ */
+export function WeddingWorld() {
+  return (
+    <ErrorBoundary
+      label="Monde 3D"
+      source="render"
+      inline
+      fallbackWrapperStyle={{
+        width: '100vw',
+        height: '100vh',
+        position: 'fixed',
+        inset: 0,
+        overflow: 'hidden',
+        zIndex: 0,
+        background: '#0c0f17',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: 24,
+      }}
+    >
+      <WeddingWorldCanvas />
+    </ErrorBoundary>
   );
 }

@@ -42,6 +42,7 @@ import {
 // Values now live in ./brand (dependency-free) to avoid the module cycle that
 // crashed startup. Re-exported here so every existing import keeps working.
 import { BRAND_ACCENT } from './brand';
+import { reportDiagnostic } from './diagnostics';
 import {
   PersistedDomainState,
   serializeDomain,
@@ -809,6 +810,89 @@ export const INITIAL_AGENTS: Agent[] = [
 
 // Initial Documents
 export const INITIAL_DOCS: DocumentEntity[] = [
+  // --- Documents that were REFERENCED by places/agents/tasks/phases but never
+  // --- created, leaving 12 dangling links in the default wedding. Detected by
+  // --- checkReferentialIntegrity(); see scripts/check-health.mjs.
+  {
+    id: 'doc_transport_navettes',
+    title: 'Plan de Transport & Navettes Invités',
+    category: 'planning',
+    fileName: 'Navettes_Invites_Bellevue.pdf',
+    rawTextExcerpt: 'Deux navettes 32 places. Rotation hôtel → domaine à 14h30 et 16h00. Retours 01h00 et 02h30. Prestataire : Bellevue Transferts.',
+    amount: 1450,
+    depositAmount: 450,
+    isPaid: true,
+    extractedDate: '14 Juin 2025',
+    extractedHour: '14:30',
+    connectedAgentIds: ['agent_driver'],
+    connectedPlaceIds: ['place_parking', 'place_hotel'],
+    connectedTaskIds: [],
+    createdAtHour: 10,
+  },
+  {
+    id: 'doc_contrat_domaine',
+    title: 'Contrat de Location — Domaine de Bellevue',
+    category: 'contrat',
+    fileName: 'Contrat_Domaine_Bellevue_Signe.pdf',
+    rawTextExcerpt: 'Location du manoir et du parc du 13 au 15 Juin. Capacité 150 personnes. Caution 3 000 €. Fin de musique amplifiée à 02h00.',
+    amount: 9800,
+    depositAmount: 2940,
+    isPaid: true,
+    extractedDate: '13 Juin 2025',
+    extractedHour: '10:00',
+    connectedAgentIds: [],
+    connectedPlaceIds: ['place_manoir'],
+    connectedTaskIds: [],
+    createdAtHour: 10,
+  },
+  {
+    id: 'doc_menu_degustation',
+    title: 'Menu Dégustation & Régimes Spéciaux',
+    category: 'devis',
+    fileName: 'Menu_Traiteur_Degustation.pdf',
+    rawTextExcerpt: 'Cocktail 8 pièces, entrée, plat, fromages, pièce montée. 120 couverts dont 6 végétariens, 2 sans gluten, 1 sans lactose.',
+    amount: 11400,
+    depositAmount: 3420,
+    isPaid: false,
+    extractedDate: '14 Juin 2025',
+    extractedHour: '19:30',
+    connectedAgentIds: ['agent_caterer_lead'],
+    connectedPlaceIds: ['place_reception'],
+    connectedTaskIds: [],
+    createdAtHour: 11,
+  },
+  {
+    id: 'doc_playlist_premiere_danse',
+    title: 'Playlist Ouverture de Bal & Consignes DJ',
+    category: 'planning',
+    fileName: 'Playlist_Premiere_Danse.pdf',
+    rawTextExcerpt: 'Première danse à 22h45. Titre d’ouverture puis montée progressive. Pas de musique amplifiée après 02h00.',
+    amount: 0,
+    depositAmount: 0,
+    isPaid: true,
+    extractedDate: '14 Juin 2025',
+    extractedHour: '22:45',
+    connectedAgentIds: ['agent_dj'],
+    connectedPlaceIds: ['place_dancefloor'],
+    connectedTaskIds: ['task_ouverture_bal'],
+    createdAtHour: 12,
+  },
+  {
+    id: 'doc_facture_photo',
+    title: 'Facture Photographe — Reportage Complet',
+    category: 'facture',
+    fileName: 'Facture_Photographe_JourJ.pdf',
+    rawTextExcerpt: 'Reportage 12h, second shooter, retouches 400 photos, album 30x30. Solde à régler sous 30 jours.',
+    amount: 3200,
+    depositAmount: 960,
+    isPaid: false,
+    extractedDate: '14 Juin 2025',
+    extractedHour: '12:00',
+    connectedAgentIds: ['agent_photographer'],
+    connectedPlaceIds: [],
+    connectedTaskIds: [],
+    createdAtHour: 11,
+  },
   {
     id: 'doc_planning_master',
     title: 'Master Planning Jour J — V8',
@@ -922,6 +1006,19 @@ export const INITIAL_DOCS: DocumentEntity[] = [
 
 // Initial Tasks
 export const INITIAL_TASKS: TaskEntity[] = [
+  // Referenced by place_manoir.connectedTaskIds but never created.
+  {
+    id: 'task_check_coiffure',
+    title: 'Vérifier coiffure & maquillage des mariées',
+    category: 'logistique',
+    dueHour: 13,
+    isDone: false,
+    urgent: false,
+    assignedAgentId: 'agent_bride',
+    assignedPlaceId: 'place_manoir',
+    connectedDocIds: [],
+    connectedAgentIds: ['agent_bride'],
+  },
   {
     id: 'task_habillage_mariee',
     title: 'Habillage & Préparatifs des Mariés',
@@ -1534,8 +1631,8 @@ class WeddingStore {
           this.lastRestoreReport = applyDomain(this, saved, serializeDomain(this));
         }
       }
-    } catch {
-      // safe fallback
+    } catch (error) {
+      reportDiagnostic({ source: 'store', severity: 'error', code: 'store_persist_failed', error });
     }
   }
 
@@ -1548,8 +1645,8 @@ class WeddingStore {
         ...serializeDomain(this),
       });
       saveWeddingProject(this.currentProject);
-    } catch {
-      // safe fallback
+    } catch (error) {
+      reportDiagnostic({ source: 'store', severity: 'error', code: 'store_persist_failed', error });
     }
   }
 
@@ -1990,6 +2087,94 @@ class WeddingStore {
     this.focusPlace('place_ceremonie');
     this.notify();
   }
+
+  // -------------------------------------------------------------------------
+  // Invitations — real local resolution.
+  //
+  // Previously the invite link (`/?code=...&role=...`) was generated and
+  // copied, but NOTHING in the app ever read it, and the "Rejoindre" form kept
+  // its code in component state and threw it away. Both paths are now real.
+  //
+  // HONEST SCOPE: resolution is local to this browser's stored projects. There
+  // is no server, so a code created on another device cannot resolve here —
+  // that requires the backend (roadmap P3) and is reported as such instead of
+  // being faked.
+  // -------------------------------------------------------------------------
+
+  /** Find a stored project by invite code (case/whitespace tolerant). */
+  public resolveInviteCode(code: string): WeddingProject | null {
+    const normalized = (code || '').trim().toUpperCase();
+    if (!normalized) return null;
+    const projects = getStoredProjects();
+    return projects.find((p) => (p.inviteCode || '').trim().toUpperCase() === normalized) || null;
+  }
+
+  /**
+   * Join a project from an invite code, optionally applying a role.
+   * Returns a structured outcome so the UI can explain failures truthfully.
+   */
+  public joinProjectByCode(
+    code: string,
+    role?: string,
+  ): { ok: boolean; reason?: 'empty' | 'unknown'; project?: WeddingProject } {
+    const normalized = (code || '').trim();
+    if (!normalized) return { ok: false, reason: 'empty' };
+
+    const project = this.resolveInviteCode(normalized);
+    if (!project) return { ok: false, reason: 'unknown' };
+
+    this.loadProject(project.id);
+    if (role) this.applyInviteRole(role);
+    this.saveCurrentState();
+    this.notify();
+    return { ok: true, project };
+  }
+
+  /** Map an invite role onto the local identity, when it is a role we know. */
+  public applyInviteRole(role: string): void {
+    const known: Record<string, AgentRole> = {
+      guest: 'guest',
+      vendor: 'caterer',
+      planner: 'wedding_planner',
+      bride: 'bride',
+      groom: 'groom',
+      photographer: 'photographer',
+      dj: 'dj',
+    };
+    const mapped = known[(role || '').toLowerCase()];
+    if (!mapped) return;
+    this.userIdentity = { ...this.userIdentity, role: mapped, isCreated: true };
+  }
+
+  /**
+   * Consume `?code=...&role=...` from the current URL, if present.
+   * Called once at startup. Returns the outcome so the UI can surface it.
+   */
+  public consumeInviteFromUrl(search?: string): { ok: boolean; reason?: string; code?: string } | null {
+    if (typeof window === 'undefined' && search === undefined) return null;
+    const raw = search ?? window.location.search;
+    if (!raw) return null;
+
+    let params: URLSearchParams;
+    try {
+      params = new URLSearchParams(raw);
+    } catch {
+      return null;
+    }
+
+    const code = params.get('code');
+    if (!code) return null;
+    const role = params.get('role') || undefined;
+
+    const result = this.joinProjectByCode(code, role);
+    this.lastInviteResult = result.ok
+      ? { ok: true, code }
+      : { ok: false, code, reason: result.reason };
+    return this.lastInviteResult;
+  }
+
+  /** Outcome of the last invite consumption, for honest UI feedback. */
+  public lastInviteResult: { ok: boolean; code?: string; reason?: string } | null = null;
 
   public switchToDemoWedding() {
     this.loadProject('proj_demo_clara_alexandre');

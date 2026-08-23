@@ -1,9 +1,10 @@
-import { useRef, useMemo } from 'react';
+import { useRef, useMemo, useEffect } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { RoundedBox } from '@react-three/drei';
 import * as THREE from 'three';
 import { weddingStore, BRAND_ACCENT } from '../../game/weddingStore';
 import { PlacedObject } from '../../types/wedding';
+import { installInput, moveAxes } from '../../game/input';
 
 interface InteriorVenueViewProps {
   venueId: string;
@@ -20,25 +21,28 @@ export function InteriorVenueView({ venueId }: InteriorVenueViewProps) {
   const leftArmRef = useRef<THREE.Mesh>(null);
   const rightArmRef = useRef<THREE.Mesh>(null);
 
-  // Keyboard state for avatar movement
-  const keys = useRef<{ w: boolean; a: boolean; s: boolean; d: boolean }>({ w: false, a: false, s: false, d: false });
+  // Keyboard state for avatar movement.
+  //
+  // This used to be a local `keys` ref that NOTHING ever wrote to, so WASD was
+  // silently inert. The project already shipped a correct, well-tested input
+  // module (game/input.ts) that was never mounted — we install it here rather
+  // than re-implementing key handling.
+  useEffect(() => installInput(), []);
 
   useFrame((state, delta) => {
     // 1. WASD movement of player avatar inside the venue
-    let moveX = 0;
-    let moveZ = 0;
-    if (keys.current.w) moveZ -= 1;
-    if (keys.current.s) moveZ += 1;
-    if (keys.current.a) moveX -= 1;
-    if (keys.current.d) moveX += 1;
+    // moveAxes() is already normalized (diagonals clamped to length 1) and
+    // supports both WASD and the arrow keys. y = forward, scene forward = -Z.
+    const axes = moveAxes();
+    const moveX = axes.x;
+    const moveZ = -axes.y;
 
     const isWalking = moveX !== 0 || moveZ !== 0;
 
     if (isWalking) {
-      const length = Math.hypot(moveX, moveZ);
       const speed = 7.0 * delta;
-      const targetX = THREE.MathUtils.clamp(store.avatarPos[0] + (moveX / length) * speed, -13, 13);
-      const targetZ = THREE.MathUtils.clamp(store.avatarPos[2] + (moveZ / length) * speed, -13, 13);
+      const targetX = THREE.MathUtils.clamp(store.avatarPos[0] + moveX * speed, -13, 13);
+      const targetZ = THREE.MathUtils.clamp(store.avatarPos[2] + moveZ * speed, -13, 13);
       store.avatarPos = [targetX, 0, targetZ];
       store.avatarRot = Math.atan2(moveX, moveZ);
 

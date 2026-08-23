@@ -6,6 +6,28 @@ import {
 } from '../types/wedding';
 import { weddingAudio } from './audio';
 import { weddingStore } from './weddingStore';
+import { reportDiagnostic } from './diagnostics';
+
+/**
+ * SELF-DECLARED CAPABILITIES — read by the System Nerve health probe.
+ *
+ * The connectors UI shows OAuth scopes and "connecté" badges for Google,
+ * Microsoft, Dropbox and Spotify, but this engine performs NO network calls:
+ * connect/sync are setTimeout state changes over local data. Declaring that
+ * here means the Nerve reports 🟡 SIMULÉ from the module's own admission
+ * rather than from a hardcoded table.
+ *
+ * When a real integration lands, flip these flags — `scripts/check-health.mjs`
+ * asserts the declaration matches what the source actually does.
+ */
+export const CONNECTOR_CAPABILITIES = {
+  /** Does this engine make real HTTP requests? */
+  network: false,
+  /** Is there a real OAuth/PKCE token exchange? */
+  oauth: false,
+  /** Are connection states and synced items simulated locally? */
+  simulated: true,
+} as const;
 import { BRAND_ACCENT } from './brand';
 
 const CONNECTORS_STORAGE_KEY = 'wedding_city_connectors_v1';
@@ -242,16 +264,16 @@ class ConnectorEngine {
           this.connectors = saved;
         }
       }
-    } catch {
-      // safe fallback
+    } catch (error) {
+      reportDiagnostic({ source: 'connectors', severity: 'warning', code: 'connectors_load_failed', error });
     }
   }
 
   private saveToStorage() {
     try {
       localStorage.setItem(CONNECTORS_STORAGE_KEY, JSON.stringify(this.connectors));
-    } catch {
-      // safe fallback
+    } catch (error) {
+      reportDiagnostic({ source: 'connectors', severity: 'error', code: 'connectors_save_failed', error });
     }
   }
 

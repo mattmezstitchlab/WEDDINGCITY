@@ -10,11 +10,25 @@ function norm(code: string): string {
   return code.toLowerCase();
 }
 
+/**
+ * True when the user is typing into a form control. Movement and shortcuts
+ * must not fire while someone is filling in a guest name or a budget amount.
+ */
+export function isTypingTarget(target: EventTarget | null): boolean {
+  const el = target as HTMLElement | null;
+  if (!el || typeof el !== 'object') return false;
+  const tag = (el.tagName || '').toLowerCase();
+  if (tag === 'input' || tag === 'textarea' || tag === 'select') return true;
+  return el.isContentEditable === true;
+}
+
 /** Install the global key listeners once. Call from a top-level effect. */
 export function installInput(): () => void {
   if (installed) return () => {};
   installed = true;
   const down = (e: KeyboardEvent) => {
+    // Never capture keys while the user is typing in a field.
+    if (isTypingTarget(e.target)) return;
     const k = norm(e.code || e.key);
     if (!held.has(k)) pressed.add(k);
     held.add(k);

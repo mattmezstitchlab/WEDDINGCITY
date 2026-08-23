@@ -2,6 +2,8 @@ import { createRoot } from 'react-dom/client';
 import App from './App';
 import './App.css';
 import { weddingStore } from './game/weddingStore';
+import { ErrorBoundary } from './components/ui/ErrorBoundary';
+import { installGlobalErrorHandlers } from './game/diagnostics';
 
 // Expose __agon_preview immediately at top-level
 if (typeof window !== 'undefined') {
@@ -54,4 +56,16 @@ if (typeof window !== 'undefined') {
   };
 }
 
-createRoot(document.getElementById('root')!).render(<App />);
+// Catch async/global failures that never reach a React boundary.
+installGlobalErrorHandlers();
+
+// Consume an invitation link (`/?code=...&role=...`). These URLs were being
+// generated and copied by InviteShareModal while nothing in the app ever read
+// them, so every invitation was inert.
+weddingStore.consumeInviteFromUrl();
+
+createRoot(document.getElementById('root')!).render(
+  <ErrorBoundary source="app">
+    <App />
+  </ErrorBoundary>,
+);

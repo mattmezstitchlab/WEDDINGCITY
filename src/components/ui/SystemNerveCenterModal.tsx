@@ -87,6 +87,10 @@ export function SystemNerveCenterModal({ isOpen, onClose }: SystemNerveCenterMod
         return <span style={statusBadgeStyle(BRAND_ACCENT, 'rgba(226, 180, 72, 0.15)')}>PARTIAL</span>;
       case 'CONFIGURATION_REQUIRED':
         return <span style={statusBadgeStyle('#38bdf8', 'rgba(56, 189, 248, 0.15)')}>CONFIG REQUISE</span>;
+      case 'MOCK':
+        return <span style={statusBadgeStyle('#eab308', 'rgba(234, 179, 8, 0.15)')}>🟡 SIMULÉ</span>;
+      case 'NOT_IMPLEMENTED':
+        return <span style={statusBadgeStyle(BRAND_TEXT_MUTED, 'rgba(255, 255, 255, 0.05)')}>⚪ ABSENT</span>;
       case 'ERROR':
         return <span style={statusBadgeStyle('#f43f5e', 'rgba(244, 63, 94, 0.15)')}>ERROR</span>;
       default:
@@ -231,8 +235,10 @@ export function SystemNerveCenterModal({ isOpen, onClose }: SystemNerveCenterMod
 
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8 }}>
               {modules.map((mod) => {
+                // MOCK and UNKNOWN are deliberately NOT healthy: a simulated module
+                // must never be displayed as working.
                 const isHealthy = mod.status === 'OK';
-                const isPartial = mod.status === 'PARTIAL' || mod.status === 'CONFIGURATION_REQUIRED';
+                const isPartial = mod.status === 'PARTIAL' || mod.status === 'CONFIGURATION_REQUIRED' || mod.status === 'MOCK';
                 const linkColor = isHealthy ? '#10b981' : isPartial ? BRAND_ACCENT : '#f43f5e';
 
                 return (

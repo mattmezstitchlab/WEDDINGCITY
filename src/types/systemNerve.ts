@@ -1,6 +1,9 @@
 export type HealthStatus =
   | 'OK'
   | 'PARTIAL'
+  // 🟡 Engine/UI exists but data or results are hardcoded. Distinct from
+  // PARTIAL: nothing here talks to a real service.
+  | 'MOCK'
   | 'ERROR'
   | 'NOT_IMPLEMENTED'
   | 'CONFIGURATION_REQUIRED'
