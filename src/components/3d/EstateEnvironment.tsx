@@ -248,12 +248,12 @@ export function EstateEnvironment() {
       >
         <mesh position={[0, 2.4, 0]} castShadow>
           <boxGeometry args={[7.5, 0.15, 4.2]} />
-          <meshStandardMaterial color="#2c3345" metalness={0.7} />
+          <meshStandardMaterial color="#2c3345" metalness={0.08} /*tok:matte*/ />
         </mesh>
         {[-3, 3].map((px, idx) => (
           <mesh key={idx} position={[px, 1.2, 0]} castShadow>
             <cylinderGeometry args={[0.08, 0.08, 2.4, 8]} />
-            <meshStandardMaterial color="#64748b" metalness={0.9} />
+            <meshStandardMaterial color="#64748b" metalness={0.08} /*tok:matte*/ />
           </mesh>
         ))}
 
@@ -278,7 +278,7 @@ export function EstateEnvironment() {
       >
         {/* Modern Titanium & Glass Pavilion */}
         <RoundedBox args={[6.5, 3.8, 4.8]} radius={0.12} position={[0, 1.9, 0]} castShadow receiveShadow>
-          <meshStandardMaterial color="#1a2233" transparent opacity={0.6} roughness={0.2} metalness={0.8} />
+          <meshStandardMaterial color="#1a2233" transparent opacity={0.6} roughness={0.32} metalness={0.08} /*tok:matte*/ />
         </RoundedBox>
 
         {/* 6 Hologram Portal Rings for Connected Services */}
@@ -465,7 +465,7 @@ export function EstateEnvironment() {
         </mesh>
         <mesh ref={fountainWaterRef} position={[0, 0.55, 0]} rotation={[-Math.PI / 2, 0, 0]}>
           <circleGeometry args={[2.4, 16]} />
-          <meshStandardMaterial color="#0099cc" emissive="#004466" emissiveIntensity={0.4} roughness={0.1} />
+          <meshStandardMaterial color="#0099cc" emissive="#004466" emissiveIntensity={0.4} roughness={0.28} />
         </mesh>
         <mesh position={[0, 1.2, 0]} castShadow>
           <cylinderGeometry args={[0.7, 0.4, 1.3, 12]} />
@@ -524,7 +524,7 @@ export function EstateEnvironment() {
         }}
       >
         <RoundedBox args={[12.5, 4.8, 9.5]} radius={0.08} position={[0, 2.4, 0]} receiveShadow>
-          <meshStandardMaterial color="#0b0f19" transparent opacity={0.35} roughness={0.1} metalness={0.9} />
+          <meshStandardMaterial color="#0b0f19" transparent opacity={0.35} roughness={0.28} metalness={0.08} /*tok:matte*/ />
         </RoundedBox>
         <mesh position={[0, 4.8, 0]} rotation={[0, Math.PI / 4, 0]} castShadow>
           <coneGeometry args={[7.8, 1.8, 4]} />
@@ -550,7 +550,7 @@ export function EstateEnvironment() {
             </mesh>
             <mesh position={[0, 0.9, 0]}>
               <cylinderGeometry args={[0.2, 0.15, 0.25, 8]} />
-              <meshStandardMaterial color="#ffe8be" emissive="#ffc46b" emissiveIntensity={0.8} />
+              <meshStandardMaterial color="#ffe8be" emissive="#ffc46b" emissiveIntensity={0.42} />
             </mesh>
           </group>
         ))}
@@ -591,11 +591,11 @@ export function EstateEnvironment() {
         </group>
 
         <RoundedBox args={[4.2, 1.2, 1.2]} position={[0, 0.6, -3.4]} castShadow>
-          <meshStandardMaterial color="#0d0f18" roughness={0.3} metalness={0.8} />
+          <meshStandardMaterial color="#0d0f18" roughness={0.3} metalness={0.08} /*tok:matte*/ />
         </RoundedBox>
         <mesh position={[0, 0.6, -2.78]}>
           <planeGeometry args={[3.8, 0.7]} />
-          <meshStandardMaterial color={BRAND_ACCENT} emissive={BRAND_ACCENT} emissiveIntensity={0.9} />
+          <meshStandardMaterial color={BRAND_ACCENT} emissive={BRAND_ACCENT} emissiveIntensity={0.42} />
         </mesh>
 
         {/* 3D Floating Hologram Music Cells in an Arc */}
@@ -621,8 +621,8 @@ export function EstateEnvironment() {
                   color={isPlayingThis ? BRAND_ACCENT : '#242b3b'}
                   emissive={isPlayingThis ? BRAND_ACCENT : '#111620'}
                   emissiveIntensity={isPlayingThis ? 0.8 : 0.2}
-                  metalness={0.8}
-                  roughness={0.2}
+                  metalness={0.55} /*tok:brass*/
+                  roughness={0.32}
                 />
               </mesh>
             </group>
@@ -687,7 +687,7 @@ export function EstateEnvironment() {
           {veh.type === 'wedding_car' ? (
             <group>
               <RoundedBox args={[3.8, 0.75, 1.6]} position={[0, 0.55, 0]} radius={0.15} castShadow>
-                <meshStandardMaterial color="#e2b448" metalness={0.8} roughness={0.2} />
+                <meshStandardMaterial color="#e2b448" metalness={0.55} /*tok:brass*/ roughness={0.32} />
               </RoundedBox>
               <mesh position={[0.2, 0.85, 0]}>
                 <boxGeometry args={[1.4, 0.35, 1.2]} />
@@ -731,12 +731,12 @@ export function EstateEnvironment() {
                 {[-2.2, 2.2].map((px, idx) => (
                   <mesh key={idx} position={[px, 1.8, 0]} castShadow>
                     <cylinderGeometry args={[0.08, 0.08, 3.6, 8]} />
-                    <meshStandardMaterial color="#334155" metalness={0.9} />
+                    <meshStandardMaterial color="#334155" metalness={0.08} /*tok:matte*/ />
                   </mesh>
                 ))}
                 {/* Billboard Board & Frame */}
                 <RoundedBox args={[slot.size[0], slot.size[1], 0.2]} position={[0, 4.2, 0]} radius={0.08} castShadow receiveShadow>
-                  <meshStandardMaterial color="#0b0f19" roughness={0.3} metalness={0.7} />
+                  <meshStandardMaterial color="#0b0f19" roughness={0.3} metalness={0.08} /*tok:matte*/ />
                 </RoundedBox>
                 {/* Backlit Screen */}
                 <mesh position={[0, 4.2, 0.12]}>
@@ -744,8 +744,8 @@ export function EstateEnvironment() {
                   <meshStandardMaterial
                     color={camp.isSponsored ? '#ffd700' : BRAND_ACCENT}
                     emissive={camp.isSponsored ? '#ffd700' : BRAND_ACCENT}
-                    emissiveIntensity={0.6}
-                    roughness={0.2}
+                    emissiveIntensity={0.42}
+                    roughness={0.32}
                   />
                 </mesh>
               </group>
@@ -753,7 +753,7 @@ export function EstateEnvironment() {
               <group>
                 {/* Vertical Monolith Totem */}
                 <RoundedBox args={[slot.size[0], slot.size[1], 0.35]} position={[0, slot.size[1] / 2, 0]} radius={0.06} castShadow receiveShadow>
-                  <meshStandardMaterial color="#080b12" roughness={0.2} metalness={0.9} />
+                  <meshStandardMaterial color="#080b12" roughness={0.32} metalness={0.08} /*tok:matte*/ />
                 </RoundedBox>
                 {/* Vertical LED Screen */}
                 <mesh position={[0, slot.size[1] / 2, 0.19]}>
@@ -761,7 +761,7 @@ export function EstateEnvironment() {
                   <meshStandardMaterial
                     color={camp.isSponsored ? '#ffd700' : BRAND_ACCENT}
                     emissive={camp.isSponsored ? '#ffd700' : BRAND_ACCENT}
-                    emissiveIntensity={0.7}
+                    emissiveIntensity={0.42}
                   />
                 </mesh>
               </group>
@@ -769,11 +769,11 @@ export function EstateEnvironment() {
               <group>
                 {/* Glass Vitrine */}
                 <RoundedBox args={[slot.size[0], slot.size[1], 0.4]} position={[0, slot.size[1] / 2, 0]} radius={0.06} castShadow>
-                  <meshStandardMaterial color="#1e293b" metalness={0.8} />
+                  <meshStandardMaterial color="#1e293b" metalness={0.08} /*tok:matte*/ />
                 </RoundedBox>
                 <mesh position={[0, slot.size[1] / 2, 0.22]}>
                   <planeGeometry args={[slot.size[0] - 0.3, slot.size[1] - 0.3]} />
-                  <meshStandardMaterial color="#ffd700" emissive="#ffd700" emissiveIntensity={0.5} />
+                  <meshStandardMaterial color="#ffd700" emissive="#ffd700" emissiveIntensity={0.42} />
                 </mesh>
               </group>
             ) : (
@@ -781,11 +781,11 @@ export function EstateEnvironment() {
                 {/* Overhead Lighting Truss Banner */}
                 <mesh position={[0, 3.6, 0]} castShadow>
                   <boxGeometry args={[slot.size[0], slot.size[1], 0.15]} />
-                  <meshStandardMaterial color="#0f172a" metalness={0.9} />
+                  <meshStandardMaterial color="#0f172a" metalness={0.08} /*tok:matte*/ />
                 </mesh>
                 <mesh position={[0, 3.6, 0.09]}>
                   <planeGeometry args={[slot.size[0] - 0.2, slot.size[1] - 0.1]} />
-                  <meshStandardMaterial color={BRAND_ACCENT} emissive={BRAND_ACCENT} emissiveIntensity={0.8} />
+                  <meshStandardMaterial color={BRAND_ACCENT} emissive={BRAND_ACCENT} emissiveIntensity={0.42} />
                 </mesh>
               </group>
             )}

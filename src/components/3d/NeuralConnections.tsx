@@ -1,6 +1,7 @@
 import { useMemo, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
+import { relationships, materials } from '../../design/tokens';
 import { weddingStore } from '../../game/weddingStore';
 import { EntityType, GridWave, NeuralPulse } from '../../types/wedding';
 
@@ -38,7 +39,7 @@ export function NeuralConnections({ selectedEntity, gridWaves, neuralPulses }: N
             lines.push({
               from: originPos,
               to: p.pos,
-              color: '#00ffff',
+              color: '#8fb8c6',
               label: p.name,
             });
           }
@@ -50,7 +51,7 @@ export function NeuralConnections({ selectedEntity, gridWaves, neuralPulses }: N
             lines.push({
               from: originPos,
               to: a.currentPos,
-              color: '#ff4d88',
+              color: '#cf8fa4',
               label: a.name,
             });
           }
@@ -71,7 +72,7 @@ export function NeuralConnections({ selectedEntity, gridWaves, neuralPulses }: N
             lines.push({
               from: originPos,
               to: tablePlace.pos,
-              color: '#34d399',
+              color: '#7fc0a4',
               label: `${table!.label} · ${tablePlace.name}`,
             });
           }
@@ -102,7 +103,7 @@ export function NeuralConnections({ selectedEntity, gridWaves, neuralPulses }: N
             lines.push({
               from: originPos,
               to: a.currentPos,
-              color: '#00e5ff',
+              color: '#8bb5c8',
               label: a.name,
             });
           }
@@ -117,7 +118,7 @@ export function NeuralConnections({ selectedEntity, gridWaves, neuralPulses }: N
             lines.push({
               from: originPos,
               to: a.currentPos,
-              color: '#ffd700',
+              color: '#d9b877',
               label: a.name,
             });
           }
@@ -128,7 +129,7 @@ export function NeuralConnections({ selectedEntity, gridWaves, neuralPulses }: N
             lines.push({
               from: originPos,
               to: p.pos,
-              color: '#00ffaa',
+              color: '#84c2aa',
               label: p.name,
             });
           }
@@ -143,7 +144,7 @@ export function NeuralConnections({ selectedEntity, gridWaves, neuralPulses }: N
             lines.push({
               from: originPos,
               to: a.currentPos,
-              color: '#ffaa00',
+              color: '#d3a473',
               label: a.name,
             });
           }
@@ -161,7 +162,7 @@ export function NeuralConnections({ selectedEntity, gridWaves, neuralPulses }: N
             lines.push({
               from: originPos,
               to: target,
-              color: '#ff0055',
+              color: '#c9788c',
               label: 'Impact Conflit',
             });
           }
@@ -212,9 +213,16 @@ function NeuralArc({
     mid.y += Math.max(1.5, dist * 0.25); // Arch height
 
     const curve = new THREE.QuadraticBezierCurve3(start, mid, end);
-    const points = curve.getPoints(24);
+    // Smoother curve + recessive opacity: a relation should be readable,
+    // never the loudest thing on screen (relationships.opacity.active).
+    const points = curve.getPoints(48);
     const geo = new THREE.BufferGeometry().setFromPoints(points);
-    const mat = new THREE.LineBasicMaterial({ color, linewidth: 2, transparent: true, opacity: 0.85 });
+    const mat = new THREE.LineBasicMaterial({
+      color,
+      transparent: true,
+      opacity: relationships.opacity.active,
+      depthWrite: false,
+    });
     return new THREE.Line(geo, mat);
   }, [from, to, color]);
 
@@ -222,10 +230,17 @@ function NeuralArc({
     <group>
       {/* Laser line primitive */}
       <primitive object={lineObject} />
-      {/* Glowing End Nodes */}
+      {/* End node: smaller, rounder (8 → 20 segments, it was visibly
+          faceted) and lit rather than flat-unlit. */}
       <mesh position={[to[0], to[1] + 0.8, to[2]]}>
-        <sphereGeometry args={[0.18, 8, 8]} />
-        <meshBasicMaterial color={color} />
+        <sphereGeometry args={[0.11, 20, 20]} />
+        <meshStandardMaterial
+          color={color}
+          roughness={materials.signal.roughness}
+          metalness={materials.signal.metalness}
+          emissive={color}
+          emissiveIntensity={materials.signal.emissiveIntensity}
+        />
       </mesh>
     </group>
   );

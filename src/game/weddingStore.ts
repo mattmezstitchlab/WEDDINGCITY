@@ -1543,6 +1543,8 @@ class WeddingStore {
   public adSlotModalOpen: boolean = false;
   public selectedAdSlotId: string | null = null;
   public systemNerveModalOpen: boolean = false;
+  /** Composition-mode surface: guest constellation (Phase B prototype). */
+  public constellationOpen: boolean = false;
 
   // Real World -> 3D World / Interior State
   public interiorMode: boolean = false;

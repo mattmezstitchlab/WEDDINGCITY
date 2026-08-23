@@ -27,7 +27,7 @@ export function AtmosphereAndEffects({
       // Crisp Morning
       return {
         sunColor: '#fff8eb',
-        sunIntensity: 1.5,
+        sunIntensity: 0.93,
         sunPos: [16, 22, 14] as [number, number, number],
         ambientColor: '#dbe4f0',
         ambientIntensity: 0.6,
@@ -36,7 +36,7 @@ export function AtmosphereAndEffects({
       // Afternoon
       return {
         sunColor: '#ffffff',
-        sunIntensity: 1.6,
+        sunIntensity: 0.99,
         sunPos: [14, 24, 10] as [number, number, number],
         ambientColor: '#e2ebf5',
         ambientIntensity: 0.65,
@@ -45,7 +45,7 @@ export function AtmosphereAndEffects({
       // Golden Hour (17h - 19h30)
       return {
         sunColor: '#f5b562',
-        sunIntensity: 1.7,
+        sunIntensity: 1.05,
         sunPos: [-18, 14, 16] as [number, number, number],
         ambientColor: '#ebd5be',
         ambientIntensity: 0.55,
@@ -54,7 +54,7 @@ export function AtmosphereAndEffects({
       // Twilight / Reception
       return {
         sunColor: '#a78bfa',
-        sunIntensity: 1.0,
+        sunIntensity: 0.62,
         sunPos: [-12, 12, -12] as [number, number, number],
         ambientColor: '#38324a',
         ambientIntensity: 0.45,
@@ -63,7 +63,7 @@ export function AtmosphereAndEffects({
       // Night Party
       return {
         sunColor: '#818cf8',
-        sunIntensity: 0.7,
+        sunIntensity: 0.43,
         sunPos: [0, 18, -16] as [number, number, number],
         ambientColor: '#1e2138',
         ambientIntensity: 0.4,
@@ -125,11 +125,13 @@ export function AtmosphereAndEffects({
 
   return (
     <group>
-      {/* Universal Hemisphere Fill */}
-      <hemisphereLight args={['#e8edf5', '#2a3342', 0.4]} />
+      {/* Universal Hemisphere Fill.
+          Raised and warmed: with IBL now present, the fill's job is to keep
+          undersides readable rather than to be the main light. */}
+      <hemisphereLight args={['#eef2f8', '#3a4152', 0.55]} />
 
-      {/* Ambient Light */}
-      <ambientLight intensity={0.6} color="#ffffff" />
+      {/* Ambient Light. Lifted so shadowed volumes stop reading as black. */}
+      <ambientLight intensity={0.75} color="#fdfbf7" />
 
       {/* Key Directional Sun Light */}
       <directionalLight
@@ -140,6 +142,10 @@ export function AtmosphereAndEffects({
         castShadow
         shadow-mapSize={[2048, 2048]}
         shadow-bias={-0.0001}
+        // Penumbra: the shadow edge now spreads instead of being a hard
+        // stencil. Paired with PCFSoftShadowMap on the Canvas.
+        shadow-radius={6}
+        shadow-normalBias={0.02}
         shadow-camera-near={0.5}
         shadow-camera-far={90}
         shadow-camera-left={-30}
@@ -148,10 +154,12 @@ export function AtmosphereAndEffects({
         shadow-camera-bottom={-30}
       />
 
-      {/* Subtle Warm Rim Light for Silhouette Definition */}
+      {/* Subtle Warm Rim Light for Silhouette Definition.
+          Reduced: the champagne rim is now also present in the IBL, so keeping
+          it at 0.35 double-counted the accent and hardened the edges. */}
       <directionalLight
         position={[-lightingParams.sunPos[0], 12, -lightingParams.sunPos[2]]}
-        intensity={0.35}
+        intensity={0.18}
         color={BRAND_ACCENT}
       />
 

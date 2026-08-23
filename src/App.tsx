@@ -13,6 +13,7 @@ import { InteriorHUD } from './components/ui/InteriorHUD';
 // Heavy, on-demand surfaces are code-split: they are only fetched when the
 // user actually opens them. Each is rendered conditionally so the chunk is not
 // requested at startup.
+const GuestConstellation = lazy(() => import('./components/ui/GuestConstellation').then((m) => ({ default: m.GuestConstellation })));
 const SystemNerveCenterModal = lazy(() => import('./components/ui/SystemNerveCenterModal').then((m) => ({ default: m.SystemNerveCenterModal })));
 const WorldResearchModal = lazy(() => import('./components/ui/WorldResearchModal').then((m) => ({ default: m.WorldResearchModal })));
 const ConnectorsHubModal = lazy(() => import('./components/ui/ConnectorsHubModal').then((m) => ({ default: m.ConnectorsHubModal })));
@@ -80,6 +81,11 @@ export default function App() {
         weddingStore.notify();
       } else if (e.code === 'KeyM' && !weddingStore.showIdentityModal) {
         weddingStore.setDjBoothOpen(!weddingStore.djBoothModalOpen);
+      } else if (e.code === 'KeyG' && !weddingStore.showIdentityModal) {
+        // Phase B prototype surface. Deliberately a shortcut rather than a new
+        // navigation entry: the permanent chrome is out of scope for now.
+        weddingStore.constellationOpen = !weddingStore.constellationOpen;
+        weddingStore.notify();
       } else if (e.code === 'KeyT' && !weddingStore.showIdentityModal) {
         weddingStore.setViewMode(weddingStore.viewMode === 'world' ? 'timeline' : 'world');
       }
@@ -136,6 +142,18 @@ export default function App() {
       )}
 
       {/* 9. System Nerve Center (Autodiagnostic & Santé Technique) */}
+      {weddingStore.constellationOpen && (
+        <Suspense fallback={null}>
+          <GuestConstellation
+            isOpen={weddingStore.constellationOpen}
+            onClose={() => {
+              weddingStore.constellationOpen = false;
+              weddingStore.notify();
+            }}
+          />
+        </Suspense>
+      )}
+
       {weddingStore.systemNerveModalOpen && (
         <Suspense fallback={null}>
         <SystemNerveCenterModal

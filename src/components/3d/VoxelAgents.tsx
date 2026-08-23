@@ -4,6 +4,7 @@ import { RoundedBox } from '@react-three/drei';
 import * as THREE from 'three';
 import { Agent } from '../../types/wedding';
 import { weddingStore, BRAND_ACCENT } from '../../game/weddingStore';
+import { materials } from '../../design/tokens';
 
 interface VoxelAgentsProps {
   agents: Agent[];
@@ -164,10 +165,9 @@ function SingleVoxelAgent({
       {/* Identity is bound by PERSON ID, not by role: two people sharing a
           role used to both render as the connected user. */}
       {weddingStore.isCurrentUserAgent(agent.id) && (
-        <mesh position={[0.1, 0.8, 0.14]}>
-          <boxGeometry args={[0.08, 0.08, 0.02]} />
-          <meshStandardMaterial color={BRAND_ACCENT} emissive={BRAND_ACCENT} emissiveIntensity={0.6} />
-        </mesh>
+        <RoundedBox args={[0.08, 0.08, 0.02]} radius={0.006} smoothness={3} position={[0.1, 0.8, 0.14]}>
+          <meshStandardMaterial color={BRAND_ACCENT} emissive={BRAND_ACCENT} emissiveIntensity={0.42} />
+        </RoundedBox>
       )}
 
       {/* RSVP state, projected onto the character itself.
@@ -185,7 +185,7 @@ function SingleVoxelAgent({
         return (
           <mesh position={[0, 1.72, 0]}>
             <octahedronGeometry args={[0.07, 0]} />
-            <meshStandardMaterial color={color} emissive={color} emissiveIntensity={0.7} />
+            <meshStandardMaterial color={color} emissive={color} emissiveIntensity={0.42} />
           </mesh>
         );
       })()}
@@ -258,33 +258,34 @@ function SingleVoxelAgent({
 
       {agent.role === 'photographer' && (
         <group position={[0, 0.7, 0.22]}>
-          <mesh castShadow>
-            <boxGeometry args={[0.22, 0.14, 0.16]} />
-            <meshStandardMaterial color="#111520" metalness={0.8} />
-          </mesh>
+          <RoundedBox args={[0.22, 0.14, 0.16]} radius={0.039} smoothness={3} castShadow>
+            <meshStandardMaterial color="#111520" metalness={0.08} /*tok:matte*/ />
+          </RoundedBox>
           <mesh position={[0, 0, 0.1]} rotation={[Math.PI / 2, 0, 0]}>
             <cylinderGeometry args={[0.06, 0.06, 0.08, 12]} />
-            <meshStandardMaterial color={BRAND_ACCENT} emissive={BRAND_ACCENT} emissiveIntensity={0.8} />
+            <meshStandardMaterial color={BRAND_ACCENT} emissive={BRAND_ACCENT} emissiveIntensity={0.42} />
           </mesh>
         </group>
       )}
 
+      {/* Pre-existing bug found while bevelling: the geometry and material
+          were direct children of a <group>, which renders NOTHING in R3F.
+          The wedding planner's clipboard has never actually been visible. */}
       {agent.role === 'wedding_planner' && (
         <group position={[0, 0.7, 0.2]} rotation={[0.3, 0, 0]}>
-          <boxGeometry args={[0.18, 0.26, 0.02]} />
-          <meshStandardMaterial color="#e2e8f0" />
+          <RoundedBox args={[0.18, 0.26, 0.02]} radius={0.006} smoothness={3} castShadow>
+            <meshStandardMaterial color="#e2e8f0" roughness={materials.matte.roughness} metalness={materials.matte.metalness} />
+          </RoundedBox>
         </group>
       )}
 
       {/* Legs */}
-      <mesh ref={leftLegRef} position={[-0.11, 0.22, 0]} castShadow>
-        <boxGeometry args={[0.13, 0.42, 0.13]} />
+      <RoundedBox args={[0.13, 0.42, 0.13]} radius={0.036} smoothness={3} ref={leftLegRef} position={[-0.11, 0.22, 0]} castShadow>
         <meshStandardMaterial color="#111520" />
-      </mesh>
-      <mesh ref={rightLegRef} position={[0.11, 0.22, 0]} castShadow>
-        <boxGeometry args={[0.13, 0.42, 0.13]} />
+      </RoundedBox>
+      <RoundedBox args={[0.13, 0.42, 0.13]} radius={0.036} smoothness={3} ref={rightLegRef} position={[0.11, 0.22, 0]} castShadow>
         <meshStandardMaterial color="#111520" />
-      </mesh>
+      </RoundedBox>
     </group>
   );
 }

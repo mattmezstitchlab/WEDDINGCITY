@@ -20,6 +20,7 @@ import { PERSISTED_FIELDS, SCHEMA_VERSION } from './persistenceSchema';
 import { loadPersistedState, getStorageFailures } from './persistence';
 import { checkReferentialIntegrity, describeBrokenReferences } from './integrity';
 import { getDiagnostics, getDiagnosticsBySource, clearDiagnostics } from './diagnostics';
+import { getPerfSnapshot } from './perfMonitor';
 import { CONNECTOR_CAPABILITIES } from './connectorEngine';
 import { RESEARCH_CAPABILITIES } from './researchEngine';
 import { extraProbes } from './probes';
@@ -336,15 +337,46 @@ const webglProbe: HealthProbe = {
       const dbg = gl.getExtension('WEBGL_debug_renderer_info');
       const renderer = dbg ? String(gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL)) : 'non exposé';
       const liveCanvas = document.getElementById('wedding-canvas');
+
+      // Real frame measurements sampled by the render loop. Never estimated:
+      // when nothing has rendered yet, these stay null and are reported as
+      // "not measured" rather than as an invented number.
+      const perf = getPerfSnapshot();
+
+      const evidence = [
+        { label: 'Version', value: String(gl.getParameter(gl.VERSION)) },
+        { label: 'Renderer', value: renderer },
+        { label: 'Taille max. de texture', value: String(gl.getParameter(gl.MAX_TEXTURE_SIZE)) },
+        { label: 'Canvas monté dans le DOM', value: liveCanvas ? 'oui' : 'non' },
+        { label: 'Images par seconde', value: perf.fps !== null ? `${perf.fps} i/s (${perf.samples} échantillons)` : 'non mesuré' },
+        { label: '1 % les plus lentes', value: perf.fps1PercentLow !== null ? `${perf.fps1PercentLow} i/s` : 'non mesuré' },
+        { label: 'Temps par image', value: perf.frameMs !== null ? `${perf.frameMs} ms` : 'non mesuré' },
+        { label: 'Pixel ratio effectif', value: perf.dpr ? String(perf.dpr) : 'non mesuré' },
+        { label: 'Triangles', value: perf.triangles ? perf.triangles.toLocaleString('fr-FR') : 'non mesuré' },
+        { label: 'Appels de rendu', value: perf.drawCalls ? String(perf.drawCalls) : 'non mesuré' },
+      ];
+
+      if (perf.fps !== null && perf.fps < 30) {
+        return base(meta, {
+          status: 'PARTIAL',
+          summary: `Scène rendue mais fluidité dégradée (${perf.fps} i/s).`,
+          evidence,
+          warnings: [{
+            code: 'render_low_fps',
+            message: `${perf.fps} images/s mesurées, ${perf.fps1PercentLow} i/s sur les images les plus lentes.`,
+            cause: perf.degradedReason ?? 'Charge de rendu supérieure à ce que le GPU absorbe (IBL, ombres douces, pixel ratio).',
+            impact: 'Navigation saccadée dans le monde.',
+            solution: 'AdaptiveDpr réduit déjà le pixel ratio automatiquement ; réduire la résolution de l’environnement ou désactiver les ombres de contact si cela persiste.',
+          }],
+        });
+      }
+
       return base(meta, {
         status: 'VERIFIED',
-        summary: 'Contexte WebGL obtenu et scène montée.',
-        evidence: [
-          { label: 'Version', value: String(gl.getParameter(gl.VERSION)) },
-          { label: 'Renderer', value: renderer },
-          { label: 'Taille max. de texture', value: String(gl.getParameter(gl.MAX_TEXTURE_SIZE)) },
-          { label: 'Canvas monté dans le DOM', value: liveCanvas ? 'oui' : 'non' },
-        ],
+        summary: perf.fps !== null
+          ? `Contexte WebGL actif, ${perf.fps} i/s à un pixel ratio de ${perf.dpr}.`
+          : 'Contexte WebGL obtenu et scène montée (fluidité pas encore mesurée).',
+        evidence,
       });
     } catch (err) {
       return base(meta, {
