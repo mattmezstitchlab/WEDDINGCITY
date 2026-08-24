@@ -736,6 +736,12 @@ try {
   r.check(Array.isArray(store.adminEvents()) && store.adminEvents().length >= 1,
     'the administration lists the events really stored');
   r.check(Array.isArray(store.adminAlerts()), 'and what awaits a decision in them');
+  r.check(store.adminEvents().every((e) => typeof e.isDemo === 'boolean'),
+    'a demonstration is labelled as one');
+  r.check(store.adminAlerts().every((a) => {
+    const project = store.adminEvents().find((e) => e.project.id === a.projectId);
+    return !project?.isDemo;
+  }), 'and never produces work for a human');
   r.check(store.searchAcrossEvents('a').length === 0, 'a one-letter search returns nothing');
   r.check(store.personDossier('inconnu') === null, 'an unknown person has no card');
   const adminSrc = read('components', 'mirror', 'admin', 'AdminConsole.tsx');

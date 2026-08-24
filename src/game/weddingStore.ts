@@ -2406,7 +2406,7 @@ class WeddingStore {
 
     // --- the place --------------------------------------------------------
     if (place) out.push({ level: 'ok', title: 'Lieu', detail: place.name });
-    else out.push({ level: 'gap', title: 'Lieu', detail: 'Aucun lieu rattaché à ce moment.' });
+    else out.push({ level: 'gap', title: 'Lieu à définir', detail: 'Aucun lieu rattaché à ce moment.' });
 
     // --- who is there -----------------------------------------------------
     if (persons.length > 0) {
@@ -3309,6 +3309,7 @@ class WeddingStore {
   public adminEvents(): {
     project: WeddingProject;
     isCurrent: boolean;
+    isDemo: boolean;
     typeLabel: string;
     moments: number;
     people: number;
@@ -3323,6 +3324,7 @@ class WeddingStore {
       return {
         project,
         isCurrent: project.id === this.currentProject.id,
+        isDemo: Boolean(project.isDemo),
         typeLabel: eventType(project.eventTypeId).label,
         moments: snap?.phases.length ?? 0,
         people: persons.length,
@@ -3346,6 +3348,11 @@ class WeddingStore {
     const clock = (h: number) => `${String(Math.floor(h) % 24).padStart(2, '0')}:${String(Math.round((h % 1) * 60)).padStart(2, '0')}`;
 
     for (const project of getStoredProjects()) {
+      // A DEMONSTRATION IS NOT A JOB. The editorial wedding shipped with the
+      // product is a real stored project — but nobody has to chase its missing
+      // contracts. It stays listed among the events, labelled as what it is,
+      // and it never produces work for a human.
+      if (project.isDemo) continue;
       const snap = this.projectSnapshot(project.id);
       if (!snap) continue;
       const name = project.coupleNames || project.title;

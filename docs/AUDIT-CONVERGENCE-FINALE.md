@@ -385,6 +385,10 @@ Régressions vérifiées : `acceptance-jourj`, `acceptance-grandjour`, `acceptan
 | §19 rôle | `store.currentRole()` / `isOrchestrator()` lisent le modèle de permissions qui existait déjà. L'entrée « Administration », le cachet et le bloc déplacement/hébergement ne s'affichent qu'à qui orchestre. |
 | §20 landing | Numérotation linéaire 02→13, sans doublon. Deux séquences créées : **02 IMPORTER LE CHAOS** (les cinq niveaux, montrés) et **11 L'ADMINISTRATION INVISIBLE** (ce que voient les mariés / ce que voit celui qui pilote). |
 
+**La démonstration ne pèse pas comme un vrai événement.** Le mariage éditorial livré avec le produit
+est bien un projet stocké : l'Administration le liste, étiqueté « démonstration », mais il ne produit
+jamais de travail à faire pour un humain (`adminAlerts()` l'ignore).
+
 **Un défaut préexistant a été corrigé au passage** (constaté avant modification, sur `8226a24`) : à
 390 px et en fin de journée, l'étiquette « maintenant » de la pellicule de démonstration dépassait de
 42 px, si bien que « Toute la journée » ne faisait plus tenir la journée. L'étiquette bascule

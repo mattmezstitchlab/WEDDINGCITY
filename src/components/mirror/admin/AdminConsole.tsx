@@ -173,6 +173,11 @@ export function AdminConsole({ onClose }: { onClose: () => void }) {
                   </span>
                   <span style={kindTag}>{e.typeLabel}</span>
                   {e.isCurrent && <span style={{ ...kindTag, borderColor: '#f6f5f3' }}>ouvert</span>}
+                  {e.isDemo && (
+                    <span style={{ ...kindTag, borderColor: '#e0a06a', color: '#e0a06a' }} data-admin="demo-tag">
+                      démonstration
+                    </span>
+                  )}
                 </div>
                 <div style={{ ...muted, marginTop: 4 }}>
                   {e.moments} moment{e.moments > 1 ? 's' : ''} · {e.people} personne{e.people > 1 ? 's' : ''}
