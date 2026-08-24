@@ -405,3 +405,334 @@ présenter comme une réalité.
 
 **État final de cette passe : audit livré, aucune implémentation de code
 réalisée.**
+
+## 11. Audit de la surface claire « Composer »
+
+### 11.1 Rendu réellement observé dans Chromium
+
+Parcours exécuté : création depuis le champ Hero, puis ouverture de la fiche
+« Ouvrir les fiches » de la section du lieu.
+
+À 1440 × 900, Chromium rend :
+
+- `#wc-mirror-canvas` en surface fixe, pleine fenêtre (`1440 × 900`) ;
+- un masthead ivoire indépendant ;
+- une navigation horizontale de six onglets : `Ordre du jour`, `Personnes`,
+  `Prestataires`, `Lieux`, `Musique`, `Médias` ;
+- trois cartes de moments dans l’onglet `Ordre du jour` ;
+- aucune saisie directe de titre, heure, durée, lieu ou note dans ces cartes ;
+- douze actions de réglage ou d’ajout réparties dans les cartes, dont
+  `Régler ce moment`, `Régler sur ce moment`, `+ Ajouter un morceau` et
+  `+ Ajouter un média`.
+
+La capture observée confirme le problème de perception : l’utilisateur quitte
+la pellicule noire et arrive dans une page claire avec son propre titre, sa
+propre navigation et ses propres cartes. Même si elle lit la même donnée, elle
+ressemble à un second poste de pilotage.
+
+### 11.2 Réponses A–G demandées
+
+| Surface | A. Capacité réellement absente du Jour J ? | B/C. Même donnée / mêmes formulaires ? | D/E/F/G. Décision |
+|---|---|---|---|
+| `CanvasCore` — `ProgrammeSurface` | Réordonner plusieurs moments avec un geste de poignée restée fixe | Oui pour la liaison musique et l’ajout de média ; lecture des autres propriétés | **GARDER seulement comme projection d’ordre accessible**, ou déplacer le geste sur la pellicule ; retirer ses écritures musique/média de cette surface |
+| `MomentHub` | Édition contextuelle complète d’un moment, état, documents, tâches, budget, scénarios | Porte principale de l’heure, durée, titre, lieu, personnes, prestataires, notes et contexte | **PORTE PRINCIPALE** pour toute donnée d’un moment |
+| `MirrorTimeline` | Lecture éditoriale du déroulé dans le récit | Même `phases`, aucune édition directe | **PROJECTION DE LECTURE** ; ses boutons doivent ouvrir le `MomentHub`, jamais le Canvas |
+| `PeopleSurface` / `VendorsSurface` / `PlacesSurface` | Fiches transverses d’entités, pas l’édition d’un moment | Même `Person`, `Vendor`, `Place` ; l’attachement au moment appartient au Hub | **GARDER pour les fiches transverses**, avec retour contextuel vers le moment |
+| `MusicSurface` | Édition détaillée d’un morceau, durée et médias audio | Même `TrackEntity` et même liaison à une phase que le Hub | **GARDER pour la fiche musique**, retirer la liaison d’un moment si elle est déjà réglable dans le Hub, ou la rendre clairement secondaire |
+| `MediaSurface` | Gestion de la collection et du propriétaire | Même `MediaAsset` ; le rattachement à un moment est aussi proposé par le Hub | **GARDER pour la collection**, mais le rattachement d’un document à un moment doit partir du Hub |
+| `OrganisationSection` | Lecture et pilotage transversal : équipe, plan de table, rapports de projet | Même store ; listes de prestataires et documents lisent les relations des phases | **PROJECTION TRANSVERSALE**, pas un éditeur de moment ; chaque action doit renvoyer au Hub |
+| `EventPanel` | Édition de l’événement entier : nom, nature, date, lieu principal, jauge | Même `WeddingProject`, mais distinct d’un moment | **GARDER dans le shell du Jour J**, unique porte des propriétés de l’événement |
+| `ProjectSettingsModal` | Aucune capacité métier absente d’`EventPanel` pour ces champs | Réédite titre, mariés, date, lieu, jauge et budget | **DOUBLON LEGACY À RETIRER DE L’EXPÉRIENCE PRINCIPALE** ; si conservé pour World, le marquer hors produit |
+| `WeddingCreationModal` | Création minimale sans rapport | Même création de projet, avec date et lieu | **SUPPRIMER COMME PORTE PUBLIQUE** au profit de l’Intake unique |
+| `CreateWeddingModal` | Création World avec valeurs et formulaires historiques | Même `createRealWedding` | **NE PAS EXPOSER** ; conserver uniquement pour compatibilité World jusqu’à passe dédiée |
+
+### 11.3 Doublons d’écriture précis
+
+Les mêmes opérations métier ont plusieurs portes :
+
+- moment : `TimelineStudio` peut déplacer une carte, `MomentHub` peut déplacer
+  avec les flèches, `ProgrammeSurface` peut réordonner avec sa poignée ;
+- musique d’un moment : `MomentHub` et `ProgrammeSurface` appellent des
+  mutations de liaison différentes mais écrivent la même relation ;
+- média d’un moment : `MomentHub` et `ProgrammeSurface` permettent l’ajout,
+  `MediaSurface` permet en plus de choisir le propriétaire ;
+- scénarios : `SimulationBar`, `MomentHub`, `EventPanel` et `ScenariosPanel`
+  peuvent créer ou rejoindre une branche ;
+- données d’événement : `EventPanel`, `ProjectSettingsModal`, les deux écrans
+  de création et `createRealWedding()` alimentent les mêmes propriétés.
+
+Le doublon le plus gênant visuellement est `CanvasCore` : même sans formulaire
+horaire dans sa version actuelle, il conserve une page complète et des actions
+sur les relations d’un moment, alors que le Hub est déjà le contexte naturel.
+
+## 12. Audit de la démonstration « Et si… »
+
+### 12.1 Ce que le moteur sait déjà faire correctement
+
+Le moteur existant est réutilisable :
+
+- `propagationImpact()` est une projection pure ;
+- il calcule le moment déplacé, les moments suivants, les personnes, les
+  prestataires et les conflits ;
+- `weatherImpact()` ne touche que les moments déclarés manuellement en
+  extérieur ;
+- `createScenario()` clone la journée dans une branche ;
+- `scenarioShiftPhase()` et `scenarioDiff()` utilisent la même arithmétique ;
+- l’application du scénario est explicite et la journée réelle ne bouge pas
+  avant validation.
+
+Il n’y a donc pas besoin de nouveau moteur de simulation ou de nouvelle
+Timeline.
+
+### 12.2 Ce que le rendu fait réellement
+
+Chromium a été conduit sur un projet réel créé depuis le Hero. Avec le curseur
+de retard réglé de `+15 min` à `+60 min` :
+
+- les cartes de la Timeline ont gardé les mêmes positions mesurées
+  (`14:00`, `17:00`, `20:00`) ;
+- seul le texte du bloc `Et si…` a changé ;
+- les moments suivants sont nommés dans une phrase, mais ne sont pas déplacés
+  dans une seconde lecture visuelle de la Timeline ;
+- le bouton `Décaler pour de vrai` écrit bien dans le réel, de manière explicite.
+
+Avec le curseur pluie à `100` :
+
+- la section prend la classe `wc-sim is-raining` ;
+- son fond passe de `rgb(11, 12, 14)` à `rgb(10, 15, 20)` ;
+- le texte liste les moments extérieurs exposés ;
+- aucune carte de la Timeline ne change d’état visuel ;
+- aucun ciel, rideau de pluie, atmosphère ou environnement n’évolue ;
+- aucune simulation temporaire n’est matérialisée sur le film lui-même.
+
+**Verdict :** le moteur est honnête et isolé, mais la démonstration est encore
+principalement textuelle. Elle ne satisfait pas la demande « la Timeline montre
+réellement l’impact ».
+
+La future correction doit ajouter une projection temporaire des horaires sur
+les cartes existantes, clairement marquée **SIMULATION**, sans écrire dans
+`phases`. Pour la pluie, la première étape sûre est de rendre visibles les
+moments concernés dans cette même pellicule et de conserver le scénario météo
+comme branche explicite. Une évolution d’ambiance visuelle ne doit pas
+introduire un deuxième espace de pilotage.
+
+## 13. Audit de la hiérarchie visuelle et des pictogrammes
+
+### 13.1 Famille existante
+
+`src/components/ui/Icons.tsx` fournit déjà une famille SVG fine et cohérente.
+Il n’est pas nécessaire d’ajouter une bibliothèque.
+
+Les surfaces auditées utilisent cependant encore des symboles Unicode isolés :
+
+- `⚠` et `✓` dans les états de moments et le Lab ;
+- `☀` et `☔` dans la météo ;
+- `↶` et `↷` pour l’historique ;
+- `↑`, `↓`, `⠿`, `×` et `→` dans différentes actions.
+
+Les flèches et la poignée peuvent rester des signes de contrôle si leur rôle est
+évident et accessible. Les pictogrammes météo et les alertes doivent être
+unifiés avec la famille SVG existante, sans transformer chaque ligne en badge.
+
+### 13.2 Accumulation observée
+
+Sur une carte réelle de la pellicule, on observe simultanément :
+
+- l’heure ;
+- le badge `ESTIMÉ` ;
+- `⚠ Horaire estimé` ;
+- `⚠ Lieu à définir` ;
+- parfois les compteurs de personnes, prestataires et documents.
+
+L’information est juste, mais sa hiérarchie est trop signalétique. Le même
+constat apparaît dans le Hub : l’état du moment et ses actions sont affichés
+avant les sept sections repliables, puis une section répète certains états.
+
+**Décision proposée :** garder un seul signal fort sur la carte — l’attention
+prioritaire — et intégrer le reste dans une phrase calme ou dans le résumé de
+section. Les détails restent dans `MomentHub`.
+
+## 14. Audit de navigation et permissions
+
+### 14.1 Navigation mesurée
+
+À 1440 px, la barre de produit présente huit boutons :
+
+`La journée · Les gens · L’organisation · Souvenirs · Calendrier · Rechercher ·
+Mes mariages · Créer`.
+
+À 390 px, elle mesure 135 px de haut. Les quatre destinations de la ligne
+principale occupent déjà la largeur ; le bouton `Calendrier` dépasse à droite,
+avec une limite mesurée à `430,47 px` pour une fenêtre de `390 px`. Le document
+ne déborde pas grâce à `overflow-x: hidden`, mais le contrôle est coupé et non
+accessible visuellement.
+
+La barre mélange :
+
+- lieux : `La journée`, `Les gens`, `L’organisation`, `Souvenirs`,
+  `Calendrier` ;
+- actions : `Rechercher`, `Mes mariages`, `Créer` ;
+- administration : `Administration` quand la condition est vraie.
+
+**Verdict :** la séparation sémantique demandée n’est pas encore visible dans
+la composition de la barre. Il faut une navigation courte pour les lieux, et des
+actions contextuelles ou un menu discret pour le reste.
+
+### 14.2 Permissions réelles
+
+`pilotsSeveralEvents()` masque l’entrée Administration pour un couple qui ne
+pilote qu’un événement. C’est une bonne règle d’expérience.
+
+Mais :
+
+- `AdminConsole` est monté selon cette condition d’interface, pas selon
+  `store.can(...)` ;
+- `can()` retourne `true` en mode local sans membership ;
+- il n’existe ni route serveur ni autorité distante dans cet environnement ;
+- le masquage d’un bouton n’est donc pas une sécurité réelle.
+
+**Verdict :** il est honnête de parler ici de **politique d’affichage locale**,
+pas de contrôle d’accès sécurisé. Une sécurité réelle exige un backend et sort
+des contraintes de cette passe. Il ne faut pas prétendre la fournir par une
+nouvelle condition React.
+
+## 15. Matrice de convergence
+
+| Fonction | Donnée modifiée | Porte actuelle | Interface principale proposée | Doublon actuel | Décision |
+|---|---|---|---|---|---|
+| Décrire l’événement | `IntakePlan` | Hero / modales de création | Hero + Intake unique | Oui | Fusionner |
+| Corriger nom/date/lieu de l’événement | `WeddingProject` | EventPanel, ProjectSettings, création | EventPanel après création | Oui | Une porte |
+| Corriger heure/durée/titre d’un moment | `TimelinePhase` | MomentHub | MomentHub | Ancien Canvas supprimé, Timeline déplace seulement | Garder |
+| Déplacer / réordonner un moment | `TimelinePhase` | pellicule, Hub, Canvas Programme | pellicule + accessibilité Hub | Oui, trois portes | Retirer du Canvas ou le rendre lecture/ordre seul |
+| Attacher une personne | `phase.personIds` | MomentHub | MomentHub | Non | Garder |
+| Attacher un prestataire | `phase.vendorIds` | MomentHub | MomentHub | Non pour l’attache, listes ailleurs | Garder |
+| Rattacher musique | `TrackEntity.linkedPhaseId` | Hub, Canvas Programme, MusicSurface | Hub pour le moment, MusicSurface pour la fiche | Oui | Réduire |
+| Rattacher un document | `MediaAsset.ownerKind/ownerId` | Hub, Canvas Programme, MediaSurface | Hub pour le moment, MediaSurface pour la collection | Oui | Clarifier |
+| Créer une tâche | `TaskEntity` | Hub, Crew / surfaces historiques | Hub | Porte globale secondaire | Contextualiser |
+| Créer un scénario | `TimelineScenario` | SimulationBar, Hub, EventPanel, Organisation | SimulationBar / Hub | Oui | Une action principale, projections ailleurs |
+| Lire les risques | projections `phaseFindings/projectFindings` | carte, Hub, Lab, Cockpit | carte résumée + Hub détaillé | Pas de second moteur | Garder |
+| Tester un retard | état local puis scénario ou écriture réelle | SimulationBar, drag, ScenariosPanel | SimulationBar dans le film | Oui | Une projection visuelle commune |
+| Tester la pluie | état local + `weatherImpact` | SimulationBar | SimulationBar + cartes simulées | Pas de second moteur | Étendre sans stocker |
+| Lire plusieurs jours | `calendarDays` | CalendarStudio | Calendrier | Non | Projection unique |
+| Administrer plusieurs événements | projets persistés | AdminConsole | surface séparée conditionnelle | Politique locale uniquement | Garder hors couple |
+
+## 16. Plan proposé avant implémentation
+
+### Passe 1 — convergence des portes
+
+1. Faire du Hero la porte publique unique, y compris lorsque le champ est vide.
+2. Faire de `IntakeStudio` le seul parcours de revue et de création publique.
+3. Retirer `WeddingCreationModal` de la navigation normale.
+4. Faire de `MomentHub` la seule porte d’édition des propriétés d’un moment.
+5. Transformer `CanvasCore` en surface de fiches transverses et d’ordre, sans
+   écritures concurrentes sur musique/média de moment.
+6. Conserver `MirrorTimeline` comme lecture, avec ouverture du Hub.
+
+### Passe 2 — fiabilité du rapport
+
+1. Empêcher `Table & Feu` ou tout prestataire de devenir les mariés.
+2. Lire les données explicitement nommées dans la description Hero, sans
+   inventer une identité à partir d’un rôle.
+3. Ne plus dédupliquer deux occurrences réelles uniquement par leur libellé.
+4. Valider les dates calendaires.
+5. Supprimer les valeurs par défaut inventées dans le chemin Intake.
+6. Garder l’absence comme `MANQUANT` ou `À CONFIRMER`.
+
+### Passe 3 — continuité rapport → même moment
+
+1. Appliquer le plan sans double écriture de création.
+2. Conserver ou rattacher les `MediaAsset` selon une règle explicite.
+3. Rattacher un lieu, une personne, un prestataire ou un morceau uniquement si
+   la preuve le permet.
+4. Transmettre les preuves et les niveaux de certitude jusqu’au Hub.
+5. Tester l’idempotence et l’absence de doublon après génération et rechargement.
+
+### Passe 4 — démonstration visuelle dans la pellicule
+
+1. Ajouter un état de projection temporaire, sans modifier `phases`.
+2. Faire apparaître les horaires simulés sur les cartes existantes.
+3. Identifier visuellement les moments déplacés, les marges et les conflits.
+4. Garder les actions explicites : appliquer au réel, créer un scénario, annuler.
+5. Faire de la pluie une projection visible sur les cartes extérieures déclarées,
+   puis seulement étudier une ambiance visuelle supplémentaire.
+
+### Passe 5 — nettoyage de surface
+
+1. Réduire la barre de navigation mobile et séparer lieux/actions.
+2. Unifier les pictogrammes sémantiques avec `Icons.tsx`.
+3. Supprimer les doublons `badge + alerte + texte`.
+4. Vérifier le Hub fermé, ouvert et le focus clavier à 1440, 768 et 390 px.
+5. Vérifier que le couple ne voit jamais la surface d’administration.
+
+## 17. État de cette passe
+
+Audit réel du code et du rendu effectué. Les tests généraux restent verts, mais
+l’audit a démontré des défauts spécifiques dans la chaîne et dans le rendu
+simulation :
+
+- le Canvas clair est bien une surface pleine page avec sa navigation ;
+- il conserve des écritures de relations déjà accessibles depuis le Hub ;
+- la simulation actuelle calcule correctement mais ne déplace pas visuellement
+  les cartes ;
+- la pluie ne change que le bloc de simulation ;
+- la navigation mobile coupe le Calendrier ;
+- les valeurs par défaut et la rupture rapport → relations restent à corriger.
+
+**Aucune implémentation de code n’a été faite dans cette passe.**
+
+Le plan recommandé commence par la **Passe 1 — convergence des portes**, puis la
+fiabilité du rapport. La simulation visuelle et le nettoyage graphique doivent
+venir ensuite, afin de ne pas embellir un parcours qui conserverait des
+écritures concurrentes.
+
+### 12.3 Premier regard après génération
+
+Le rendu Chromium révèle une autre rupture du parcours : après une génération
+réelle contenant `Cérémonie à 14h`, `Cocktail à 17h` et `Dîner à 20h`, la
+pellicule conserve son zoom par défaut de `190 px / heure` et commence à
+`07:00`.
+
+La première carte commence donc à `1330 px` depuis la gauche. À 1440 px, seuls
+110 px de cette carte entrent dans la fenêtre ; à 390 px, aucune carte n’est
+visible sans défilement horizontal manuel.
+
+Le résultat est un premier écran majoritairement noir, avec l’événement réel
+hors champ. Le rapport a bien généré les phases, mais l’arrivée dans le Jour J
+ne montre pas immédiatement la journée produite.
+
+**Verdict : BUG UX P0 pour la chaîne HERO → JOUR J.** Après création ou
+ouverture d’un projet, la Timeline doit centrer le premier moment réel, ou
+adopter un zoom d’entrée qui rend la journée lisible. Cette correction doit
+utiliser le même `TimelineStudio`, pas un aperçu parallèle.
+
+## 18. Conclusion et décision recommandée
+
+Le code possède déjà les briques essentielles : un `IntakePlan` déterministe,
+un `MomentHub`, une seule collection `phases`, un moteur de propagation, un
+moteur de scénarios et un Calendrier dérivé.
+
+Le problème n’est donc pas une absence de moteur. Il est dans les jonctions :
+
+- deux portes publiques de création ;
+- une lecture Hero incomplète et parfois trompeuse ;
+- des valeurs par défaut qui deviennent des faits ;
+- des documents et relations perdus entre le rapport et les phases ;
+- une surface claire qui ressemble encore à un poste concurrent ;
+- une simulation honnête mais pas assez visuelle ;
+- une Timeline qui peut arriver avec le moment réel hors champ ;
+- une navigation mobile qui coupe un contrôle ;
+- des alertes et pictogrammes parfois redondants ;
+- une administration protégée par affichage local, pas par sécurité réelle.
+
+La séquence de travail recommandée est donc :
+
+1. **Convergence des portes et de l’éditeur** ;
+2. **Fiabilité du rapport et absence d’invention** ;
+3. **Relations réelles entre le rapport et les moments** ;
+4. **Projection visible des simulations dans la Timeline existante** ;
+5. **Nettoyage visuel et navigation responsive**.
+
+Cette priorité évite de produire une nouvelle couche graphique sur une chaîne
+qui pourrait encore écrire des données par plusieurs chemins.
+
+**Audit terminé. Aucune implémentation de code n’a été réalisée.**
