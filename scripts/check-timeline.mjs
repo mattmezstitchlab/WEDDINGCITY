@@ -589,6 +589,73 @@ try {
     'the public page carries the spectacle section');
   r.check(/SPECTACLE_CRAFTS/.test(landingCrew), 'with the crafts named from the registry');
 
+  // -------------------------------------------------------------------------
+  console.log('\n[12/12] ORCHESTRATION — several events, one identity, no second base');
+  // -------------------------------------------------------------------------
+  const weddingTypes = read('types', 'wedding.ts');
+  r.check(/assignedPersonId\?: string/.test(weddingTypes) && /status\?: 'todo'/.test(weddingTypes),
+    'a mission is a task with someone on it — no Mission entity');
+  r.check(/travel\?: \{/.test(read('types', 'identity.ts')),
+    'travel and lodging are optional fields of the craft — no TravelSheet entity');
+
+  const orch = store;
+  const artist2 = orch.persons.find((p) => p.craft?.role) ?? orch.createPerson({ displayName: 'REMPLACANT TEST', asGuest: false });
+  if (!artist2.craft) orch.setPersonCraft(artist2.id, { role: 'Saxophoniste' });
+
+  // Delegation
+  const mission = orch.createMission({ title: 'Vérifier le contrat', assignedPersonId: artist2.id });
+  r.check(Boolean(mission) && orch.getMissionsFor(artist2.id).length === 1,
+    'a mission can be delegated to a person');
+  r.check(orch.setMissionStatus(mission.id, 'to_confirm')
+    && orch.tasks.find((t) => t.id === mission.id).status === 'to_confirm',
+    'and it carries a state everyone can read');
+  r.check(orch.createMission({ title: '  ' }) === null, 'an empty mission is refused');
+
+  // Travel
+  r.check(orch.setPersonTravel(artist2.id, { from: 'Bruxelles', hotel: 'Hôtel du Parc' }),
+    'travel can be written');
+  r.check(orch.persons.find((p) => p.id === artist2.id).craft.travel.from === 'Bruxelles',
+    'exactly as it was typed');
+  orch.setPersonTravel(artist2.id, { from: '' });
+  r.check(!orch.persons.find((p) => p.id === artist2.id).craft.travel?.from,
+    'and an emptied field becomes an absence, not an empty string');
+
+  // Replacements: proposals only, from people who really exist
+  const twin = orch.createPerson({ displayName: 'AUTRE SAXO', asGuest: false });
+  orch.setPersonCraft(twin.id, { role: 'Saxophoniste' });
+  const options = orch.findReplacements(artist2.id);
+  r.check(options.some((o) => o.person.id === twin.id),
+    'a replacement with the same craft is proposed', String(options.length));
+  r.check(options.every((o) => orch.persons.some((p) => p.id === o.person.id)),
+    'and only people who already exist are proposed');
+  r.check(orch.phases.every((ph) => !(ph.personIds ?? []).includes(twin.id)),
+    'proposing never swaps anyone');
+
+  // Documents: produced into the ONE document system
+  const mediaBefore = orch.media.length;
+  const doc = orch.generateAdminDocument({
+    docKind: 'Devis', authorKind: 'Moi', recipientKind: 'Association',
+    recipientName: 'ASSOCIATION LES FEES', personId: artist2.id,
+  });
+  r.check(Boolean(doc) && orch.media.length === mediaBefore + 1,
+    'a document is produced as a MediaAsset — no second document system');
+  r.check(doc.ownerKind === 'person' && doc.ownerId === artist2.id,
+    'attached to the person it concerns');
+  const body = decodeURIComponent(String(doc.source).split(',')[1] || '');
+  r.check(/À CONFIRMER/.test(body), 'what the project does not know is written « À CONFIRMER »');
+  r.check(/Montant : À CONFIRMER/.test(body), 'and no amount is invented');
+  r.check(orch.generateAdminDocument({ docKind: 'Devis', authorKind: 'Moi', recipientKind: 'X', recipientName: '  ' }) === null,
+    'a document without a recipient is refused');
+
+  // Cross-event reading: read-only, and honest about matching on a name
+  r.check(Array.isArray(orch.crossEventConflicts()), 'the cross-event check answers');
+  const crewSrc = read('components', 'mirror', 'organisation', 'CrewPanel.tsx');
+  r.check(/deux homonymes ne sont pas la même personne/.test(crewSrc),
+    'and says out loud that a name is not an identity');
+  r.check(/n’est pas\s+disponible ici/.test(crewSrc) || /aucun accès réseau/.test(crewSrc),
+    'looking a company up on the web is declared unavailable, not simulated');
+  r.check(!/fetch\(|https?:\/\//.test(crewSrc), 'and the surface calls nothing outside');
+
   un();
 } finally {
   harness.cleanup();

@@ -173,6 +173,34 @@ export function CrewPanel() {
               onCommit={(v) => store.setPersonCraft(openSheet.person.id, { zone: v })} />
           </div>
 
+          {/* ---- getting there and back ---- */}
+          <div style={{ marginTop: 18 }}>
+            <div style={eyebrow}>Déplacement et hébergement</div>
+            <div style={grid}>
+              {([
+                ['from', 'Départ'], ['arrival', 'Arrivée'], ['transport', 'Transport'],
+                ['shuttle', 'Navette'], ['hotel', 'Hébergement'], ['departure', 'Retour'],
+              ] as const).map(([key, label]) => (
+                <Craft
+                  key={key}
+                  label={label}
+                  tag={`travel-${key}`}
+                  value={openSheet.person.craft?.travel?.[key] ?? ''}
+                  onCommit={(v) => store.setPersonTravel(openSheet.person.id, { [key]: v })}
+                />
+              ))}
+            </div>
+            <p style={{ ...muted, marginTop: 8 }}>
+              Champs libres : rien n’est réservé, aucun numéro de vol n’est deviné.
+            </p>
+          </div>
+
+          {/* ---- missions delegated about this person ---- */}
+          <Missions personId={openSheet.person.id} personName={openSheet.person.displayName} />
+
+          {/* ---- who could replace them ---- */}
+          <Replacements personId={openSheet.person.id} />
+
           <div style={{ marginTop: 16 }}>
             <div style={eyebrow}>Besoins techniques</div>
             {(openSheet.person.craft?.requirements ?? []).length === 0 ? (
@@ -200,6 +228,12 @@ export function CrewPanel() {
         </div>
       )}
 
+      {/* ---- the same person, in another event ---- */}
+      <CrossEvents />
+
+      {/* ---- produce a document from what the project knows ---- */}
+      <DocumentDesk />
+
       {/* ---- what the crew makes visible ---- */}
       {findings.length > 0 && (
         <ul style={{ ...list, marginTop: 22 }} data-crew="findings">
@@ -217,6 +251,214 @@ export function CrewPanel() {
         </ul>
       )}
     </div>
+  );
+}
+
+/** Missions: a task with someone on it, and a state everyone can read. */
+function Missions({ personId, personName }: { personId: string; personName: string }) {
+  const store = weddingStore;
+  const [draft, setDraft] = useState('');
+  const missions = store.getMissionsFor(personId);
+  const LABEL: Record<string, string> = {
+    todo: 'à faire', doing: 'en cours', to_confirm: 'à confirmer', done: 'validé', blocked: 'bloqué',
+  };
+
+  return (
+    <div style={{ marginTop: 18 }} data-crew="missions">
+      <div style={eyebrow}>Missions déléguées</div>
+      {missions.length === 0 ? (
+        <p style={{ ...muted, marginTop: 6 }}>Aucune mission confiée à {personName}.</p>
+      ) : (
+        <ul style={{ ...list, marginTop: 10 }}>
+          {missions.map((m) => (
+            <li key={m.id} style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }} data-crew="mission">
+              <span style={{ flex: '1 1 200px' }}>{m.title}</span>
+              <select
+                value={m.status ?? 'todo'}
+                onChange={(e) => store.setMissionStatus(m.id, e.target.value as 'todo')}
+                style={{ ...field, width: 150 }}
+                data-crew="mission-status"
+              >
+                {Object.entries(LABEL).map(([value, label]) => (
+                  <option key={value} value={value}>{label}</option>
+                ))}
+              </select>
+            </li>
+          ))}
+        </ul>
+      )}
+      <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+        <input
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key !== 'Enter' || !draft.trim()) return;
+            store.createMission({ title: draft.trim(), assignedPersonId: personId });
+            setDraft('');
+          }}
+          placeholder={`Confier une vérification à ${personName}…`}
+          style={{ ...field, flex: 1 }}
+          data-crew="mission-new"
+        />
+        <button
+          onClick={() => { if (draft.trim()) { store.createMission({ title: draft.trim(), assignedPersonId: personId }); setDraft(''); } }}
+          style={smallBtn}
+          data-crew="mission-submit"
+        >
+          Déléguer
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/** « Et si l’artiste n’était plus disponible ? » — a proposal, never a swap. */
+function Replacements({ personId }: { personId: string }) {
+  const store = weddingStore;
+  const [open, setOpen] = useState(false);
+  const options = open ? store.findReplacements(personId) : [];
+  return (
+    <div style={{ marginTop: 18 }} data-crew="replacements">
+      <div style={eyebrow}>Et si cette personne n’était plus disponible ?</div>
+      <button onClick={() => setOpen(!open)} style={{ ...smallBtn, marginTop: 8 }} data-crew="replacements-open">
+        {open ? 'Masquer' : 'Chercher un remplaçant'}
+      </button>
+      {open && (
+        options.length === 0 ? (
+          <p style={{ ...muted, marginTop: 8 }} data-crew="replacements-empty">
+            Personne d’autre n’exerce ce métier dans cet événement. Le produit ne
+            propose que des personnes qui existent réellement ici.
+          </p>
+        ) : (
+          <ul style={{ ...list, marginTop: 10 }} data-crew="replacements-list">
+            {options.map((o) => (
+              <li key={o.person.id} style={row}>
+                <span style={{ fontWeight: 600 }}>{o.person.displayName}</span>
+                <span style={mutedInline}>{o.reason}</span>
+              </li>
+            ))}
+          </ul>
+        )
+      )}
+    </div>
+  );
+}
+
+/** The same name, working somewhere else on the same day. */
+function CrossEvents() {
+  const store = weddingStore;
+  const [checked, setChecked] = useState(false);
+  const conflicts = checked ? store.crossEventConflicts() : [];
+  return (
+    <div style={{ marginTop: 24 }} data-crew="crossevents">
+      <div style={eyebrow}>Plusieurs événements</div>
+      <button onClick={() => setChecked(true)} style={{ ...smallBtn, marginTop: 8 }} data-crew="crossevents-run">
+        Vérifier les autres événements
+      </button>
+      {checked && (
+        conflicts.length === 0 ? (
+          <p style={{ ...muted, marginTop: 8 }} data-crew="crossevents-empty">
+            Aucune double réservation détectée le même jour dans vos autres
+            événements.
+          </p>
+        ) : (
+          <ul style={{ ...list, marginTop: 10 }} data-crew="crossevents-list">
+            {conflicts.map((c, i) => (
+              <li key={i} style={{ ...row, paddingLeft: 12, borderLeft: '2px solid #e0736a' }} data-crew="crossevent">
+                <span style={{ fontWeight: 600 }}>⚠ {c.personName} · double réservation</span>
+                <span style={mutedInline}>
+                  Ici : {c.here} — {c.otherProjectName} : {c.there}. À confirmer : le
+                  rapprochement se fait sur le nom, deux homonymes ne sont pas la même personne.
+                </span>
+              </li>
+            ))}
+          </ul>
+        )
+      )}
+    </div>
+  );
+}
+
+/**
+ * QUI · QUOI · POUR QUI — a document produced from what the project knows.
+ *
+ * The result is a MediaAsset of this project: one document system, not two.
+ * Looking a company up on the web is NOT available here (no network, external
+ * providers out of scope), and the panel says so rather than pretending.
+ */
+function DocumentDesk() {
+  const store = weddingStore;
+  const [author, setAuthor] = useState('Moi');
+  const [docKind, setDocKind] = useState('Devis');
+  const [recipientKind, setRecipientKind] = useState('Particulier');
+  const [recipient, setRecipient] = useState('');
+  const [personId, setPersonId] = useState('');
+  const [note, setNote] = useState<string | null>(null);
+
+  const generate = () => {
+    const asset = store.generateAdminDocument({
+      docKind, authorKind: author, recipientKind, recipientName: recipient,
+      personId: personId || undefined,
+    });
+    setNote(asset
+      ? `« ${asset.title} » a été produit et rattaché${personId ? ' à la personne' : ' à l’événement'}.`
+      : 'Il manque le destinataire pour produire ce document.');
+  };
+
+  return (
+    <div style={{ marginTop: 26 }} data-crew="documents">
+      <div style={eyebrow}>Que voulez-vous faire ?</div>
+      <div style={{ ...grid, marginTop: 10 }}>
+        <Select label="Qui ?" value={author} onChange={setAuthor} tag="author"
+          options={['Moi', 'Un particulier', 'Une entreprise', 'Une association', 'Un artiste', 'Un technicien', 'Un prestataire', 'Une structure']} />
+        <Select label="Quoi ?" value={docKind} onChange={setDocKind} tag="kind"
+          options={['Devis', 'Facture', 'Contrat', 'Convention', 'Fiche technique', 'Feuille de route', 'Cahier des charges', 'Bon de commande', 'Attestation', 'Document personnalisé']} />
+        <Select label="Pour qui ?" value={recipientKind} onChange={setRecipientKind} tag="recipient-kind"
+          options={['Particulier', 'Entreprise', 'Association', 'Collectivité', 'Producteur', 'Organisateur', 'Artiste', 'Prestataire', 'Autre structure']} />
+      </div>
+      <div style={{ ...grid, marginTop: 10 }}>
+        <label style={{ display: 'grid', gap: 6 }}>
+          <span style={eyebrow}>Destinataire</span>
+          <input
+            value={recipient}
+            onChange={(e) => setRecipient(e.target.value)}
+            placeholder="Nom de la personne ou de la structure"
+            style={field}
+            data-crew="doc-recipient"
+          />
+        </label>
+        <label style={{ display: 'grid', gap: 6 }}>
+          <span style={eyebrow}>Concerne (facultatif)</span>
+          <select value={personId} onChange={(e) => setPersonId(e.target.value)} style={field} data-crew="doc-person">
+            <option value="">Aucune personne en particulier</option>
+            {store.getCrew().map((p) => (
+              <option key={p.id} value={p.id}>{p.displayName} · {p.craft!.role}</option>
+            ))}
+          </select>
+        </label>
+      </div>
+      <button onClick={generate} style={{ ...btn, marginTop: 12 }} data-crew="doc-generate">Générer</button>
+      {note && <p style={{ ...muted, marginTop: 10 }} data-crew="doc-note">{note}</p>}
+      <p style={{ ...muted, marginTop: 10 }} data-crew="doc-web">
+        Rechercher une entreprise ou une association sur le web n’est pas
+        disponible ici : aucun accès réseau, aucun service extérieur. Les
+        informations que le projet ne possède pas sont écrites « À CONFIRMER »
+        dans le document, jamais devinées.
+      </p>
+    </div>
+  );
+}
+
+function Select({ label, value, onChange, options, tag }: {
+  label: string; value: string; onChange: (v: string) => void; options: string[]; tag: string;
+}) {
+  return (
+    <label style={{ display: 'grid', gap: 6 }}>
+      <span style={eyebrow}>{label}</span>
+      <select value={value} onChange={(e) => onChange(e.target.value)} style={field} data-crew={`doc-${tag}`}>
+        {options.map((o) => <option key={o} value={o}>{o}</option>)}
+      </select>
+    </label>
   );
 }
 

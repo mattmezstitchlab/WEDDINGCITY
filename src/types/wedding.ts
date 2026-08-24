@@ -413,6 +413,12 @@ export interface TaskEntity {
   isDone: boolean;
   urgent: boolean;
   cost?: number;
+  /**
+   * DELEGATION — who was asked to do this, and where it stands.
+   * A « mission » is not a new entity: it is a task with a person on it.
+   */
+  assignedPersonId?: string;
+  status?: 'todo' | 'doing' | 'to_confirm' | 'done' | 'blocked';
   assignedAgentId?: string;
   assignedPlaceId?: string;
   sourceOrigin?: DataSourceOrigin;

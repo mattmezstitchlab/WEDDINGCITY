@@ -161,6 +161,18 @@ export interface PersonCraft {
   /** Technical needs, as declared. An empty list means « not declared yet ». */
   requirements?: string[];
   notes?: string;
+  /**
+   * Getting there and back. Free text, all optional: the product never books
+   * anything and never invents a flight number.
+   */
+  travel?: {
+    from?: string;
+    arrival?: string;
+    transport?: string;
+    hotel?: string;
+    shuttle?: string;
+    departure?: string;
+  };
   /** Administrative fields — optional, never invented, never computed. */
   professionalNumber?: string;
   services?: number;

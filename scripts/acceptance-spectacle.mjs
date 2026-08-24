@@ -111,6 +111,8 @@ const state = () => p.evaluate(() => {
     persons: L('persons').map((x) => ({ id: x.id, name: x.displayName, craft: x.craft || null })),
     media: L('media').map((m) => ({ owner: m.ownerKind, id: m.ownerId, name: m.fileName })),
     scenarios: L('scenarios').length,
+    tasksToConfirm: L('tasks').filter((t) => t.status === 'to_confirm').length,
+    missions: L('tasks').filter((t) => t.assignedPersonId).length,
     editorialAnywhere: Object.keys(localStorage).filter((k) => k.startsWith('wedding_city_state_'))
       .some((k) => /\/editorial\//.test(localStorage.getItem(k) || '')),
     text: (document.body.innerText || '').replace(/\s+/g, ' '),
@@ -407,6 +409,90 @@ check('et rend son contexte', results.some((r) => /moment/.test(r) || /Cocktail/
 await click('search', 'close'); await wait(500);
 await shot('04-recherche-metier');
 
+// --- 6b. ORCHESTRATION: travel, missions, replacements, documents ----------
+say('\n=== 6b. ORCHESTRATION ===');
+await click('jourj', 'nav-crew'); await wait(900);
+await openCrew('MATT SAXO');
+
+// travel — free text, nothing booked
+// The craft fields carry a `craft-` prefix on their test id.
+await commit('crew', 'craft-travel-from', 'Bruxelles');
+await commit('crew', 'craft-travel-hotel', 'Hôtel du Parc, nuit du 21');
+let st = await state();
+const trav = st.persons.find((x) => /MATT SAXO/.test(x.name))?.craft?.travel;
+check('le déplacement est enregistré tel qu’écrit',
+  trav?.from === 'Bruxelles' && /Hôtel du Parc/.test(trav?.hotel || ''), JSON.stringify(trav));
+
+// delegation
+await setField('crew', 'mission-new', 'Vérifier le contrat de Matt');
+await click('crew', 'mission-submit');
+await wait(800);
+const missions = await p.evaluate(() => [...document.querySelectorAll('[data-crew="mission"]')]
+  .map((m) => m.textContent.replace(/\s+/g, ' ').trim().slice(0, 60)));
+check('une mission peut être déléguée', missions.length === 1, JSON.stringify(missions));
+await p.evaluate(() => {
+  const sel = document.querySelector('[data-crew="mission-status"]');
+  const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set;
+  setter.call(sel, 'to_confirm');
+  sel.dispatchEvent(new Event('change', { bubbles: true }));
+});
+await wait(700);
+check('et son statut évolue',
+  (await state()).tasksToConfirm > 0, String((await state()).tasksToConfirm));
+
+// replacements — a proposal, never a swap
+await click('crew', 'replacements-open');
+await wait(700);
+const repl = await p.evaluate(() => ({
+  empty: !!document.querySelector('[data-crew="replacements-empty"]'),
+  list: [...document.querySelectorAll('[data-crew="replacements-list"] li')].map((l) => l.textContent.trim().slice(0, 60)),
+}));
+say('  ' + JSON.stringify(repl));
+check('la recherche de remplaçant ne propose que des personnes réelles',
+  repl.empty || repl.list.length > 0);
+
+// cross-event check
+await click('crew', 'crossevents-run');
+await wait(900);
+const cross = await p.evaluate(() => ({
+  empty: !!document.querySelector('[data-crew="crossevents-empty"]'),
+  list: [...document.querySelectorAll('[data-crew="crossevent"]')].map((l) => l.textContent.trim().slice(0, 80)),
+}));
+say('  ' + JSON.stringify(cross));
+check('la vérification inter-événements répond', cross.empty || cross.list.length > 0);
+
+// the document desk
+await setField('crew', 'doc-recipient', 'ASSOCIATION LES FEES');
+await p.evaluate(() => {
+  const sel = document.querySelector('[data-crew="doc-person"]');
+  const opt = [...sel.options].find((o) => /MATT SAXO/.test(o.textContent));
+  if (!opt) return;
+  const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set;
+  setter.call(sel, opt.value);
+  sel.dispatchEvent(new Event('change', { bubbles: true }));
+});
+await wait(400);
+await click('crew', 'doc-generate');
+await wait(900);
+st = await state();
+const generated = st.media.filter((m) => /devis/i.test(m.name || ''));
+check('un document est produit et rattaché à la personne',
+  generated.length === 1 && generated[0].owner === 'person', JSON.stringify(generated));
+check('la recherche web est déclarée indisponible, pas simulée',
+  await p.evaluate(() => /n’est pas\s+disponible ici|n’est pas disponible ici/.test(
+    document.querySelector('[data-crew="doc-web"]')?.textContent.replace(/\s+/g, ' ') || '')));
+const docBody = await p.evaluate(() => {
+  const id = localStorage.getItem('wedding_city_active_project_id_v1');
+  const st2 = JSON.parse(localStorage.getItem('wedding_city_state_' + id) || '{}');
+  const m = (st2.media || []).find((x) => /devis/i.test(x.fileName || ''));
+  return m ? decodeURIComponent(String(m.source).split(',')[1] || '') : '';
+});
+check('le document contient le déroulé réel de la personne', /D[ÉE]ROUL[ÉE]/.test(docBody) && /Cocktail/.test(docBody));
+check('et marque « À CONFIRMER » ce qui n’est pas connu', /À CONFIRMER/.test(docBody));
+check('sans inventer de montant', /Montant : À CONFIRMER/.test(docBody));
+await shot('05-orchestration');
+await noOverflow('Orchestration');
+
 // --- 7. reload and isolation ------------------------------------------------
 say('\n=== 7. RELOAD ET ISOLATION ===');
 const before = await state();
@@ -418,6 +504,10 @@ check('les métiers survivent au reload',
   String(after.persons.filter((x) => x.craft).length));
 check('les rattachements aussi',
   JSON.stringify(after.phases.map((x) => x.people.length)) === JSON.stringify(before.phases.map((x) => x.people.length)));
+check('les missions et le déplacement survivent au reload',
+  after.missions === before.missions
+  && after.persons.find((x) => /MATT SAXO/.test(x.name))?.craft?.travel?.from === 'Bruxelles',
+  `${after.missions} mission(s)`);
 
 await click('jourj', 'nav-weddings'); await wait(1600);
 await click('landing', 'hero-create'); await wait(1200);

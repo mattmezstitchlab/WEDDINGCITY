@@ -2725,6 +2725,280 @@ class WeddingStore {
     return out;
   }
 
+  // =========================================================================
+  // ORCHESTRATION — several events, one identity, no second database.
+  //
+  // Everything below is either a pure READ across the project snapshots that
+  // already exist, or a write into an entity that already exists (a task, a
+  // media). No « Mission », no « TravelSheet », no second timeline.
+  // =========================================================================
+
+  /** Where an artist comes from and sleeps. Free text, nothing booked. */
+  public setPersonTravel(personId: string, patch: Partial<NonNullable<PersonCraft['travel']>>): boolean {
+    const person = this.persons.find((p) => p.id === personId);
+    if (!person?.craft) return false;
+    this.beginMutation('Déplacement de la personne');
+    const next = { ...(person.craft.travel ?? {}), ...patch };
+    for (const key of Object.keys(next) as (keyof typeof next)[]) {
+      if (!String(next[key] ?? '').trim()) delete next[key];
+    }
+    person.craft.travel = Object.keys(next).length > 0 ? next : undefined;
+    person.updatedAt = new Date().toISOString();
+    this.saveCurrentState();
+    this.notify();
+    return true;
+  }
+
+  /**
+   * DELEGATION — « vérifier le contrat de Matt ».
+   *
+   * A mission is a TaskEntity with someone on it. Same list, same persistence,
+   * same undo: nothing new to keep in sync.
+   */
+  public createMission(input: {
+    title: string; assignedPersonId?: string; phaseId?: string; dueHour?: number;
+  }): TaskEntity | null {
+    const title = input.title?.trim();
+    if (!title) return null;
+    if (input.assignedPersonId && !this.persons.some((p) => p.id === input.assignedPersonId)) return null;
+    if (input.phaseId && !this.phases.some((p) => p.id === input.phaseId)) return null;
+
+    this.beginMutation('Déléguer une mission');
+    const task: TaskEntity = {
+      id: freshId('task'),
+      title,
+      category: 'logistique',
+      phaseId: input.phaseId,
+      dueHour: input.dueHour ?? (input.phaseId
+        ? this.phases.find((p) => p.id === input.phaseId)?.startHour ?? this.time
+        : this.time),
+      isDone: false,
+      urgent: false,
+      assignedPersonId: input.assignedPersonId,
+      status: 'todo',
+      sourceOrigin: 'USER',
+      connectedDocIds: [],
+      connectedAgentIds: [],
+    };
+    this.tasks.push(task);
+    if (input.phaseId) {
+      const phase = this.phases.find((p) => p.id === input.phaseId);
+      if (phase) phase.taskIds = [...(phase.taskIds ?? []), task.id];
+    }
+    this.saveCurrentState();
+    this.notify();
+    return task;
+  }
+
+  public setMissionStatus(taskId: string, status: NonNullable<TaskEntity['status']>): boolean {
+    const task = this.tasks.find((t) => t.id === taskId);
+    if (!task) return false;
+    this.beginMutation('Statut de la mission');
+    task.status = status;
+    task.isDone = status === 'done';
+    this.saveCurrentState();
+    this.notify();
+    return true;
+  }
+
+  /** The missions of one person — what they, and only they, must handle. */
+  public getMissionsFor(personId: string): TaskEntity[] {
+    return this.tasks.filter((t) => t.assignedPersonId === personId);
+  }
+
+  /**
+   * SEVERAL EVENTS, ONE PERSON.
+   *
+   * Reads the OTHER projects' snapshots — read only, nothing copied — and
+   * reports someone booked twice on the same day.
+   *
+   * HONESTY: projects do not share ids, so the match is made on the displayed
+   * name. Two namesakes in two weddings are not the same human being, and this
+   * product does not decide that for you: every line is « à confirmer ».
+   */
+  public crossEventConflicts(): {
+    personName: string; otherProjectId: string; otherProjectName: string;
+    here: string; there: string; sameDay: boolean;
+  }[] {
+    const out: {
+      personName: string; otherProjectId: string; otherProjectName: string;
+      here: string; there: string; sameDay: boolean;
+    }[] = [];
+    const clock = (h: number) => `${String(Math.floor(h) % 24).padStart(2, '0')}:${String(Math.round((h % 1) * 60)).padStart(2, '0')}`;
+
+    const mine = this.getCrew().map((person) => ({
+      person,
+      windows: this.phases
+        .filter((p) => (p.personIds ?? []).includes(person.id))
+        .map((p) => ({ name: p.name, start: p.startHour, end: p.endHour })),
+    })).filter((x) => x.windows.length > 0);
+    if (mine.length === 0) return out;
+
+    for (const project of getStoredProjects()) {
+      if (project.id === this.currentProject.id) continue;
+      const snapshot = loadPersistedState(project.id);
+      if (!snapshot) continue;
+      const persons = (snapshot as unknown as { persons?: Person[] }).persons ?? [];
+      const phases = (snapshot as unknown as { phases?: TimelinePhase[] }).phases ?? [];
+      const sameDay = Boolean(project.weddingDate && this.currentProject.weddingDate
+        && project.weddingDate === this.currentProject.weddingDate);
+
+      for (const { person, windows } of mine) {
+        const twin = persons.find((p) => p.displayName?.toLowerCase() === person.displayName.toLowerCase());
+        if (!twin) continue;
+        const theirs = phases.filter((p) => (p.personIds ?? []).includes(twin.id));
+        if (theirs.length === 0) continue;
+
+        for (const w of windows) {
+          for (const t of theirs) {
+            const overlaps = t.startHour < w.end && t.endHour > w.start;
+            if (!sameDay || !overlaps) continue;
+            out.push({
+              personName: person.displayName,
+              otherProjectId: project.id,
+              otherProjectName: project.coupleNames || project.title,
+              here: `${w.name} ${clock(w.start)}–${clock(w.end)}`,
+              there: `${t.name} ${clock(t.startHour)}–${clock(t.endHour)}`,
+              sameDay,
+            });
+          }
+        }
+      }
+    }
+    return out;
+  }
+
+  /**
+   * WHO COULD REPLACE THEM — a proposal, never a substitution.
+   *
+   * Same craft, and free during the hours the missing person covers. Nobody is
+   * invented: only people already in this project are proposed, and the swap
+   * is left to a human.
+   */
+  public findReplacements(personId: string): { person: Person; reason: string }[] {
+    const person = this.persons.find((p) => p.id === personId);
+    if (!person?.craft?.role) return [];
+    const windows = this.phases
+      .filter((p) => (p.personIds ?? []).includes(personId))
+      .map((p) => ({ start: p.startHour, end: p.endHour }));
+
+    return this.persons
+      .filter((candidate) => candidate.id !== personId)
+      .filter((candidate) => candidate.craft?.role?.toLowerCase() === person.craft!.role.toLowerCase())
+      .map((candidate) => {
+        const busy = this.phases
+          .filter((p) => (p.personIds ?? []).includes(candidate.id))
+          .filter((p) => windows.some((w) => p.startHour < w.end && p.endHour > w.start));
+        return {
+          person: candidate,
+          reason: busy.length === 0
+            ? `Même métier (${candidate.craft!.role}), libre sur ces heures.`
+            : `Même métier, mais déjà pris sur ${busy.map((b) => b.name).join(', ')}.`,
+          free: busy.length === 0,
+        };
+      })
+      .sort((a, b) => Number(b.free) - Number(a.free))
+      .map(({ person: p, reason }) => ({ person: p, reason }));
+  }
+
+  /**
+   * ADMINISTRATION — produce a document from what the project really knows.
+   *
+   * The result is a MediaAsset of this project (one document system, not two).
+   * Every field the project does not know is written « À CONFIRMER » in the
+   * document itself: nothing is invented, and the gap is visible on paper.
+   */
+  public generateAdminDocument(input: {
+    docKind: string;
+    authorKind: string;
+    recipientKind: string;
+    recipientName: string;
+    personId?: string;
+    phaseId?: string;
+  }): MediaAsset | null {
+    const docKind = input.docKind?.trim();
+    const recipientName = input.recipientName?.trim();
+    if (!docKind || !recipientName) return null;
+
+    const person = input.personId ? this.persons.find((p) => p.id === input.personId) ?? null : null;
+    const phase = input.phaseId ? this.phases.find((p) => p.id === input.phaseId) ?? null : null;
+    const clock = (h: number) => `${String(Math.floor(h) % 24).padStart(2, '0')}:${String(Math.round((h % 1) * 60)).padStart(2, '0')}`;
+    const unknown = 'À CONFIRMER';
+
+    const sheet = person ? this.getCallSheet(person.id) : null;
+    const lines: string[] = [
+      docKind.toUpperCase(),
+      '',
+      `Émis par : ${input.authorKind || unknown}`,
+      `Destinataire (${input.recipientKind || unknown}) : ${recipientName}`,
+      `Événement : ${this.currentProject.coupleNames || this.currentProject.title}`,
+      `Date : ${this.currentProject.weddingDate || unknown}`,
+      `Lieu : ${this.currentProject.locationName || unknown}`,
+      '',
+    ];
+
+    if (person) {
+      lines.push(
+        `Personne : ${person.displayName}`,
+        `Métier : ${person.craft?.role ?? unknown}`,
+        `Statut : ${person.craft?.status ?? unknown}`,
+        `Téléphone : ${person.phone ?? unknown}`,
+        `E-mail : ${person.email ?? unknown}`,
+        `Rémunération : ${person.craft?.fee ?? unknown}`,
+        '',
+      );
+      if (sheet && sheet.rows.length > 0) {
+        lines.push('DÉROULÉ');
+        for (const row of sheet.rows) {
+          lines.push(`  ${clock(row.hour)}  ${row.label}${row.placeName ? ` — ${row.placeName}` : ''}`);
+        }
+        lines.push('');
+      } else {
+        lines.push('DÉROULÉ : ' + unknown, '');
+      }
+      const needs = person.craft?.requirements ?? [];
+      lines.push('BESOINS TECHNIQUES', needs.length ? needs.map((n) => `  · ${n}`).join('\n') : `  ${unknown}`, '');
+      const travel = person.craft?.travel;
+      if (travel && Object.keys(travel).length > 0) {
+        lines.push('DÉPLACEMENT',
+          `  Départ : ${travel.from ?? unknown}`,
+          `  Arrivée : ${travel.arrival ?? unknown}`,
+          `  Transport : ${travel.transport ?? unknown}`,
+          `  Navette : ${travel.shuttle ?? unknown}`,
+          `  Hébergement : ${travel.hotel ?? unknown}`,
+          `  Retour : ${travel.departure ?? unknown}`,
+          '');
+      }
+    }
+
+    if (phase) {
+      lines.push(`Moment concerné : ${phase.name} (${clock(phase.startHour)} → ${clock(phase.endHour)})`, '');
+    }
+
+    lines.push(
+      'Montant : ' + unknown,
+      'Signature : ' + unknown,
+      '',
+      `Produit par LE GRAND JOUR le ${new Date().toLocaleDateString('fr-FR')}.`,
+      'Les mentions « À CONFIRMER » sont des informations que le projet ne possède pas :',
+      'elles n’ont pas été devinées.',
+    );
+
+    const body = lines.join('\n');
+    const fileName = `${docKind.toLowerCase().replace(/[^a-z0-9]+/gi, '-')}-${recipientName.toLowerCase().replace(/[^a-z0-9]+/gi, '-')}.txt`;
+    const source = `data:text/plain;charset=utf-8,${encodeURIComponent(body)}`;
+
+    return this.addMedia({
+      kind: 'document',
+      source,
+      ownerKind: person ? 'person' : phase ? 'event' : 'wedding',
+      ownerId: person ? person.id : phase ? phase.id : this.currentProject.id,
+      title: `${docKind} — ${recipientName}`,
+      fileName,
+      byteSize: body.length,
+    });
+  }
+
   /**
    * UNIVERSAL SEARCH — one query, every kind of thing in the project.
    *
