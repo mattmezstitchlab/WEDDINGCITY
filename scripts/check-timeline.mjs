@@ -512,6 +512,83 @@ try {
   r.check(/firstName/.test(registryV3) && /Émilie/.test(registryV3),
     'the demonstration people have a first name and a thread');
 
+  // -------------------------------------------------------------------------
+  console.log('\n[11/11] SPECTACLE — a performer is a Person with a craft');
+  // -------------------------------------------------------------------------
+  const identityTypes = read('types', 'identity.ts');
+  r.check(/export interface PersonCraft/.test(identityTypes) && /craft\?: PersonCraft/.test(identityTypes),
+    'the craft is a block on Person, not a new entity');
+  for (const forbidden of ['interface Performer', 'interface Technician', 'interface CrewMember', 'interface CallSheet']) {
+    r.check(!identityTypes.includes(forbidden), `no ${forbidden.replace('interface ', '')} entity was created`);
+  }
+
+  // A crew member, their moments, and a road map that is derived — never stored.
+  const artist = store.createPerson({ displayName: 'MATT SAXO', asGuest: false });
+  r.check(Boolean(artist), 'an artist is created as a Person');
+  r.check(store.setPersonCraft(artist.id, { role: 'Saxophoniste' }), 'and given a craft');
+  r.check(store.setPersonCraft(artist.id, { role: '' }) === false || store.persons.find((p) => p.id === artist.id).craft.role === 'Saxophoniste',
+    'a craft without a role is refused');
+  r.check(store.getCrew().some((p) => p.id === artist.id), 'the crew lists them');
+
+  const day = store.phases.sort((a, b) => a.startHour - b.startHour);
+  store.attachPersonToPhase(day[0].id, artist.id);
+  store.attachPersonToPhase(day[1].id, artist.id);
+  let sheet = store.getCallSheet(artist.id);
+  r.check(sheet.rows.length === 2, 'the road map lists exactly the moments they work',
+    JSON.stringify(sheet.rows.map((x) => x.label)));
+  r.check(sheet.rows.every((x) => x.kind === 'moment'),
+    'and invents no arrival when no setup time was declared');
+
+  store.setPersonCraft(artist.id, { setupMinutes: 45, teardownMinutes: 30 });
+  sheet = store.getCallSheet(artist.id);
+  r.check(sheet.rows.length === 4 && sheet.rows[0].kind === 'setup',
+    'a declared setup time adds an arrival, at the right hour',
+    JSON.stringify(sheet.rows.map((x) => `${x.kind}:${Math.round(x.hour * 60)}`)));
+  r.check(Math.abs(sheet.rows[0].hour - (day[0].startHour - 0.75)) < 1e-6,
+    'exactly 45 minutes before the first moment');
+
+  // Move the moment: the road map follows, because it was never a copy.
+  const beforeHour = sheet.rows[0].hour;
+  store.setPhaseTime(day[0].id, day[0].startHour + 0.5);
+  sheet = store.getCallSheet(artist.id);
+  r.check(Math.abs(sheet.rows[0].hour - (beforeHour + 0.5)) < 1e-6,
+    'moving a moment recomputes the road map, with no second write',
+    `${beforeHour} → ${sheet.rows[0].hour}`);
+
+  // Conflicts and gaps, from the real data.
+  const crewFindings = store.crewFindings();
+  r.check(crewFindings.some((f) => /Besoins techniques non déclarés/.test(f.title)),
+    'undeclared technical needs are reported, not guessed');
+  store.addCraftRequirement(artist.id, 'Micro HF');
+  r.check(!store.crewFindings().some((f) => /Besoins techniques non déclarés — MATT SAXO/.test(f.title)),
+    'and the report goes away once they are declared');
+  r.check(store.crewFindings().every((f) => ['conflict', 'gap'].includes(f.level)),
+    'every line carries a level, and no opinion');
+
+  const overlap = store.phases.find((p) => p.id !== day[0].id && p.id !== day[1].id);
+  if (overlap) {
+    store.attachPersonToPhase(overlap.id, artist.id);
+    store.setPhaseTime(overlap.id, day[0].startHour + 0.1);
+    r.check(store.crewFindings().some((f) => f.level === 'conflict' && /deux endroits/.test(f.title)),
+      'someone expected in two places at once is a conflict');
+  }
+
+  r.check(store.whoWorksBetween(0, 30).some((w) => w.person.id === artist.id),
+    'the day can answer « who works between these hours »');
+  r.check(store.searchEverything('saxo').some((x) => /Saxophoniste/.test(x.label)),
+    'the universal search finds a craft');
+
+  const crewUi = read('components', 'mirror', 'organisation', 'CrewPanel.tsx');
+  r.check(/getCallSheet/.test(crewUi) && !/localStorage/.test(crewUi),
+    'the crew surface reads the projection and writes nothing of its own');
+  r.check(/Ma journée/.test(crewUi), 'and it is called « Ma journée »');
+
+  const landingCrew = read('components', 'mirror', 'MirrorLanding.tsx');
+  r.check(/data-landing="spectacle"/.test(landingCrew)
+    && /Un moment ne se produit jamais par hasard/.test(landingCrew),
+    'the public page carries the spectacle section');
+  r.check(/SPECTACLE_CRAFTS/.test(landingCrew), 'with the crafts named from the registry');
+
   un();
 } finally {
   harness.cleanup();

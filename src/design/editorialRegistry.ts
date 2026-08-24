@@ -121,3 +121,40 @@ export const EDITORIAL_TRACKS: {
 /** The one sentence every demonstration surface must be able to show. */
 export const EDITORIAL_DISCLAIMER =
   'Démonstration : images et morceaux appartiennent au produit, jamais à votre événement.';
+
+// ---------------------------------------------------------------------------
+// SPECTACLE — those who make the moment happen.
+// ---------------------------------------------------------------------------
+// Product photographs again: a stage, a control desk, a beam of light. They
+// illustrate the crafts, they are never a real supplier of yours.
+
+export const SPECTACLE_VISUALS: Record<'danseuse' | 'musicien' | 'regie' | 'coulisses', EditorialAsset> = {
+  danseuse: {
+    src: '/editorial/spectacle/danseuse.jpg',
+    alt: 'Une danseuse en mouvement dans un faisceau de lumière, scène noire',
+    width: 1376, height: 768,
+  },
+  musicien: {
+    src: '/editorial/spectacle/musicien.jpg',
+    alt: 'Un saxophoniste sur scène, halo ambré dans la fumée',
+    width: 1376, height: 768,
+  },
+  regie: {
+    src: '/editorial/spectacle/regie.jpg',
+    alt: 'Une console son et lumière de nuit, mains sur les faders',
+    width: 1376, height: 768,
+  },
+  coulisses: {
+    src: '/editorial/spectacle/coulisses.jpg',
+    alt: 'Coulisses avant le spectacle : câbles, pied de projecteur, ouverture de scène éclairée',
+    width: 1376, height: 768,
+  },
+};
+
+/** The crafts the product knows how to name. Vocabulary, not data. */
+export const SPECTACLE_CRAFTS: string[] = [
+  'Danseuse', 'Musicien', 'Saxophoniste', 'Chanteur', 'DJ',
+  'Éclairagiste', 'Technicien son', 'Technicienne lumière', 'Régisseur',
+  'Vidéaste', 'Photographe', 'Performer', 'Artiste circassien',
+  'Comédien', 'Scénographe', 'Stage manager',
+];

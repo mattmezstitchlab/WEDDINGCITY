@@ -135,6 +135,38 @@ export interface PersonRelationship {
 // ---------------------------------------------------------------------------
 // Person — the identity of a human being, independent of any role
 // ---------------------------------------------------------------------------
+/**
+ * The professional side of a person — a musician, a lighting technician, a
+ * dancer, a stage manager.
+ *
+ * IT IS NOT A NEW ENTITY. A performer is a Person who happens to have a craft,
+ * and their presence on the day is the phase they are attached to. Everything
+ * here is optional and starts empty: the product never fills an administrative
+ * field it was not given.
+ */
+export interface PersonCraft {
+  /** « Saxophoniste », « Technicienne lumière », « Régisseur »… */
+  role: string;
+  speciality?: string;
+  /** « Intermittent du spectacle », « Indépendant », « Salarié »… */
+  status?: string;
+  /** The structure they invoice through, when there is one (a Vendor id). */
+  vendorId?: string;
+  zone?: string;
+  /** Free text, because a fee is negotiated, not computed. */
+  fee?: string;
+  /** Minutes needed before and after the moments they play. */
+  setupMinutes?: number;
+  teardownMinutes?: number;
+  /** Technical needs, as declared. An empty list means « not declared yet ». */
+  requirements?: string[];
+  notes?: string;
+  /** Administrative fields — optional, never invented, never computed. */
+  professionalNumber?: string;
+  services?: number;
+  hours?: number;
+}
+
 export interface Person extends Timestamped {
   id: PersonId;
   displayName: string;
@@ -152,6 +184,8 @@ export interface Person extends Timestamped {
   portraitMediaId?: MediaId;
   /** Free-form note written by a human. Absent until then. */
   notes?: string;
+  /** Present only for the people who work the day. */
+  craft?: PersonCraft;
   origin: EntityOrigin;
 }
 

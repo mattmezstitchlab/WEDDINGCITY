@@ -51,7 +51,8 @@ import { BRAND_ACCENT } from './brand';
 export type CanvasSection = 'programme' | 'people' | 'vendors' | 'places' | 'music' | 'media';
 import { PlaceKind } from '../types/wedding';
 import {
-  Person, UserAccountV2, DmcIdentityRecord, Guest, Vendor, SeatingTable,
+  Person,
+  PersonCraft, UserAccountV2, DmcIdentityRecord, Guest, Vendor, SeatingTable,
   ProjectMembership, Invitation, TrackVote, Capability, MembershipRole, RsvpStatus,
   MediaAsset, MediaKind, MediaOwnerKind, MediaProvenance, EntityOrigin,
   PersonRelationship, RelationshipKind,
@@ -2512,6 +2513,218 @@ class WeddingStore {
     return track;
   }
 
+  // =========================================================================
+  // SPECTACLE — those who make the moment happen.
+  //
+  // NO NEW ENTITY (see docs/AUDIT-SPECTACLE.md): a performer is a Person with a
+  // craft, their presence is the moment they are attached to, their contract is
+  // a MediaAsset, their setup is a Task. The call sheet below is a PROJECTION —
+  // never stored — so moving a moment recomputes every road map at once.
+  // =========================================================================
+
+  /** Give a person a craft, or correct it. Everything is optional. */
+  public setPersonCraft(personId: string, patch: Partial<PersonCraft>): boolean {
+    const person = this.persons.find((p) => p.id === personId);
+    if (!person) return false;
+    const role = (patch.role ?? person.craft?.role ?? '').trim();
+    if (!role) return false;
+    this.beginMutation('Métier de la personne');
+    const next: PersonCraft = { ...(person.craft ?? { role }), ...patch, role };
+    // Empty strings are absences, not values.
+    for (const key of ['speciality', 'status', 'zone', 'fee', 'notes', 'professionalNumber', 'vendorId'] as const) {
+      const value = next[key];
+      if (typeof value === 'string' && !value.trim()) delete next[key];
+    }
+    person.craft = next;
+    person.updatedAt = new Date().toISOString();
+    this.saveCurrentState();
+    this.notify();
+    return true;
+  }
+
+  public removePersonCraft(personId: string): boolean {
+    const person = this.persons.find((p) => p.id === personId);
+    if (!person?.craft) return false;
+    this.beginMutation('Retirer le métier');
+    person.craft = undefined;
+    this.saveCurrentState();
+    this.notify();
+    return true;
+  }
+
+  public addCraftRequirement(personId: string, requirement: string): boolean {
+    const person = this.persons.find((p) => p.id === personId);
+    const clean = requirement?.trim();
+    if (!person?.craft || !clean) return false;
+    this.beginMutation('Besoin technique');
+    person.craft.requirements = [...(person.craft.requirements ?? []), clean];
+    this.saveCurrentState();
+    this.notify();
+    return true;
+  }
+
+  public removeCraftRequirement(personId: string, index: number): boolean {
+    const person = this.persons.find((p) => p.id === personId);
+    const list = person?.craft?.requirements;
+    if (!person?.craft || !list || index < 0 || index >= list.length) return false;
+    this.beginMutation('Retirer un besoin technique');
+    person.craft.requirements = list.filter((_, i) => i !== index);
+    if (person.craft.requirements.length === 0) person.craft.requirements = undefined;
+    this.saveCurrentState();
+    this.notify();
+    return true;
+  }
+
+  /** Everyone who works the day: a person with a craft. */
+  public getCrew(): Person[] {
+    return this.persons
+      .filter((p) => Boolean(p.craft?.role))
+      .sort((a, b) => (a.craft!.role).localeCompare(b.craft!.role, 'fr'));
+  }
+
+  /** The crew expected at one moment. */
+  public getCrewForPhase(phaseId: string): Person[] {
+    const phase = this.phases.find((p) => p.id === phaseId);
+    if (!phase) return [];
+    return (phase.personIds ?? [])
+      .map((id) => this.persons.find((p) => p.id === id))
+      .filter((p): p is Person => Boolean(p?.craft?.role));
+  }
+
+  /**
+   * « MA JOURNÉE » — one person's road map, derived from the timeline.
+   *
+   * Arrival, setup and teardown appear ONLY when the person declared how long
+   * they need: no default 30 minutes is invented. Every row carries the id of
+   * the moment it comes from, so nothing here is a copy.
+   */
+  public getCallSheet(personId: string): {
+    person: Person;
+    rows: { hour: number; label: string; kind: 'setup' | 'moment' | 'teardown'; phaseId?: string; placeName?: string }[];
+    firstHour: number | null;
+    lastHour: number | null;
+  } | null {
+    const person = this.persons.find((p) => p.id === personId);
+    if (!person) return null;
+
+    const moments = this.phases
+      .filter((p) => (p.personIds ?? []).includes(personId))
+      .sort((a, b) => a.startHour - b.startHour);
+
+    const rows: { hour: number; label: string; kind: 'setup' | 'moment' | 'teardown'; phaseId?: string; placeName?: string }[] = [];
+    const placeName = (id: string) => this.places.find((pl) => pl.id === id)?.name;
+
+    if (moments.length > 0) {
+      const setup = person.craft?.setupMinutes;
+      if (setup && setup > 0) {
+        rows.push({
+          hour: moments[0].startHour - setup / 60,
+          label: `Arrivée et installation (${setup} min)`,
+          kind: 'setup',
+          placeName: placeName(moments[0].primaryPlaceId),
+        });
+      }
+      for (const m of moments) {
+        rows.push({ hour: m.startHour, label: m.name, kind: 'moment', phaseId: m.id, placeName: placeName(m.primaryPlaceId) });
+      }
+      const teardown = person.craft?.teardownMinutes;
+      const last = moments[moments.length - 1];
+      if (teardown && teardown > 0) {
+        rows.push({ hour: last.endHour, label: `Démontage (${teardown} min)`, kind: 'teardown', placeName: placeName(last.primaryPlaceId) });
+      }
+    }
+
+    rows.sort((a, b) => a.hour - b.hour);
+    return {
+      person,
+      rows,
+      firstHour: rows.length ? rows[0].hour : null,
+      lastHour: rows.length ? rows[rows.length - 1].hour : null,
+    };
+  }
+
+  /**
+   * What the crew makes visible: someone expected in two places at once, a
+   * craft with no moment, a declared need nobody has answered.
+   *
+   * Read-only, deterministic, and silent when there is nothing to say.
+   */
+  public crewFindings(): { level: 'conflict' | 'gap'; personId: string; title: string; detail: string }[] {
+    const out: { level: 'conflict' | 'gap'; personId: string; title: string; detail: string }[] = [];
+    const clock = (h: number) => `${String(Math.floor(h) % 24).padStart(2, '0')}:${String(Math.round((h % 1) * 60)).padStart(2, '0')}`;
+
+    for (const person of this.getCrew()) {
+      const moments = this.phases
+        .filter((p) => (p.personIds ?? []).includes(person.id))
+        .sort((a, b) => a.startHour - b.startHour);
+
+      for (let i = 0; i < moments.length - 1; i++) {
+        if (moments[i].endHour > moments[i + 1].startHour + 1e-6) {
+          out.push({
+            level: 'conflict',
+            personId: person.id,
+            title: `${person.displayName} est attendu·e à deux endroits`,
+            detail: `${moments[i].name} finit à ${clock(moments[i].endHour)} et ${moments[i + 1].name} commence à ${clock(moments[i + 1].startHour)}.`,
+          });
+        }
+      }
+
+      const setup = person.craft?.setupMinutes ?? 0;
+      if (setup > 0 && moments.length > 0 && moments[0].startHour - setup / 60 < 0) {
+        out.push({
+          level: 'conflict',
+          personId: person.id,
+          title: `${person.displayName} n’a pas le temps de s’installer`,
+          detail: `${setup} min d’installation avant ${clock(moments[0].startHour)} sortent de la journée.`,
+        });
+      }
+
+      if (moments.length === 0) {
+        out.push({
+          level: 'gap',
+          personId: person.id,
+          title: `${person.displayName} n’est rattaché·e à aucun moment`,
+          detail: `${person.craft?.role} sans horaire : personne ne saura quand l’attendre.`,
+        });
+      }
+
+      const hasContract = this.media.some((m) => m.ownerKind === 'person' && m.ownerId === person.id);
+      if (!hasContract && moments.length > 0) {
+        out.push({
+          level: 'gap',
+          personId: person.id,
+          title: `Aucun document pour ${person.displayName}`,
+          detail: 'Contrat, fiche technique ou fiche de route : rien n’est rattaché à cette personne.',
+        });
+      }
+
+      if (!person.craft?.requirements || person.craft.requirements.length === 0) {
+        out.push({
+          level: 'gap',
+          personId: person.id,
+          title: `Besoins techniques non déclarés — ${person.displayName}`,
+          detail: 'Son, lumière, électricité, loge, repas : rien n’a été écrit, donc rien ne peut être vérifié.',
+        });
+      }
+    }
+    return out;
+  }
+
+  /** Who is working between two hours — the question the day J asks. */
+  public whoWorksBetween(fromHour: number, toHour: number): {
+    person: Person; moments: string[];
+  }[] {
+    const out: { person: Person; moments: string[] }[] = [];
+    for (const person of this.getCrew()) {
+      const moments = this.phases
+        .filter((p) => (p.personIds ?? []).includes(person.id))
+        .filter((p) => p.startHour < toHour && p.endHour > fromHour)
+        .sort((a, b) => a.startHour - b.startHour);
+      if (moments.length > 0) out.push({ person, moments: moments.map((m) => m.name) });
+    }
+    return out;
+  }
+
   /**
    * UNIVERSAL SEARCH — one query, every kind of thing in the project.
    *
@@ -2532,18 +2745,23 @@ class WeddingStore {
     const clock = (h: number) => `${String(Math.floor(h) % 24).padStart(2, '0')}:${String(Math.round((h % 1) * 60)).padStart(2, '0')}`;
 
     for (const p of this.persons) {
-      if (!hit(p.displayName) && !hit(p.email) && !hit(p.phone)) continue;
+      // A craft is searchable: « saxophoniste », « intermittent », « lumière ».
+      const craft = p.craft;
+      if (!hit(p.displayName) && !hit(p.email) && !hit(p.phone)
+        && !hit(craft?.role) && !hit(craft?.speciality) && !hit(craft?.status)
+        && !(craft?.requirements ?? []).some((r) => hit(r))) continue;
       const moments = this.phases.filter((ph) => (ph.personIds ?? []).includes(p.id));
       const guest = this.guests.find((g) => g.personId === p.id);
       const table = guest?.seating.tableId
         ? this.seatingTables.find((t) => t.id === guest.seating.tableId)?.label
         : null;
       out.push({
-        kind: 'person', id: p.id, label: p.displayName,
+        kind: 'person', id: p.id, label: craft?.role ? `${p.displayName} · ${craft.role}` : p.displayName,
         context: [
+          craft?.status,
           moments.length ? `${moments.length} moment${moments.length > 1 ? 's' : ''} : ${moments.map((m) => m.name).join(', ')}` : 'aucun moment',
-          table ? `table ${table}` : 'aucune table',
-        ].join(' · '),
+          table ? `table ${table}` : null,
+        ].filter(Boolean).join(' · '),
       });
     }
     for (const ph of this.phases) {

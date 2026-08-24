@@ -1076,3 +1076,126 @@
   .wc-gj-doc-row { grid-template-columns: 70px 1fr; }
   .wc-gj-doc-list { grid-column: 1 / -1; }
 }
+
+/* --- 03 SPECTACLE ------------------------------------------------------------- */
+.wc-gj-spectacle {
+  position: relative;
+  min-height: 92vh;
+  display: flex;
+  align-items: flex-end;
+  border-top: 1px solid rgba(246, 245, 243, 0.12);
+}
+
+.wc-gj-spectacle-img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.wc-gj-spectacle-scrim {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(8, 9, 11, 0.55) 0%, rgba(8, 9, 11, 0.72) 55%, rgba(8, 9, 11, 0.95) 100%);
+}
+
+.wc-gj-spectacle-body {
+  position: relative;
+  padding: clamp(40px, 9vh, 110px) clamp(18px, 5vw, 64px);
+  max-width: 1000px;
+}
+
+.wc-gj-spectacle-title {
+  margin: 0;
+  font-size: clamp(28px, 6.4vw, 88px);
+  line-height: 0.98;
+  letter-spacing: -0.04em;
+  font-weight: 600;
+}
+
+.wc-gj-spectacle-lead {
+  margin: clamp(16px, 2.4vw, 26px) 0 0;
+  max-width: 520px;
+  font-size: clamp(14px, 1.4vw, 19px);
+  line-height: 1.5;
+  color: rgba(246, 245, 243, 0.82);
+}
+
+.wc-gj-crafts {
+  margin: clamp(20px, 3vw, 32px) 0;
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  max-width: 900px;
+}
+
+.wc-gj-craft {
+  border: 1px solid rgba(246, 245, 243, 0.28);
+  border-radius: 999px;
+  padding: 7px 13px;
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgba(246, 245, 243, 0.85);
+}
+
+/* --- call sheets --------------------------------------------------------------- */
+.wc-gj-callsheets {
+  padding: 0 clamp(18px, 5vw, 64px);
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: clamp(14px, 2vw, 26px);
+  max-width: 1280px;
+}
+
+.wc-gj-callsheet {
+  border: 1px solid rgba(246, 245, 243, 0.14);
+  border-radius: 4px;
+  overflow: hidden;
+  background: #0b0c0e;
+}
+
+.wc-gj-callsheet-img {
+  width: 100%;
+  height: 170px;
+  object-fit: cover;
+  display: block;
+}
+
+.wc-gj-callsheet-body { padding: 16px 18px 20px; }
+
+.wc-gj-callsheet-role {
+  font-size: clamp(14px, 1.4vw, 18px);
+  font-weight: 600;
+  margin-bottom: 10px;
+}
+
+.wc-gj-callsheet-rows {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.wc-gj-callsheet-rows li {
+  display: flex;
+  gap: 12px;
+  align-items: baseline;
+  font-size: 13px;
+  color: rgba(246, 245, 243, 0.8);
+}
+
+.wc-gj-callsheet-rows b {
+  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: #f6f5f3;
+  min-width: 46px;
+}
+
+.wc-gj-callsheets .wc-gj-fineprint { grid-column: 1 / -1; }
+
+@media (max-width: 900px) {
+  .wc-gj-callsheets { grid-template-columns: 1fr; }
+  .wc-gj-callsheet-img { height: 150px; }
+}

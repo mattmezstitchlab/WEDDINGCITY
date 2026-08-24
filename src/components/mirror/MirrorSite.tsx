@@ -83,6 +83,7 @@ function ProductNav() {
     { id: 'jour-j', label: 'Timeline', tag: 'nav-jourj' },
     { id: 'mirror-guests', label: 'Personnes', tag: 'nav-people' },
     { id: 'organisation', label: 'Organisation', tag: 'nav-organisation' },
+    { id: 'equipe', label: 'Spectacle', tag: 'nav-crew' },
     { id: 'mirror-music', label: 'Musique', tag: 'nav-music' },
     { id: 'organisation', label: 'Documents', tag: 'nav-documents' },
     { id: 'mirror-gallery', label: 'Souvenirs', tag: 'nav-memories' },

@@ -100,7 +100,7 @@ export function MomentHub({ phaseId, onClose }: { phaseId: string; onClose: () =
       {/* ---- who ---- */}
       <Dimension title="Personnes" hint={persons.length === 0 ? 'Personne n’est encore attendu à ce moment.' : undefined}>
         <PeopleRow
-          persons={persons as { id: string; displayName: string; portraitMediaId?: string }[]}
+          persons={persons as { id: string; displayName: string; portraitMediaId?: string; craft?: { role: string } }[]}
           onRemove={(id) => store.detachPersonFromPhase(phase.id, id)}
         />
         <AddExisting
@@ -366,7 +366,7 @@ function MusicDimension({ phaseId }: { phaseId: string }) {
 // day, who they work with and what is attached to them — all read from the
 // same store, nothing invented.
 function PeopleRow({ persons, onRemove }: {
-  persons: { id: string; displayName: string; portraitMediaId?: string }[];
+  persons: { id: string; displayName: string; portraitMediaId?: string; craft?: { role: string } }[];
   onRemove: (id: string) => void;
 }) {
   const store = weddingStore;
@@ -401,7 +401,11 @@ function PeopleRow({ persons, onRemove }: {
               {src
                 ? <img src={src} alt="" width={28} height={28} style={avatarImg} />
                 : <span style={avatarInitials} aria-hidden>{initials(p.displayName)}</span>}
-              <span>{p.displayName}</span>
+              <span>
+                {p.displayName}
+                {/* Who is here to WORK, and at what. */}
+                {p.craft?.role && <span style={{ ...muted, marginLeft: 6 }}>· {p.craft.role}</span>}
+              </span>
               <span
                 role="button"
                 tabIndex={0}

@@ -5,7 +5,10 @@ import { typography } from '../../design/tokens';
 import { GRAND_JOUR_HERO, DEMO_DAY, MOMENT_ASSETS } from '../../design/momentImagery';
 import { PRODUCT_NAME, PRODUCT_MARK, PRODUCT_TAGLINE } from '../../design/productIdentity';
 import { EVENT_TYPES, eventType, type EventTypeId } from '../../design/eventTypes';
-import { EDITORIAL_PEOPLE, EDITORIAL_TRACKS, EDITORIAL_DISCLAIMER } from '../../design/editorialRegistry';
+import {
+  EDITORIAL_PEOPLE, EDITORIAL_TRACKS, EDITORIAL_DISCLAIMER,
+  SPECTACLE_VISUALS, SPECTACLE_CRAFTS,
+} from '../../design/editorialRegistry';
 import { LandingFilm } from './timeline/LandingFilm';
 import { IntakeStudio } from './intake/IntakeStudio';
 import './landing.css';
@@ -226,6 +229,92 @@ export function MirrorLanding() {
           )}
         </div>
       </section>
+
+      {/* ======================================================= 03 SPECTACLE */}
+      <section className="wc-gj-spectacle" aria-label="Ceux qui donnent vie au moment" data-landing="spectacle">
+        <img
+          src={SPECTACLE_VISUALS.danseuse.src}
+          alt={SPECTACLE_VISUALS.danseuse.alt}
+          width={SPECTACLE_VISUALS.danseuse.width}
+          height={SPECTACLE_VISUALS.danseuse.height}
+          loading="lazy"
+          decoding="async"
+          className="wc-gj-spectacle-img"
+        />
+        <div className="wc-gj-spectacle-scrim" aria-hidden />
+        <div className="wc-gj-spectacle-body">
+          <span className="wc-gj-index">03</span>
+          <h2 className="wc-gj-spectacle-title">Un moment ne se produit jamais par hasard.</h2>
+          <p className="wc-gj-spectacle-lead">
+            Des artistes. Des techniciens. Des prestataires.
+            Des dizaines de personnes. Une seule pellicule.
+          </p>
+          <div className="wc-gj-crafts" data-landing="crafts">
+            {SPECTACLE_CRAFTS.map((c) => <span key={c} className="wc-gj-craft">{c}</span>)}
+          </div>
+          <button
+            onClick={() => document.getElementById('film')?.scrollIntoView({ behavior: 'smooth' })}
+            className="wc-gj-cta"
+            data-landing="crew-cta"
+          >
+            Découvrir l’équipe du jour <span aria-hidden>→</span>
+          </button>
+        </div>
+      </section>
+
+      {/* ---- what a crew really needs, hour by hour — same sequence ---- */}
+      <div className="wc-gj-cols" aria-label="Feuilles de route">
+        <div className="wc-gj-section-head">
+          <h2 className="wc-gj-h2">Chacun reçoit sa propre journée.</h2>
+          <p className="wc-gj-sub">
+            Le saxophoniste voit son arrivée, sa balance et ses deux passages.
+            L’éclairagiste voit son montage et son démontage. Personne ne
+            recopie une heure : tout est calculé depuis la pellicule, donc tout
+            se recale quand un moment bouge.
+          </p>
+        </div>
+        <div className="wc-gj-callsheets" data-landing="callsheets">
+          {[
+            {
+              role: 'Saxophoniste', img: SPECTACLE_VISUALS.musicien,
+              rows: [['17:00', 'Arrivée et installation'], ['17:30', 'Cocktail'], ['21:00', 'Première danse'], ['21:30', 'Démontage']],
+            },
+            {
+              role: 'Technicienne lumière', img: SPECTACLE_VISUALS.regie,
+              rows: [['14:00', 'Montage plateau'], ['17:30', 'Cocktail'], ['19:30', 'Dîner'], ['23:30', 'Party'], ['01:00', 'Démontage']],
+            },
+            {
+              role: 'Régie générale', img: SPECTACLE_VISUALS.coulisses,
+              rows: [['08:00', 'Ouverture du lieu'], ['11:00', 'Cérémonie'], ['19:30', 'Dîner'], ['02:00', 'Fermeture']],
+            },
+          ].map((sheet) => (
+            <article key={sheet.role} className="wc-gj-callsheet" data-landing="callsheet">
+              <img
+                src={sheet.img.src}
+                alt={sheet.img.alt}
+                width={sheet.img.width}
+                height={sheet.img.height}
+                loading="lazy"
+                decoding="async"
+                className="wc-gj-callsheet-img"
+              />
+              <div className="wc-gj-callsheet-body">
+                <div className="wc-gj-callsheet-role">{sheet.role}</div>
+                <ol className="wc-gj-callsheet-rows">
+                  {sheet.rows.map(([h, label]) => (
+                    <li key={h}><b>{h}</b><span>{label}</span></li>
+                  ))}
+                </ol>
+              </div>
+            </article>
+          ))}
+          <p className="wc-gj-fineprint">
+            {EDITORIAL_DISCLAIMER} Dans votre événement, ces feuilles sont
+            dérivées de vos moments — et le statut d’intermittent, les besoins
+            techniques ou le cachet ne s’affichent que si vous les renseignez.
+          </p>
+        </div>
+      </div>
 
       {/* ========================================================= 05 MUSIQUE */}
       <section className="wc-gj-cols" aria-label="La musique devient le temps">

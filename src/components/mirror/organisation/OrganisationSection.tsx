@@ -3,6 +3,7 @@ import { weddingStore } from '../../../game/weddingStore';
 import { typography } from '../../../design/tokens';
 import { SeatingPlan } from './SeatingPlan';
 import { ScenariosPanel } from './ScenariosPanel';
+import { CrewPanel } from './CrewPanel';
 
 // ---------------------------------------------------------------------------
 // ORGANISATION — the part of the day that is not an hour.
@@ -49,6 +50,12 @@ export function OrganisationSection() {
             ))}
           </ul>
         )}
+      </div>
+
+      {/* ---- those who make the moment happen ---- */}
+      <div style={block} id="equipe">
+        <h3 style={h3}>Artistes &amp; techniciens</h3>
+        <CrewPanel />
       </div>
 
       {/* ---- scenarios: a parallel day ---- */}
