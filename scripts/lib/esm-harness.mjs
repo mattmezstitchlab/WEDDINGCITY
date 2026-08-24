@@ -28,7 +28,7 @@ export async function compileGameModules() {
   const out = mkdtempSync(path.join(holder, 'run-'));
 
   const inputs = [];
-  for (const dir of ['game', 'game/enrichment', 'types', 'projections', 'design/tokens']) {
+  for (const dir of ['game', 'game/enrichment', 'types', 'projections', 'design', 'design/tokens']) {
     const abs = path.join(SRC, dir);
     if (!existsSync(abs)) continue;
     for (const f of readdirSync(abs)) if (f.endsWith('.ts')) inputs.push(path.join(abs, f));
@@ -46,7 +46,7 @@ export async function compileGameModules() {
   });
 
   // Node requires explicit extensions on relative specifiers.
-  for (const dir of ['game', 'game/enrichment', 'types', 'projections', 'design/tokens']) {
+  for (const dir of ['game', 'game/enrichment', 'types', 'projections', 'design', 'design/tokens']) {
     const abs = path.join(out, dir);
     if (!existsSync(abs)) continue;
     for (const f of readdirSync(abs)) {

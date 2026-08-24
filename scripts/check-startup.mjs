@@ -49,7 +49,9 @@ async function checkNativeEsmStartup() {
     // Transpile file-by-file. NO bundling: module boundaries and evaluation
     // order are preserved exactly as the browser/Vite would see them.
     const inputs = [];
-    for (const dir of ['game', 'game/enrichment', 'types']) {
+    // `design` joined the engine graph when the intake became type-aware
+    // (design/eventTypes) — the boot check must transpile it too.
+    for (const dir of ['game', 'game/enrichment', 'types', 'design', 'design/tokens']) {
       const abs = path.join(SRC, dir);
       if (!existsSync(abs)) continue;
       for (const f of readdirSync(abs)) if (f.endsWith('.ts')) inputs.push(path.join(abs, f));
@@ -66,7 +68,7 @@ async function checkNativeEsmStartup() {
     });
 
     // Node needs explicit extensions on relative specifiers.
-    for (const dir of ['game', 'game/enrichment', 'types']) {
+    for (const dir of ['game', 'game/enrichment', 'types', 'design', 'design/tokens']) {
       const abs = path.join(out, dir);
       if (!existsSync(abs)) continue;
       for (const f of readdirSync(abs)) {

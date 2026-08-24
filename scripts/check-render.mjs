@@ -474,3 +474,8 @@ void path; void SRC;
 
 if (r.failures) { console.log(`\n\u001b[31m${r.failures} check(s) failed.\u001b[0m\n`); process.exit(1); }
 console.log('\n\u001b[32mAll rendered-output checks passed.\u001b[0m\n');
+
+// The rendered components legitimately own timers (the NOW marker ticks every
+// 30s). jsdom keeps them alive after cleanup, which used to hang this script
+// for minutes after its last check. Nothing is left to do here, so we say so.
+process.exit(0);

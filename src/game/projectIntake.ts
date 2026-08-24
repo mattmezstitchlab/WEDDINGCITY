@@ -21,6 +21,7 @@
 // ---------------------------------------------------------------------------
 
 import { extractDocumentFacts, type DocumentFacts } from './documentIntelligence';
+import { eventType, type EventTypeId } from '../design/eventTypes';
 
 export type IntakeConfidence = 'read' | 'estimated';
 
@@ -57,6 +58,9 @@ export interface IntakeDocument {
 }
 
 export interface IntakePlan {
+  /** Which kind of day this is. Decides the vocabulary AND the questions. */
+  eventTypeId: EventTypeId;
+  /** The people at the centre: the couple, the child, the company… or none. */
   coupleNames: string | null;
   weddingDate: string | null;
   locationName: string | null;
@@ -80,8 +84,11 @@ export interface IntakeSource {
 
 // --- vocabulary --------------------------------------------------------------
 
-/** Words that name a moment of a day. Only these become moments. */
-const MOMENT_WORDS: { re: RegExp; label: string }[] = [
+/**
+ * Kept for reference and for tests: the wedding vocabulary. The live list is
+ * the one carried by the chosen event type (see design/eventTypes).
+ */
+export const MOMENT_WORDS: { re: RegExp; label: string }[] = [
   { re: /pr[ée]paratifs?/i, label: 'Préparatifs' },
   { re: /coiffure/i, label: 'Coiffure' },
   { re: /habillage/i, label: 'Habillage' },
@@ -134,9 +141,12 @@ function hoursIn(text: string): { hour: number; index: number; raw: string }[] {
 export function analyseIntake(input: {
   description?: string;
   sources?: IntakeSource[];
+  /** Defaults to a wedding, because that is what the product is for. */
+  eventTypeId?: EventTypeId;
 }): IntakePlan {
   const description = input.description ?? '';
   const sources = input.sources ?? [];
+  const type = eventType(input.eventTypeId ?? 'mariage');
   const all = [description, ...sources.map((s) => `${s.fileName}\n${s.text}`)].join('\n');
 
   const questions: string[] = [];
@@ -146,8 +156,16 @@ export function analyseIntake(input: {
   // couple. Two first names are only a couple when the PERSON writing the
   // brief says so — so this is read from the description, and only there.
   let coupleNames: string | null = null;
-  const couple = /\b([A-ZÉÈÀÂÎÔÛ][\p{Ll}'-]{2,})\s*(?:&|et)\s*([A-ZÉÈÀÂÎÔÛ][\p{Ll}'-]{2,})\b/u.exec(description);
-  if (couple) coupleNames = `${couple[1]} & ${couple[2]}`;
+  if (type.id === 'mariage') {
+    const couple = /\b([A-ZÉÈÀÂÎÔÛ][\p{Ll}'-]{2,})\s*(?:&|et)\s*([A-ZÉÈÀÂÎÔÛ][\p{Ll}'-]{2,})\b/u.exec(description);
+    if (couple) coupleNames = `${couple[1]} & ${couple[2]}`;
+  } else if (type.id === 'corporate' || type.id === 'seminaire') {
+    const company = /\b(?:pour|chez|avec|société|entreprise)\s+([A-ZÉÈÀÂÎÔÛ][\p{L}&'-]+(?:\s+[A-ZÉÈÀÂÎÔÛ][\p{L}&'-]+){0,2})/u.exec(description);
+    if (company) coupleNames = company[1].trim();
+  } else {
+    const person = /\b(?:anniversaire|bapt[êe]me|f[êe]te)\s+(?:de|d’|d')\s*([A-ZÉÈÀÂÎÔÛ][\p{L}'-]+)/iu.exec(description);
+    if (person) coupleNames = person[1].trim();
+  }
 
   // --- the date -------------------------------------------------------------
   let weddingDate: string | null = null;
@@ -164,13 +182,13 @@ export function analyseIntake(input: {
   } else {
     questions.push('Quelle est la date du mariage ? Elle n’apparaît nulle part dans ce que vous avez donné.');
   }
-  if (!coupleNames) {
-    questions.push('Qui se marie ? Deux prénoms n’ont pas été reconnus dans votre phrase — écrivez-les, ils ne seront pas devinés.');
+  if (!coupleNames && type.principalsQuestion) {
+    questions.push(type.principalsQuestion);
   }
 
   // --- guests ---------------------------------------------------------------
   let guestCountTarget: number | null = null;
-  const guests = /\b(?:environ\s+)?(\d{2,4})\s+(?:invit[ée]s?|convives?|personnes?)\b/i.exec(all);
+  const guests = /\b(?:environ\s+)?(\d{2,4})\s+(?:invit[ée]s?|convives?|personnes?|participants?|collaborateurs?)\b/i.exec(all);
   if (guests) guestCountTarget = Number(guests[1]);
 
   // --- moments --------------------------------------------------------------
@@ -181,7 +199,7 @@ export function analyseIntake(input: {
   for (const fragment of fragments) {
     const f = clean(fragment);
     if (!f) continue;
-    const found = MOMENT_WORDS.find((w) => w.re.test(f));
+    const found = type.momentWords.find((w) => w.re.test(f));
     if (!found) continue;
     const hs = hoursIn(f);
     if (hs.length === 0) continue;
@@ -252,7 +270,7 @@ export function analyseIntake(input: {
 
       // A guest list: one or two words per line, no digits, no ':'.
       const isNameLine = /^[\p{Lu}][\p{L}'-]+(?:\s+[\p{Lu}][\p{L}'-]+){0,2}$/u.test(line)
-        && !/\d|:/.test(line) && !MOMENT_WORDS.some((w) => w.re.test(line))
+        && !/\d|:/.test(line) && !type.momentWords.some((w) => w.re.test(line))
         && !PLACE_WORDS.test(line) && !VENDOR_WORDS.test(line);
       if (isNameLine && /invit|guest|liste|convive/i.test(source.fileName + source.text.slice(0, 120))) {
         pushOnce(people, line, `${source.fileName} : ${line}`, people);
@@ -310,6 +328,7 @@ export function analyseIntake(input: {
   }
 
   return {
+    eventTypeId: type.id,
     coupleNames, weddingDate, locationName, guestCountTarget,
     moments, people, vendors, places, tracks, documents, amounts, questions,
   };

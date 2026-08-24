@@ -272,8 +272,13 @@ try {
     'the demonstration day carries no couple, no guest, no venue and no price');
   r.check(/GRAND_JOUR_HERO/.test(imagery) && /grandjour-hero\.jpg/.test(imagery),
     'the cover of the page is a declared product asset');
-  r.check(/data-landing="hero-wedding"/.test(landing) && /projects\.find\(\(p\) => !p\.isDemo/.test(landing),
-    'the countdown belongs to a real wedding of this browser, or to nobody');
+  // PRODUCT DECISION (editorial pass): the hero shows neither a couple nor a
+  // date — it shows the product name and hands over one field. So the
+  // guarantee is stronger than before: no wedding identity in the hero at all.
+  r.check(!/hero-wedding/.test(landing) && !/wc-gj-countdown/.test(landing),
+    'the hero shows no couple and no date — nothing to invent');
+  r.check(/data-landing="brief"/.test(landing) && /data-landing="type"/.test(landing),
+    'it shows one field and the kind of event instead');
   r.check(/@media \(max-width: 900px\)/.test(landingCss) && !/@media/.test(landing),
     'every responsive value of the page lives in the stylesheet');
 

@@ -61,8 +61,10 @@ const clickText = (t, sel = 'button') => p.evaluate((t, sel) => {
   if (!el) return false;
   el.click(); return true;
 }, t, sel);
+/** Product controls carry data-jourj; the public page carries data-landing. */
 const clickTag = (tag) => p.evaluate((tag) => {
-  const el = document.querySelector(`[data-jourj="${tag}"]`);
+  const el = document.querySelector(`[data-jourj="${tag}"]`)
+    || document.querySelector(`[data-landing="${tag}"]`);
   if (!el) return false;
   el.click(); return true;
 }, tag);
@@ -163,8 +165,10 @@ await p.goto('http://localhost:5173/', { waitUntil: 'domcontentloaded', timeout:
 await wait(2600);
 let s = await state();
 check('la landing s’ouvre sans projet actif', !s.projectId);
-await clickText('Créer mon mariage');
-await wait(900);
+// LOCATOR ADAPTED (editorial pass): the hero is a single field with its own
+// submit; an empty field opens the same creation surface as before.
+await clickTag('hero-create');
+await wait(1100);
 await typeInto('Clara', 'ANNA-JOURJ');
 await typeInto('Alexandre', 'BORIS-JOURJ');
 await clickText('Continuer'); await wait(500);
@@ -475,7 +479,7 @@ await clickTag('nav-weddings'); await wait(1600);
 // LOCATOR ADAPTED (Le Grand Jour pass): the public page is now the film page.
 check('« Mes mariages » ramène au site',
   await p.evaluate(() => !!document.querySelector('[data-landing="page"]')));
-await clickText('Créer mon mariage'); await wait(900);
+await clickTag('hero-create'); await wait(1100);
 await typeInto('Clara', 'CELIA-AUTRE');
 await typeInto('Alexandre', 'DAVID-AUTRE');
 await clickText('Continuer'); await wait(400);

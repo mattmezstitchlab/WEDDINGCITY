@@ -137,9 +137,24 @@ check('la photographie est réellement chargée', hero.imgLoaded);
 check('elle n’est pas déformée', hero.imgFit === 'cover');
 check('le nom du produit est monumental', /LE GRAND JOUR/.test(hero.title || '') && hero.titleSize >= 38,
   `${hero.titleSize}px`);
-check('aucun couple n’est inventé quand aucun mariage n’existe', !hero.hasWedding);
-check('un seul appel : entrer dans le grand jour', hero.cta);
+check('le hero n’affiche ni couple ni date', !hero.hasWedding);
+check('un seul champ, avec son bouton intégré', hero.cta);
 check('aucune grille de cartes dans le hero', hero.cards === 0);
+const bar = await p.evaluate(() => {
+  const b = document.querySelector('.wc-gj-bar');
+  const sel = document.querySelector('[data-landing="type"]');
+  return b ? {
+    field: !!b.querySelector('[data-landing="brief"]'),
+    importer: !!b.querySelector('[data-landing="files"]'),
+    go: !!b.querySelector('[data-landing="hero-create"]'),
+    types: sel ? [...sel.options].map((o) => o.value) : [],
+    signature: /L’amour en vrai/.test(document.body.innerText),
+  } : null;
+});
+check('la barre contient champ + import + type + validation',
+  bar && bar.field && bar.importer && bar.go, JSON.stringify(bar));
+check('les sept types d’événement sont proposés', bar.types.length === 7, bar.types.join(','));
+check('la signature est affichée', bar.signature);
 await shot('01-hero');
 await noOverflow('Landing');
 
@@ -160,7 +175,10 @@ const filmPos = await p.evaluate(() => {
 say('  ' + JSON.stringify(filmPos));
 check('la pellicule arrive dans l’écran qui suit le hero', filmPos.gapScreens <= 0.6, `${filmPos.gapScreens} écran`);
 check('les 8 moments de la démonstration sont dessinés', filmPos.moments === 8, String(filmPos.moments));
-check('la page reste courte : 6 sections au plus', filmPos.sections <= 6, String(filmPos.sections));
+// The page tells the eleven innovations of the product, one section each —
+// and never more, so it stays a story rather than a catalogue.
+check('la page raconte onze sections, pas davantage',
+  filmPos.sections >= 9 && filmPos.sections <= 12, String(filmPos.sections));
 
 await p.evaluate(() => document.getElementById('film')?.scrollIntoView());
 await wait(900);
@@ -206,7 +224,50 @@ await p.mouse.move(box.x - 220, box.y, { steps: 10 });
 await p.mouse.up();
 await wait(400);
 const scrolled = await p.evaluate(() => document.querySelector('[data-landing="film"]').scrollLeft);
-check('la pellicule se déplace au glisser', scrolled > box.scroll, `${box.scroll} → ${Math.round(scrolled)}`);
+check('la pellicule se déplace de droite à gauche', scrolled > box.scroll, `${box.scroll} → ${Math.round(scrolled)}`);
+
+// …and in the other direction, which is the one that used to be forgotten.
+const rightStart = await p.evaluate(() => document.querySelector('[data-landing="film"]').scrollLeft);
+await p.mouse.move(box.x, box.y);
+await p.mouse.down();
+await p.mouse.move(box.x + 240, box.y, { steps: 10 });
+await p.mouse.up();
+await wait(600);
+const backScroll = await p.evaluate(() => document.querySelector('[data-landing="film"]').scrollLeft);
+check('la pellicule se déplace de gauche à droite', backScroll < rightStart,
+  `${Math.round(rightStart)} → ${Math.round(backScroll)}`);
+
+// touch: the same gesture with a finger.
+const touchStart = await p.evaluate(() => document.querySelector('[data-landing="film"]').scrollLeft);
+await p.touchscreen.tap(box.x, box.y).catch(() => {});
+const touchOk = await p.evaluate(async () => {
+  const strip = document.querySelector('[data-landing="film"]');
+  const r = strip.getBoundingClientRect();
+  const y = r.top + r.height / 2;
+  const send = (type, x) => strip.dispatchEvent(new PointerEvent(type, {
+    pointerId: 7, pointerType: 'touch', clientX: x, clientY: y, bubbles: true, isPrimary: true,
+  }));
+  send('pointerdown', r.left + r.width / 2);
+  for (let i = 1; i <= 8; i++) send('pointermove', r.left + r.width / 2 - i * 20);
+  send('pointerup', r.left + r.width / 2 - 160);
+  await new Promise((res) => setTimeout(res, 400));
+  return strip.scrollLeft;
+});
+check('la pellicule répond au tactile', touchOk > touchStart,
+  `${Math.round(touchStart)} → ${Math.round(touchOk)}`);
+
+// On a phone the cards are narrow: the duration appears as soon as one zooms,
+// which is exactly what a finger does. Zoom first, then read.
+if (WIDTH < 900) { await clickTag('landing', 'zoom-in'); await wait(500); await clickTag('landing', 'zoom-in'); await wait(600); }
+const filmExtras = await p.evaluate(() => ({
+  now: !!document.querySelector('[data-landing="now"]'),
+  durations: [...document.querySelectorAll('[data-landing="film-moment"]')]
+    .filter((el) => /\d\s?(h|min)/.test(el.textContent)).length,
+}));
+check('un repère MAINTENANT est posé sur la pellicule', filmExtras.now);
+// At 390px only three cards can be wide enough at once — the rest carry their
+// duration as soon as they are scrolled to, which is the same guarantee.
+check('les moments affichent leur durée', filmExtras.durations >= 3, String(filmExtras.durations));
 
 // --- a scene ---------------------------------------------------------------
 say('\n=== 4. UNE VIGNETTE OUVRE UNE SCÈNE ===');
@@ -245,12 +306,105 @@ const movedCount = afterShift.filter((h, i) => Math.abs(h - beforeShift[i]) > 1e
 check('la démonstration décale bien la suite de la journée', movedCount === 5, `${movedCount} moments`);
 check('et l’explique en une ligne',
   await p.evaluate(() => !!document.querySelector('[data-landing="propagate-note"]')));
+const cascade = await p.evaluate(() => [...document.querySelectorAll('[data-landing="cascade"] li')]
+  .map((li) => li.textContent.replace(/\s+/g, ' ').trim()));
+say('  ' + JSON.stringify(cascade));
+check('la cascade montre photos, dîner, musique, DJ et traiteur',
+  cascade.length === 6 && cascade.every((c) => /\+30 min/.test(c)), String(cascade.length));
 await shot('04-propagation');
+
+say('\n=== 5b. LES SECTIONS ÉDITORIALES ===');
+const editorial = await p.evaluate(() => {
+  const t = document.body.innerText;
+  return {
+    indexes: [...document.querySelectorAll('.wc-gj-index')].map((x) => x.textContent.trim()),
+    scenarios: document.querySelectorAll('[data-landing="scenario-tab"]').length,
+    steps: document.querySelectorAll('[data-landing="steps"] li').length,
+    people: document.querySelectorAll('[data-landing="people"] .wc-gj-person').length,
+    music: document.querySelectorAll('[data-landing="music"] .wc-gj-music-row').length,
+    closing: /Tout commence par un oui/.test(t),
+    oldLine: /commence par un nom/.test(t),
+    honestMusic: /Aucune jaquette n’est inventée/.test(t),
+    honestPeople: /jamais un portrait inventé/.test(t),
+  };
+});
+say('  ' + JSON.stringify(editorial));
+check('les sections numérotées 02 → 11 sont là', editorial.indexes.length >= 8, editorial.indexes.join(' '));
+check('la section scénarios propose trois plans', editorial.scenarios === 3, String(editorial.scenarios));
+check('l’import est raconté en cinq étapes', editorial.steps === 5, String(editorial.steps));
+check('la section people montre les liens', editorial.people === 3, String(editorial.people));
+check('la section musique montre l’heure et la durée', editorial.music === 3, String(editorial.music));
+check('la dernière section dit « Tout commence par un oui »', editorial.closing);
+check('l’ancienne phrase administrative a disparu', !editorial.oldLine);
+check('aucune pochette ni portrait n’est inventé, et c’est écrit',
+  editorial.honestMusic && editorial.honestPeople);
+
+// scenarios really switch
+await p.evaluate(() => {
+  const b = [...document.querySelectorAll('[data-landing="scenario-tab"]')].find((x) => /Plan B/.test(x.textContent));
+  b?.click();
+});
+await wait(500);
+const planB = await p.evaluate(() => [...document.querySelectorAll('[data-landing="scenario-lines"] li')]
+  .map((li) => li.textContent.trim()));
+check('le plan B montre ses conséquences', planB.some((l) => /intérieur/i.test(l)), planB.join(' · '));
+await shot('04b-scenarios');
 await clickTag('landing', 'propagate'); await wait(600);
 
 // --- 6. into the product ----------------------------------------------------
+say('\n=== 5c. LE TYPE D’ÉVÉNEMENT CHANGE LES QUESTIONS ===');
+await p.evaluate(() => {
+  const sel = document.querySelector('[data-landing="type"]');
+  const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set;
+  setter.call(sel, 'corporate');
+  sel.dispatchEvent(new Event('change', { bubbles: true }));
+});
+await wait(400);
+await p.evaluate(() => {
+  const f = document.querySelector('[data-landing="brief"]');
+  const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
+  setter.call(f, 'Convention annuelle le 12 octobre 2027 au Centre des Congrès, plénière à 9h, ateliers à 11h, déjeuner à 12h30, 250 participants.');
+  f.dispatchEvent(new Event('input', { bubbles: true }));
+});
+await wait(300);
+await clickTag('landing', 'hero-create');
+await wait(2600);
+const corporate = await p.evaluate(() => {
+  const labels = [...document.querySelectorAll('[data-intake="review"] label span')].map((s) => s.textContent.trim());
+  const t = document.body.innerText;
+  return {
+    labels: labels.slice(0, 6),
+    asksBride: /mariés|Qui se marie/i.test(t),
+    moments: [...document.querySelectorAll('[data-intake="moment-label"]')].map((i) => i.value),
+    headcount: document.querySelector('[data-intake="intake-headcount"]')?.value,
+  };
+});
+say('  ' + JSON.stringify(corporate));
+check('un événement corporate ne demande jamais les mariés', !corporate.asksBride);
+check('il demande l’entreprise et les participants',
+  corporate.labels.some((l) => /entreprise/i.test(l)) && corporate.labels.some((l) => /participants/i.test(l)),
+  corporate.labels.join(' | '));
+check('le vocabulaire des moments est professionnel',
+  corporate.moments.some((m) => /Plénière|Atelier|Déjeuner/i.test(m)), corporate.moments.join(', '));
+check('250 participants sont lus', corporate.headcount === '250', String(corporate.headcount));
+await shot('04c-corporate');
+await clickTag('intake', 'close');
+await wait(600);
+// back to a wedding for the rest of the journey
+await p.evaluate(() => {
+  const sel = document.querySelector('[data-landing="type"]');
+  const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set;
+  setter.call(sel, 'mariage');
+  sel.dispatchEvent(new Event('change', { bubbles: true }));
+  const f = document.querySelector('[data-landing="brief"]');
+  const s2 = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
+  s2.call(f, '');
+  f.dispatchEvent(new Event('input', { bubbles: true }));
+});
+await wait(400);
+
 say('\n=== 6. CRÉATION, PUIS LE PRODUIT ===');
-await clickTag('landing', 'hero-create'); await wait(1000);
+await clickTag('landing', 'hero-create'); await wait(1200);
 await typeInto('Clara', 'MATT'); await typeInto('Alexandre', 'EMILIE');
 await clickText('Continuer'); await wait(400);
 await typeInto('date', new Date().toISOString().slice(0, 10));

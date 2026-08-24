@@ -39,7 +39,16 @@ export function LandingFilm({ onOpenMoment, shifted }: {
   pxRef.current = pxPerHour;
   const [cursor, setCursor] = useState<number | null>(null);
   const stripRef = useRef<HTMLDivElement>(null);
-  const panRef = useRef<{ x: number; scroll: number } | null>(null);
+  const panRef = useRef<{ x: number; scroll: number; lastX: number; lastT: number; v: number } | null>(null);
+  const inertiaRef = useRef<number | null>(null);
+
+  // The real clock, projected on the demonstration day — so the NOW marker is
+  // a real time, not a decorative line.
+  const [clock, setClock] = useState(() => new Date().getHours() + new Date().getMinutes() / 60);
+  useEffect(() => {
+    const id = setInterval(() => setClock(new Date().getHours() + new Date().getMinutes() / 60), 30000);
+    return () => clearInterval(id);
+  }, []);
 
   const moments = useMemo(() => DEMO_DAY.map((m, i) => {
     const delta = shifted && i >= shifted.from ? shifted.delta : 0;
@@ -115,7 +124,12 @@ export function LandingFilm({ onOpenMoment, shifted }: {
         onPointerDown={(e) => {
           const strip = stripRef.current;
           if (!strip) return;
-          panRef.current = { x: e.clientX, scroll: strip.scrollLeft };
+          if (inertiaRef.current) { cancelAnimationFrame(inertiaRef.current); inertiaRef.current = null; }
+          // Capture keeps a finger that leaves the strip in control of the
+          // gesture. It can legitimately fail (a pointer id that is not
+          // active), and a failed capture must never abort the drag.
+          try { strip.setPointerCapture?.(e.pointerId); } catch { /* keep dragging */ }
+          panRef.current = { x: e.clientX, scroll: strip.scrollLeft, lastX: e.clientX, lastT: performance.now(), v: 0 };
           strip.classList.add('is-panning');
         }}
         onPointerMove={(e) => {
@@ -123,10 +137,32 @@ export function LandingFilm({ onOpenMoment, shifted }: {
           if (!strip) return;
           const rect = strip.getBoundingClientRect();
           setCursor(DAY_START + (e.clientX - rect.left + strip.scrollLeft) / pxPerHour);
-          if (!panRef.current) return;
-          strip.scrollLeft = panRef.current.scroll - (e.clientX - panRef.current.x);
+          const pan = panRef.current;
+          if (!pan) return;
+          // Both directions, by construction: the delta is signed.
+          strip.scrollLeft = pan.scroll - (e.clientX - pan.x);
+          const now = performance.now();
+          const dt = Math.max(1, now - pan.lastT);
+          pan.v = (pan.lastX - e.clientX) / dt;   // px per ms, signed
+          pan.lastX = e.clientX;
+          pan.lastT = now;
         }}
-        onPointerUp={() => { panRef.current = null; stripRef.current?.classList.remove('is-panning'); }}
+        onPointerUp={() => {
+          const strip = stripRef.current;
+          const pan = panRef.current;
+          panRef.current = null;
+          strip?.classList.remove('is-panning');
+          if (!strip || !pan || Math.abs(pan.v) < 0.05) return;
+          // A light inertia, in the direction the finger was going.
+          let velocity = pan.v * 16;
+          const step = () => {
+            velocity *= 0.94;
+            strip.scrollLeft += velocity;
+            if (Math.abs(velocity) > 0.4) inertiaRef.current = requestAnimationFrame(step);
+            else inertiaRef.current = null;
+          };
+          inertiaRef.current = requestAnimationFrame(step);
+        }}
         onPointerLeave={() => { panRef.current = null; setCursor(null); stripRef.current?.classList.remove('is-panning'); }}
       >
         <div style={{ position: 'relative', width, height: '100%' }}>
@@ -144,7 +180,9 @@ export function LandingFilm({ onOpenMoment, shifted }: {
           {moments.map((m) => {
             const w = Math.max((m.endHour - m.hour) * pxPerHour, MIN_CARD_PX);
             const asset = MOMENT_ASSETS[m.key];
-            const dense = w < 190;
+            // Under ~150px there is room for the hour and nothing else; the
+            // label and the duration come back as soon as one zooms in.
+            const dense = w < 150;
             return (
               <article
                 key={m.label}
@@ -165,11 +203,28 @@ export function LandingFilm({ onOpenMoment, shifted }: {
                     {fmt(m.hour)}
                   </div>
                   {!dense && <div style={momentLabel}>{m.label}</div>}
+                  {!dense && (
+                    <div style={durationLabel}>
+                      {(() => {
+                        const total = Math.round((m.endHour - m.hour) * 60);
+                        return total >= 60
+                          ? `${Math.floor(total / 60)} h${total % 60 ? ` ${String(total % 60).padStart(2, '0')}` : ''}`
+                          : `${total} min`;
+                      })()}
+                    </div>
+                  )}
                   {m.shifted && <div style={shiftedTag}>recalculé</div>}
                 </div>
               </article>
             );
           })}
+
+          {/* NOW — the real time of day, if it falls inside the day shown. */}
+          {clock >= DAY_START && clock <= DAY_END && (
+            <div style={{ position: 'absolute', left: x(clock), top: 0, bottom: 0, width: 2, background: '#e0736a', zIndex: 6, pointerEvents: 'none' }} data-landing="now">
+              <div style={nowBadge}>{fmt(clock)} · maintenant</div>
+            </div>
+          )}
 
           {cursor !== null && (
             <div style={{ position: 'absolute', left: x(cursor), top: 0, bottom: 0, width: 1, background: 'rgba(246,245,243,0.32)', pointerEvents: 'none' }}>
@@ -220,6 +275,17 @@ const shiftedTag: React.CSSProperties = {
   marginTop: 8, display: 'inline-block', background: '#f6f5f3', color: '#08090b',
   borderRadius: 999, padding: '3px 9px', fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase',
 };
+const durationLabel: React.CSSProperties = {
+  marginTop: 4, fontSize: 11, letterSpacing: '0.08em',
+  color: 'rgba(246,245,243,0.72)', fontFamily: typography.family.mono,
+};
+
+const nowBadge: React.CSSProperties = {
+  position: 'absolute', top: 12, left: 8, whiteSpace: 'nowrap',
+  background: '#e0736a', color: '#08090b', borderRadius: 999,
+  padding: '4px 10px', fontFamily: typography.family.mono, fontSize: 11, fontWeight: 700,
+};
+
 const cursorBadge: React.CSSProperties = {
   position: 'absolute', top: 12, left: 6, fontFamily: typography.family.mono,
   fontSize: 11, color: 'rgba(246,245,243,0.75)', whiteSpace: 'nowrap',

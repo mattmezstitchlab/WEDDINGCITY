@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { weddingStore } from '../../../game/weddingStore';
 import { typography } from '../../../design/tokens';
 import { analyseIntake, summariseIntake, type IntakePlan, type IntakeSource } from '../../../game/projectIntake';
+import { eventType, type EventTypeId } from '../../../design/eventTypes';
 
 // ---------------------------------------------------------------------------
 // INTAKE — « Importez votre chaos. Nous construisons votre journée. »
@@ -24,9 +25,11 @@ type Stage = 'reading' | 'review' | 'done';
 export function IntakeStudio({ description, files, projectType, onClose }: {
   description: string;
   files: File[];
-  projectType: string;
+  /** The event type chosen in the hero — it decides every question below. */
+  projectType: EventTypeId;
   onClose: () => void;
 }) {
+  const schema = eventType(projectType);
   const store = weddingStore;
   const [stage, setStage] = useState<Stage>('reading');
   const [plan, setPlan] = useState<IntakePlan | null>(null);
@@ -47,7 +50,7 @@ export function IntakeStudio({ description, files, projectType, onClose }: {
       }
       setStep('Analyse des documents');
       await new Promise((r) => setTimeout(r, 260));
-      const result = analyseIntake({ description, sources });
+      const result = analyseIntake({ description, sources, eventTypeId: projectType });
       setStep('Structuration du projet');
       await new Promise((r) => setTimeout(r, 260));
       setPlan(result);
@@ -98,7 +101,7 @@ export function IntakeStudio({ description, files, projectType, onClose }: {
     <div style={overlay} role="dialog" aria-modal="true" aria-label="Construction de votre journée" data-intake="studio">
       <div style={surface}>
         <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, flexWrap: 'wrap' }}>
-          <span style={eyebrow}>{projectType}</span>
+          <span style={eyebrow}>{schema.label}</span>
           <span style={{ flex: 1 }} />
           <button onClick={onClose} style={ghost} data-intake="close">Fermer</button>
         </div>
@@ -106,6 +109,7 @@ export function IntakeStudio({ description, files, projectType, onClose }: {
         {stage === 'reading' && (
           <div style={{ padding: '48px 0' }} data-intake="reading">
             <div style={title}>{step}…</div>
+            <p style={{ ...muted, marginTop: 8 }}>{schema.intakeLine}</p>
             <p style={muted}>
               Tout est lu ici, dans votre navigateur : aucun fichier n’est envoyé
               nulle part.
@@ -129,13 +133,36 @@ export function IntakeStudio({ description, files, projectType, onClose }: {
               )}
             </div>
 
+            {/* CE QUE NOUS AVONS COMPRIS — with the words of THIS kind of day.
+                A corporate event is never asked who the bride is. */}
             <div style={identityRow}>
-              <Field label="Les mariés" value={plan.coupleNames ?? ''} placeholder="Prénom & Prénom"
-                onCommit={(v) => setPlan({ ...plan, coupleNames: v || null })} testId="intake-couple" />
-              <Field label="Date" value={plan.weddingDate ?? ''} placeholder="AAAA-MM-JJ"
-                onCommit={(v) => setPlan({ ...plan, weddingDate: v || null })} testId="intake-date" />
-              <Field label="Lieu principal" value={plan.locationName ?? ''} placeholder="Domaine, château…"
-                onCommit={(v) => setPlan({ ...plan, locationName: v || null })} testId="intake-place" />
+              {schema.fields.map((f) => {
+                if (f.key === 'principals') {
+                  return (
+                    <Field key={f.key} label={f.label} value={plan.coupleNames ?? ''} placeholder={f.placeholder}
+                      onCommit={(v) => setPlan({ ...plan, coupleNames: v || null })} testId="intake-couple" />
+                  );
+                }
+                if (f.key === 'date') {
+                  return (
+                    <Field key={f.key} label={f.label} value={plan.weddingDate ?? ''} placeholder={f.placeholder}
+                      onCommit={(v) => setPlan({ ...plan, weddingDate: v || null })} testId="intake-date" />
+                  );
+                }
+                if (f.key === 'place') {
+                  return (
+                    <Field key={f.key} label={f.label} value={plan.locationName ?? ''} placeholder={f.placeholder}
+                      onCommit={(v) => setPlan({ ...plan, locationName: v || null })} testId="intake-place" />
+                  );
+                }
+                return (
+                  <Field key={f.key} label={f.label}
+                    value={plan.guestCountTarget ? String(plan.guestCountTarget) : ''}
+                    placeholder={f.placeholder}
+                    onCommit={(v) => setPlan({ ...plan, guestCountTarget: Number(v) || null })}
+                    testId="intake-headcount" />
+                );
+              })}
             </div>
 
             {plan.questions.length > 0 && (
@@ -175,7 +202,7 @@ export function IntakeStudio({ description, files, projectType, onClose }: {
               ))}
             </Group>
 
-            <Group title="Personnes">
+            <Group title={schema.headcountLabel === 'participants' ? 'Participants' : 'Personnes'}>
               {plan.people.length === 0 && <p style={muted}>Aucune liste d’invités reconnue.</p>}
               <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                 {plan.people.map((p, i) => (
@@ -259,7 +286,7 @@ export function IntakeStudio({ description, files, projectType, onClose }: {
             </div>
             {!canGenerate && (
               <p style={{ ...muted, marginTop: 12 }} data-intake="need-couple">
-                Écrivez d’abord qui se marie : ces deux prénoms ne seront pas devinés.
+                Renseignez d’abord « {schema.fields[0].label} » : cette information ne sera pas devinée.
               </p>
             )}
             <p style={{ ...muted, marginTop: 12 }}>

@@ -142,10 +142,12 @@ check('aucune mention World / Canvas comme destination',
 const worldLinks = await p.evaluate(() => [...document.querySelectorAll('button, a')]
   .filter((b) => /monde 3d|world|mirror|canvas/i.test(b.textContent || '')).length);
 check('aucun bouton ne mène à une surface 3D', worldLinks === 0, String(worldLinks));
+// LOCATOR ADAPTED (editorial pass): the six type chips became one compact
+// selector inside the field. Same guarantee: a field, an import, a type.
 check('le hero est un outil : champ + import + types',
   await p.evaluate(() => !!document.querySelector('[data-landing="brief"]')
     && !!document.querySelector('[data-landing="files"]')
-    && document.querySelectorAll('[data-landing="type"]').length >= 5));
+    && document.querySelectorAll('[data-landing="type"] option').length >= 5));
 await shot('01-hero-outil');
 await noOverflow('Page publique');
 

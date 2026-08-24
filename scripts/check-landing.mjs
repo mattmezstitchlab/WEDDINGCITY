@@ -82,20 +82,22 @@ try {
       .filter((w) => text.includes(w));
     r.check(jargon.length === 0, 'and uses no technical vocabulary', jargon.join(', '));
 
-    // One CTA, several places, one handler.
-    const ctas = [...doc.querySelectorAll('button')]
-      .filter((b) => /Créer mon mariage|Entrer dans le grand jour/.test(b.textContent));
-    r.check(ctas.length >= 3, `the way in appears in the nav, the hero and the closing (${ctas.length})`);
+    // PRODUCT DECISION (editorial pass): the hero is a TOOL, not a row of
+    // calls to action. One field with its submit inside it, the type chosen
+    // right there — and every way in still ends on the same creation path.
     const landingSrc = readFileSync(path.join(SRC, 'components', 'mirror', 'MirrorLanding.tsx'), 'utf8');
-    // LOCATOR ADAPTED (convergence pass): the hero button now routes — with a
-    // brief or files it opens the intake, otherwise it calls the same single
-    // creation handler. The guarantee is unchanged and asserted directly: the
-    // page has exactly one creation entry point, `create`, and no second one.
-    r.check((landingSrc.match(/onClick=\{create\}/g) || []).length >= 2
-      && /: create\(\)/.test(landingSrc),
+    r.check(doc.querySelectorAll('[data-landing="brief"]').length === 1,
+      'the way in is one field, in the hero');
+    r.check(doc.querySelectorAll('[data-landing="hero-create"]').length === 1,
+      'with its submit button inside it');
+    r.check(doc.querySelectorAll('[data-landing="type"] option').length === 7,
+      'and the kind of event is chosen right there');
+    r.check(/const start = \(\) =>/.test(landingSrc) && /: create\(\)/.test(landingSrc),
       'and every way in ends on the same single handler');
     r.check(/store\.startWeddingCreation\(\)/.test(landingSrc),
       'which is the store\u2019s one creation entry point');
+    r.check(!/createRealWedding\(/.test(landingSrc),
+      'the landing never reimplements the creation logic');
 
     const storeSrc = readFileSync(path.join(SRC, 'game', 'weddingStore.ts'), 'utf8');
     r.check(/public startWeddingCreation\(\): void \{[\s\S]{0,600}(weddingCreationOpen|createWeddingModalOpen) = true/
@@ -255,9 +257,10 @@ try {
       'the grid reflows on smaller screens');
 
     const { document: doc } = await render(LANDING_ENTRY, { width: 390 });
-    const ctas = [...doc.querySelectorAll('button')]
-      .filter((b) => /Créer mon mariage|Entrer dans le grand jour/.test(b.textContent));
-    r.check(ctas.length >= 3, 'every way in is still rendered on a phone', String(ctas.length));
+    r.check(!!doc.querySelector('[data-landing="brief"]')
+      && !!doc.querySelector('[data-landing="hero-create"]')
+      && !!doc.querySelector('[data-landing="files"]'),
+      'the whole tool is still rendered on a phone');
   }
 } finally {
   for (const v of views) v.cleanup();
@@ -265,3 +268,8 @@ try {
 
 if (r.failures) { console.log(`\n\u001b[31m${r.failures} check(s) failed.\u001b[0m\n`); process.exit(1); }
 console.log('\n\u001b[32mAll landing checks passed.\u001b[0m\n');
+
+// The rendered components legitimately own timers (the NOW marker ticks every
+// 30s). jsdom keeps them alive after cleanup, which used to hang this script
+// for minutes after its last check. Nothing is left to do here, so we say so.
+process.exit(0);
