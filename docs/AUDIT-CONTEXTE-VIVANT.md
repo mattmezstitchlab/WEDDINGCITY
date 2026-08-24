@@ -1,6 +1,10 @@
 # AUDIT STRATÉGIQUE — « LE CONTEXTE VIVANT »
 
 Dépôt `mattmezstitchlab/WEDDINGCITY` · branche `arena/01a02c94-weddingcity` · HEAD audité **`0f34488`**.
+
+*Révision 2 : ajout de l'audit de la « Timeline infinie » mesuré dans le code (§1.19), des douze
+points de sécurité traités un par un (§8 bis) et des vingt innovations entièrement spécifiées, dix
+champs chacune (§11).*
 **Aucune ligne de code n'a été écrite pour cet audit. Rien n'est implémenté.**
 
 Objet : déterminer si le moteur existant peut porter le temps, les personnes, le contexte, le
@@ -156,6 +160,57 @@ Clés : `wedding_city_accounts_v1`, `_active_account_v1`, `_projects_v1`, `_acti
 `deleteStoredProject()` supprime le projet et son état.
 → **GARDER.** Mais : **JSON en clair**, aucun chiffrement, aucune expiration, **aucune suppression
 d'une personne** (seulement d'un projet entier), **aucun export**, aucune journalisation des accès.
+
+### 1.19 La « Timeline potentiellement infinie » — ce que le code autorise réellement
+
+*(Mesuré après coup : ce point était sous-traité dans la première version de cet audit, alors qu'il
+conditionne toute l'ambition « n'importe quelle journée, mission ou tournée ».)*
+
+**Le moteur refuse aujourd'hui tout ce qui dépasse trente heures.** Une seule ligne :
+
+```
+// src/game/weddingStore.ts:1947
+private canPlacePhase(startHour: number, duration: number): boolean {
+  ...
+  return startHour >= 0 && startHour + duration <= 30;
+}
+```
+
+**Bonne nouvelle architecturale :** c'est *la seule* porte. Elle est appelée depuis **dix** endroits
+— `createPhase`, `setPhaseTime`, `setPhaseDuration`, `movePhaseToIndex`, `shiftPhaseAndFollowing`,
+`shiftPhasesAfter`, `applyIntakePlan`, `scenarioShiftPhase`, `applyScenario`, `previewMoveToIndex`.
+Il n'existe aucun contournement : toute écriture temporelle du produit passe par là.
+
+**Mauvaise nouvelle fonctionnelle :** une tournée, un voyage, une mission de trois jours ou une
+organisation familiale hebdomadaire sont **refusés silencieusement** (la méthode renvoie `false` /
+`null`). Le produit ne dit même pas pourquoi.
+
+Ce qu'il faudrait toucher, et rien d'autre — inventaire exhaustif mesuré :
+
+| Endroit | Ce qui suppose une seule journée |
+|---|---|
+| `canPlacePhase` | le plafond `<= 30` |
+| `formatHour()` | `Math.floor(total / 60) % 24` — au-delà de 24 h, l'heure « retombe » sans dire quel jour |
+| `formatHourWithDay()` | ne connaît qu'un seul lendemain (`h >= 24 → « (+1) »`) |
+| `% 24` ailleurs | **23 occurrences** (10 dans le store, 13 dans les composants) : chacune est une horloge murale qui a perdu la date |
+| `ScenariosPanel` | rails de comparaison **codés en dur** de 7 h à 27 h |
+| `TimelineStudio` | bornes déjà **dynamiques** (`Math.min/max` sur les moments) — cette surface-là est prête |
+| `LandingFilm` | bornes fixes 8 h → 29 h, mais c'est une démonstration éditoriale, pas le produit |
+| `WeddingProject.weddingDate` | **une seule date**, pas de date de fin (12 usages) — une tournée n'a pas « une date » |
+| `normalizeNightHour` | règle « une heure < 6 h devient +24 » : juste pour une nuit, fausse pour trois jours |
+| `atmosphereForHour` | déjà modulo 24 : **compatible multi-jour sans changement** |
+
+**Verdict.** L'obstacle n'est pas conceptuel : le modèle stocke une heure décimale, qui pourrait
+valoir 74,5 aussi bien que 17,5. L'obstacle est une convention d'affichage répandue dans vingt-trois
+endroits, plus un plafond dans une ligne. C'est faisable, ce n'est pas anodin, et cela ne doit pas
+être fait en même temps que le consentement : ce sont deux passes distinctes, avec deux risques de
+régression distincts. La pellicule est le cœur du produit ; on ne touche pas à son échelle en passant.
+
+**Conséquence pour la stratégie** : « la Timeline devient potentiellement infinie » est une décision
+d'ingénierie à part entière (classée **B-15** puis détaillée en **B-19/B-20** ci-dessous), pas un
+effet de bord du contexte vivant.
+
+---
 
 ---
 
@@ -377,6 +432,79 @@ peuvent.
 
 ---
 
+## 8 bis. AUDIT DE SÉCURITÉ ET DE CONFIDENTIALITÉ — LES DOUZE POINTS, UN PAR UN
+
+*(Réponse point par point à la liste du brief. « Aujourd'hui » = état réel mesuré au commit
+`0f34488`. Aucun de ces points n'est implémenté ; ce sont des exigences, pas des promesses.)*
+
+**1. Données personnelles potentiellement sensibles.**
+Déjà présentes : `Guest.dietary` (santé), `Person.phone`, `Person.email`, `Person.notes` (texte
+libre, donc contenu imprévisible), `craft.status` (situation professionnelle), `craft.fee`
+(rémunération), `craft.professionalNumber`, `phase.meal.allergies`, `phase.notes`, `vendor.notes`.
+Envisagées : allergie critique, accessibilité, mobilité, assistance, langue, contact d'urgence.
+**Sept champs de texte libre** peuvent déjà contenir n'importe quoi — c'est le vrai angle mort.
+
+**2. Données à ne jamais collecter par défaut.**
+Aucune donnée de santé, aucun handicap, aucune position, aucune religion, aucune origine, aucune
+donnée bancaire, aucun document d'identité, aucun numéro de sécurité sociale. Règle de conception :
+**un champ sensible n'existe pas tant que la personne ne l'a pas créé.** Pas de formulaire vide qui
+réclame.
+
+**3. Consentements.** Voir §9 : un consentement par finalité, jamais global ; `grantedVia` distingue
+« écrit par la personne » de « transcrit par un tiers ». **Aucun `DeclaredFact` ne peut exister sans
+`consentId`** — contrainte de construction, pas de discipline.
+
+**4. Révocation.** Un geste, immédiat, sans justification, aussi accessible que l'ajout.
+Techniquement : `revokedAt` posé, le fait disparaît de **toutes** les projections au render suivant.
+Le consentement, lui, n'est pas supprimé : sa trace prouve que la personne a retiré son accord.
+**Corollaire non négociable :** si le fait a été recopié dans un document généré, la révocation est
+impossible à honorer. → interdiction de recopier (§4.4).
+
+**5. Qui peut voir quoi.** Quatre visibilités (`self`, `organiser`, `mission`, `emergency`) × trois
+capacités nouvelles, lues par le modèle de permissions existant. Tableau complet en §10.
+**Réserve capitale :** aujourd'hui `can()` renvoie `true` sans membership — sans serveur, ceci est
+une convention d'affichage, **pas une protection**. À écrire dans l'interface, pas à sous-entendre.
+
+**6. Durée de conservation.** Rien aujourd'hui : un état de 2027 restera en 2032.
+Proposition : `expiresAt` par défaut = date de l'événement + 30 jours pour un fait contextuel ;
+au-delà, le produit propose la suppression et ne la fait pas dans le dos de l'utilisateur.
+
+**7. Suppression.** Aujourd'hui, seul `deleteStoredProject()` existe — **un projet entier, jamais une
+personne**. Manquent : supprimer une personne et tout ce qui la concerne, supprimer un fait,
+supprimer tous les faits d'un événement. Sans cela, l'article 17 du RGPD n'est pas satisfaisable.
+
+**8. Séparation profil public / professionnel / contextuel.**
+Public = `displayName`, `portraitMediaId`. Professionnel = `craft`. Contextuel = `declared`
+(à créer). **Le contextuel ne doit apparaître dans aucune** projection éditoriale (`worldModel`),
+aucun document généré, aucun export, aucun index de recherche, aucun libellé de tâche, aucun titre de
+média. Ce sont cinq interdictions vérifiables par test.
+
+**9. Traçabilité des accès sensibles.**
+Aujourd'hui : **aucune journalisation, nulle part**. Proposition (A-08) : toute lecture d'un fait
+`emergency` laisse une ligne horodatée, lisible **par la personne concernée en premier**. C'est ce
+qui rend le niveau `emergency` défendable ; sans lui, il ne l'est pas.
+
+**10. Risques d'abus.** Sept, identifiés : (a) contrôle de présence déguisé en organisation ;
+(b) tri d'invités sur un critère sensible ; (c) constitution d'un fichier de personnes vulnérables ;
+(d) transmission d'une allergie à un prestataire non concerné par « facilité » ; (e) contact
+d'urgence utilisé comme carnet d'adresses ; (f) rapprochement par homonymie transportant un fait
+sensible sur la mauvaise personne ; (g) organisateur qui exige une déclaration comme condition de
+participation — **le produit ne doit jamais rendre un champ obligatoire**.
+
+**11. Fonctionnalités exigeant un service externe réel.**
+Notification (SMS, push, e-mail), proximité entre appareils, synchronisation multi-appareils,
+authentification réelle, chiffrement défendable, horodatage opposable, signature de document.
+**Toutes classées C ou D.** Sans serveur, aucune n'existe — et `Invitation.scope: 'local'` le dit
+déjà dans le code.
+
+**12. Ne jamais simuler une protection ou une intervention.**
+Interdits explicites, à inscrire dans les tests : « l'équipe a été prévenue », « les secours ont été
+contactés », « 3 personnes ont été alertées », « données chiffrées », « accès sécurisé », toute barre
+de progression d'envoi, toute confirmation d'acheminement. Le produit peut afficher **une liste de
+personnes à appeler** et **les numéros officiels** ; il ne peut rien affirmer d'autre.
+
+---
+
 ## 9. MODÈLE DE CONSENTEMENT PROPOSÉ
 
 ### 9.1 Cinq principes
@@ -431,116 +559,231 @@ question, `isOrchestrator()` est branché. **Ce qui manque, c'est le fait et son
 
 ---
 
-## 11. DIX-HUIT INNOVATIONS, CLASSÉES
+## 11. VINGT INNOVATIONS, CLASSÉES ET SPÉCIFIÉES
 
-Classement : **A** compatible tout de suite · **B** évolution locale · **C** exige un service externe
-réel · **D** à ne pas implémenter.
+Classement : **A** compatible avec le moteur actuel · **B** évolution locale · **C** exige un service
+externe réel · **D** à ne pas implémenter.
+Chaque fiche porte les dix champs demandés. *SdV* = source de vérité.
 
-### CLASSE A — le moteur actuel suffit
+---
 
-**A-01 · La proximité par la pellicule (« qui est là, maintenant »)**
-- *Problème* : savoir qui est présent, sans capteur.
-- *Fonctionnement* : `phase` en cours + `personIds` + `primaryPlaceId`. La présence est **déclarée par
-  l'organisation**, pas mesurée.
-- *Données* : existantes. *Consentement* : aucun nouveau (déjà su de l'organisateur).
-- *Source de vérité* : la Timeline. *Doublon* : nul. *Difficulté* : faible.
-- *Confidentialité* : faible **si** cela reste réservé à l'organisateur — sinon R6.
-- *Valeur* : **c'est la réponse honnête à la « proximité » du brief**, sans GPS et sans serveur.
+### CLASSE A — le moteur existant suffit
 
-**A-02 · L'agrégat au lieu du nom**
-- *Problème* : le traiteur n'a pas besoin de savoir qui est allergique.
-- *Fonctionnement* : `phaseFindings()` publie « 4 informations alimentaires », jamais la liste.
-- *Données* : `Guest.dietary` existant. *Consentement* : à créer pour aller plus loin.
-- *Doublon* : nul. *Difficulté* : faible. *Confidentialité* : **réduit** le risque existant.
-- *Valeur* : première réduction concrète de R1.
+**A-01 · LA PROXIMITÉ PAR LA PELLICULE**
+- *Problème résolu* : savoir qui est réellement présent à un moment, sans capteur ni géolocalisation.
+- *Fonctionnement* : le moment en cours donne `personIds` et `primaryPlaceId`. La présence est
+  **déclarée par l'organisation**, jamais mesurée. « Proche » signifie « attendu au même moment, au
+  même endroit ».
+- *Données nécessaires* : aucune nouvelle — `TimelinePhase.personIds`, `primaryPlaceId`, l'heure.
+- *Consentement nécessaire* : aucun nouveau (l'organisateur sait déjà qui il a placé) ; un
+  consentement devient nécessaire dès que la liste sort du cercle de l'organisation.
+- *SdV* : la Timeline. — *Doublon* : nul. — *Difficulté* : faible.
+- *Risque de confidentialité* : **moyen** — devient du contrôle de présence si l'historique est
+  conservé (R6). Mitigation : lecture de l'instant, jamais d'historique.
+- *Valeur réelle* : **élevée.** C'est la réponse honnête à la « proximité » du brief, disponible
+  immédiatement, sans serveur et sans GPS.
 
-**A-03 · Une demande ouverte aux volontaires déclarés**
-- *Problème* : « besoin de quelqu'un pour récupérer le matériel ».
-- *Fonctionnement* : `TaskEntity` + `openTo`. Le produit **liste** les personnes ayant accepté ce type
-  de demande ; **un humain contacte**. Aucun déclenchement.
-- *Consentement* : « j'accepte d'être sollicité pour ce type d'aide », par événement.
-- *Doublon* : nul (la mission existe). *Difficulté* : faible.
-- *Confidentialité* : moyenne. *Valeur* : forte pour le monde associatif.
+**A-02 · L'AGRÉGAT AU LIEU DU NOM**
+- *Problème résolu* : le traiteur doit adapter quatre repas, pas savoir qui est allergique.
+- *Fonctionnement* : `phaseFindings()` publie « 4 informations alimentaires à prendre en compte ».
+  Le nom n'apparaît que si le service en salle l'exige **et** que la personne l'a accepté.
+- *Données* : `Guest.dietary` existant (puis `DeclaredFact`).
+- *Consentement* : aucun pour l'agrégat anonyme ; explicite pour toute désignation nominative.
+- *SdV* : la personne. — *Doublon* : nul. — *Difficulté* : faible.
+- *Confidentialité* : **réduit** le risque existant R1. — *Valeur* : élevée, immédiate.
 
-**A-04 · L'indisponibilité déclarée**
-- *Fonctionnement* : créneaux déclarés, lus par `findReplacements()`. **Un silence n'est jamais une
-  disponibilité** — le produit affiche « inconnue ».
-- *Doublon* : nul. *Difficulté* : faible. *Confidentialité* : faible. *Valeur* : ferme la boucle du
-  remplacement.
+**A-03 · LA DEMANDE OUVERTE AUX VOLONTAIRES DÉCLARÉS**
+- *Problème résolu* : « il faut quelqu'un pour aller chercher le matériel à 15 h ».
+- *Fonctionnement* : une `TaskEntity` avec `openTo`. Le produit **liste** les personnes ayant accepté
+  ce type de sollicitation ; **un humain les contacte**. Aucun déclenchement, aucun envoi.
+- *Données* : tâches existantes + une déclaration de volontariat.
+- *Consentement* : « j'accepte d'être sollicité pour ce type d'aide », par événement, révocable.
+- *SdV* : la tâche. — *Doublon* : nul (`createMission` existe). — *Difficulté* : faible.
+- *Confidentialité* : moyenne (révèle une disponibilité à l'organisation).
+- *Valeur* : **élevée pour le monde associatif**, qui vit de cela.
 
-**A-05 · La procédure écrite, attachée au moment**
-- *Fonctionnement* : un `MediaAsset` document, rattaché au moment, lisible par les rôles autorisés.
-  Écrite par un humain — **le produit n'en rédige aucune**.
-- *Doublon* : nul. *Difficulté* : faible.
-- *Confidentialité* : **élevée si elle contient un fait sensible** → l'interdire dans un document.
-- *Valeur* : le « que fait-on si » cesse d'être dans la tête d'une seule personne.
+**A-04 · L'INDISPONIBILITÉ DÉCLARÉE**
+- *Problème résolu* : `findReplacements()` propose des gens dont on ignore s'ils sont libres.
+- *Fonctionnement* : créneaux déclarés par la personne. **Un silence n'est jamais une
+  disponibilité** : le produit affiche « inconnue », ce qui est la vérité.
+- *Données* : créneaux (`DeclaredFact.kind = 'availability'`).
+- *Consentement* : implicite (la personne l'écrit elle-même), visibilité `organiser`.
+- *SdV* : la personne. — *Doublon* : nul. — *Difficulté* : faible.
+- *Confidentialité* : faible. — *Valeur* : moyenne à élevée ; ferme la boucle du remplacement.
 
-**A-06 · Le plan « imprévu » nommé**
-- *Fonctionnement* : scénario existant + une cause (pluie, retard, transport annulé, matériel
-  manquant) ; `propagationImpact` nomme les conséquences.
-- *Doublon* : nul si le moteur reste unique. *Difficulté* : moyenne. *Valeur* : forte.
+**A-05 · LA PROCÉDURE ÉCRITE, ATTACHÉE AU MOMENT**
+- *Problème résolu* : « que fait-on s'il pleut / si le courant saute » vit dans la tête d'une seule
+  personne.
+- *Fonctionnement* : un `MediaAsset` document rattaché au moment, écrit **par un humain**. Le produit
+  n'en rédige aucune et n'en suggère aucune.
+- *Données* : documents existants. — *Consentement* : aucun (pas de donnée personnelle).
+- *SdV* : le document. — *Doublon* : nul. — *Difficulté* : faible.
+- *Confidentialité* : **élevée si elle contient un fait sensible** → interdiction stricte d'y recopier
+  un `DeclaredFact` (§4.4).
+- *Valeur* : élevée, et sans aucun risque technique.
 
-**A-07 · Le contact d'urgence comme relation**
-- *Fonctionnement* : `PersonRelationship.kind = 'emergency_contact'`, visible seulement en `emergency`.
-- *Consentement* : **deux** — celui de la personne, et l'information du tiers (R5).
-- *Doublon* : nul. *Difficulté* : faible. *Confidentialité* : élevée.
-- *Valeur* : réelle, à condition de ne rien promettre d'automatique.
+**A-06 · LE PLAN « IMPRÉVU » NOMMÉ**
+- *Problème résolu* : un scénario est aujourd'hui un décalage anonyme.
+- *Fonctionnement* : le scénario existant reçoit une cause (pluie, retard, transport annulé, matériel
+  manquant, artiste indisponible) ; `propagationImpact()` nomme les conséquences et les conflits.
+- *Données* : scénarios + causalité, tous deux existants. — *Consentement* : aucun.
+- *SdV* : la Timeline. — *Doublon* : nul **si le moteur reste unique**. — *Difficulté* : moyenne.
+- *Confidentialité* : nulle. — *Valeur* : élevée.
 
-**A-08 · Le journal des accès sensibles**
-- *Fonctionnement* : chaque consultation d'un fait `emergency` laisse une ligne, lisible par la
-  personne concernée.
-- *Doublon* : nul. *Difficulté* : faible. *Valeur* : **c'est ce qui rend le reste défendable.**
+**A-07 · LE CONTACT D'URGENCE COMME RELATION**
+- *Problème résolu* : personne ne sait qui prévenir, et l'information dort dans un téléphone.
+- *Fonctionnement* : `PersonRelationship.kind = 'emergency_contact'`, visible uniquement au niveau
+  `emergency`, pendant l'événement.
+- *Données* : relations existantes + un consentement.
+- *Consentement* : **double** — celui de la personne, et l'information du tiers, qui n'a rien demandé
+  (R5). Sans le second, la fonction ne devrait pas exister.
+- *SdV* : la relation. — *Doublon* : nul. — *Difficulté* : faible.
+- *Confidentialité* : **élevée**. — *Valeur* : réelle, à condition de ne rien promettre d'automatique.
+
+**A-08 · LE JOURNAL DES ACCÈS SENSIBLES**
+- *Problème résolu* : personne ne sait qui a consulté quoi.
+- *Fonctionnement* : toute lecture d'un fait `emergency` laisse une ligne horodatée, lisible **par la
+  personne concernée en premier**.
+- *Données* : une liste d'événements d'accès. — *Consentement* : aucun (c'est une protection).
+- *SdV* : le journal. — *Doublon* : nul. — *Difficulté* : faible.
+- *Confidentialité* : **c'est ce qui rend le niveau `emergency` défendable.**
+- *Valeur* : **structurelle** — sans lui, je déconseille d'ouvrir le niveau `emergency`.
+
+**A-09 · LE MOMENT QUI DIT CE QUI LUI MANQUE, CÔTÉ PERSONNES**
+- *Problème résolu* : on découvre au dernier moment qu'aucun référent n'est prévu sur un moment à
+  120 personnes.
+- *Fonctionnement* : `phaseFindings()` gagne des lignes « aucun référent désigné », « aucune consigne
+  écrite pour ce moment » — **des constats, pas des injonctions**.
+- *Données* : existantes + rôles. — *Consentement* : aucun.
+- *SdV* : la Timeline. — *Doublon* : nul (troisième appelant d'un moteur existant). — *Difficulté* :
+  faible. — *Confidentialité* : faible. — *Valeur* : élevée.
+
+---
 
 ### CLASSE B — évolution locale du moteur
 
-**B-09 · `DeclaredFact` + `Consent`** — les deux entités du §4. *Difficulté* : élevée.
-*Confidentialité* : **le sujet même**. *Valeur* : c'est la fondation ; rien d'autre ne tient sans elle.
+**B-10 · MIGRER `Guest.dietary` ET `phase.meal.allergies` — LA PRIORITÉ ABSOLUE**
+- *Problème résolu* : une donnée de santé est **déjà** affichée sans contrôle d'accès, à travers
+  quatre surfaces, et deux champs concurrents la décrivent.
+- *Fonctionnement* : une seule source (`DeclaredFact`), les deux anciens champs devenant des lectures
+  dérivées, avec migration des données existantes.
+- *Données* : celles déjà stockées. — *Consentement* : rétroactif à demander, sinon le fait passe
+  `À CONFIRMER` et cesse d'être servi nominativement.
+- *SdV* : la personne. — *Doublon* : **supprime** un doublon existant. — *Difficulté* : moyenne.
+- *Confidentialité* : **ferme R1**, le risque le plus grave du produit aujourd'hui.
+- *Valeur* : **la plus haute du document.** Rien d'autre ne devrait être écrit avant.
 
-**B-10 · Migration de `Guest.dietary` et `meal.allergies`** — supprimer le doublon avant qu'il ne
-devienne triple, et **fermer R1**. *Difficulté* : moyenne. *Priorité* : **la plus haute du document.**
+**B-11 · `DeclaredFact` + `Consent` — LA FONDATION**
+- *Problème résolu* : le produit n'a aujourd'hui aucun moyen de dire « cette information est à moi,
+  et voici qui peut la voir ».
+- *Fonctionnement* : les deux structures du §4, sans aucune troisième entité.
+- *Données* : nouvelles, minimales. — *Consentement* : **c'est le sujet même**.
+- *SdV* : la personne. — *Doublon* : nul si les huit notions du brief y sont absorbées (§3).
+- *Difficulté* : **élevée** (modèle, persistance, migration, tests, interface).
+- *Confidentialité* : maximale — tout en dépend. — *Valeur* : fondatrice ; rien ne tient sans elle.
 
-**B-11 · Trois capacités nouvelles** (`context.view.organiser|mission|emergency`) dans le modèle de
-permissions existant. *Doublon* : nul (aucun second système). *Difficulté* : faible.
+**B-12 · TROIS CAPACITÉS NOUVELLES**
+- *Problème résolu* : aucune capacité existante ne parle de donnée sensible.
+- *Fonctionnement* : `context.view.organiser`, `context.view.mission`, `context.view.emergency`
+  ajoutées à `Capability` et à `ROLE_CAPABILITIES`. **Aucun second système de permissions.**
+- *Données* : existantes. — *Consentement* : aucun (c'est la mécanique d'accès).
+- *SdV* : la membership. — *Doublon* : nul. — *Difficulté* : faible.
+- *Confidentialité* : élevée — **et à ne jamais présenter comme une sécurité** tant que `can()` reste
+  permissif sans serveur. — *Valeur* : élevée.
 
-**B-12 · Expiration et effacement** — durée de conservation par défaut, suppression d'une personne,
-export de ses données. *Difficulté* : moyenne. *Valeur* : **conformité, pas confort.**
+**B-13 · EXPIRATION, SUPPRESSION, EXPORT**
+- *Problème résolu* : aucune durée de conservation, aucune suppression d'une personne, aucun export.
+- *Fonctionnement* : `expiresAt` par défaut ; « supprimer cette personne et tout ce qui la
+  concerne » ; export JSON de ses données.
+- *Données* : existantes. — *Consentement* : sans objet.
+- *SdV* : la persistance. — *Doublon* : nul. — *Difficulté* : moyenne.
+- *Confidentialité* : **conditionne les articles 17 et 20 du RGPD.**
+- *Valeur* : conformité, pas confort — donc non négociable si B-11 est fait.
 
-**B-13 · Exclusion structurelle de l'index** — un fait sensible n'entre jamais dans
-`searchEverything`. *Difficulté* : faible. *Valeur* : ferme R8.
+**B-14 · EXCLUSION STRUCTURELLE DE L'INDEX**
+- *Problème résolu* : `searchEverything` indexe déjà `craft.requirements` ; il indexerait naïvement
+  les faits sensibles.
+- *Fonctionnement* : les faits sensibles ne sont **jamais** ajoutés à l'index — exclusion à la
+  source, pas filtrage à l'affichage.
+- *Données* : existantes. — *Consentement* : sans objet. — *SdV* : la recherche.
+- *Doublon* : nul. — *Difficulté* : faible. — *Confidentialité* : ferme R8. — *Valeur* : élevée.
 
-**B-14 · La feuille de route enrichie du contexte de mission** — le traiteur reçoit ses agrégats, le
-régisseur ses besoins techniques, chacun **seulement pour ses moments**. *Difficulté* : moyenne.
+**B-15 · LA FEUILLE DE ROUTE ENRICHIE DU CONTEXTE DE MISSION**
+- *Problème résolu* : chaque métier doit recevoir ce qui le concerne, et seulement cela.
+- *Fonctionnement* : `getCallSheet()` gagne un bloc contextuel filtré par la visibilité `mission` et
+  limité **aux moments de cette personne**.
+- *Données* : `DeclaredFact` + `craft`. — *Consentement* : visibilité `mission` explicite.
+- *SdV* : la Timeline. — *Doublon* : nul. — *Difficulté* : moyenne.
+- *Confidentialité* : élevée (c'est là que la donnée sort du cercle). — *Valeur* : élevée.
 
-**B-15 · Timeline non bornée (au-delà de 30 h)** — condition technique pour « une tournée, un voyage,
-une mission ». *Difficulté* : élevée, **risque de régression réel** sur la pellicule.
+**B-16 · LE MODE « RÉFÉRENT »**
+- *Problème résolu* : la personne responsable d'un moment n'a aucune vue dédiée.
+- *Fonctionnement* : une projection : ce qui est déclaré pour le moment en cours, **en agrégat**, les
+  procédures écrites, et les numéros officiels. **Aucune alerte, aucun envoi, aucune carte.**
+- *Données* : existantes + faits. — *Consentement* : `organiser` et `emergency`.
+- *SdV* : la Timeline. — *Doublon* : nul (une projection de plus, pas une page de plus).
+- *Difficulté* : moyenne. — *Confidentialité* : **élevée** — à n'ouvrir qu'à un rôle nommément
+  désigné, et journalisée (A-08). — *Valeur* : élevée.
 
-**B-16 · Le mode « référent »** — une projection dédiée : ce qui est déclaré pour le moment en cours,
-en agrégat, avec les procédures et les numéros officiels. **Aucune alerte, aucun envoi.**
-*Difficulté* : moyenne. *Confidentialité* : élevée — à n'ouvrir qu'à un rôle nommément désigné.
+**B-17 · LA TIMELINE MULTI-JOUR**
+- *Problème résolu* : une tournée, un voyage, une mission ou une semaine familiale sont **refusés**
+  par `canPlacePhase` (`<= 30`).
+- *Fonctionnement* : plafond porté à *n* jours, heures affichées avec leur jour, rails de scénario
+  dynamiques ; voir l'inventaire exhaustif du §1.19.
+- *Données* : existantes (l'heure décimale suffit) + une date de fin sur le projet.
+- *Consentement* : aucun. — *SdV* : la Timeline. — *Doublon* : nul.
+- *Difficulté* : **élevée, avec risque de régression réel** sur 23 points d'affichage.
+- *Confidentialité* : nulle. — *Valeur* : **c'est la condition unique de l'universalité promise.**
 
-### CLASSE C — exige un service externe réel (donc une décision, un budget, un cadre juridique)
+**B-18 · LE TYPE « JOURNÉE » ET LE TYPE « MISSION »**
+- *Problème résolu* : organiser une journée ordinaire ou une mission professionnelle sans passer par
+  le vocabulaire du mariage.
+- *Fonctionnement* : deux schémas de plus dans `EVENT_TYPES` (qui en porte déjà onze, chacun avec son
+  vocabulaire, ses questions et sa trame estimée). **Aucune catégorie indépendante, aucun second
+  moteur** — exactement le mécanisme existant.
+- *Données* : aucune nouvelle. — *Consentement* : aucun. — *SdV* : le type d'événement.
+- *Doublon* : nul. — *Difficulté* : **faible**. — *Confidentialité* : nulle.
+- *Valeur* : élevée au regard de l'ambition — et c'est, de loin, le chemin le moins cher vers
+  « n'importe quelle succession d'actions ».
 
-**C-17 · Proximité réelle entre deux appareils** — exigerait géolocalisation, serveur, temps réel,
-consentement ePrivacy, AIPD. **Techniquement impossible aujourd'hui.**
-*Valeur potentielle* : forte. *Risque* : maximal. → à n'étudier qu'après une décision explicite.
+---
 
-**C-18 · Notification réelle (« prévenir l'équipe »)** — exigerait un transport (SMS, push, e-mail) et
-un serveur. Sans lui, **toute formulation laissant croire qu'un message part est un mensonge
-dangereux** (R2).
+### CLASSE C — exige un service externe réel
+
+**C-19 · LA PROXIMITÉ RÉELLE ENTRE APPAREILS**
+- *Problème résolu* : savoir qui est physiquement près, et non qui était prévu.
+- *Fonctionnement* : géolocalisation consentie + serveur + temps réel + calcul de distance
+  approximative, **sans jamais afficher de position précise**.
+- *Données* : position — la donnée la plus sensible du document.
+- *Consentement* : explicite, révocable, distinct (ePrivacy), limité à la durée de l'événement.
+- *SdV* : l'appareil de la personne. — *Doublon* : nul. — *Difficulté* : **très élevée.**
+- *Confidentialité* : **maximale** ; AIPD obligatoire (§8).
+- *Valeur* : potentiellement forte, **mais A-01 en offre 80 % sans aucun de ces risques.**
+  → à n'étudier qu'après une décision explicite, jamais par glissement.
+
+**C-20 · LA NOTIFICATION RÉELLE**
+- *Problème résolu* : « prévenir l'équipe désignée » suppose qu'un message parte.
+- *Fonctionnement* : transport réel (SMS, push, e-mail) + serveur + accusé de remise.
+- *Données* : coordonnées. — *Consentement* : explicite par canal.
+- *SdV* : le service d'envoi. — *Doublon* : nul. — *Difficulté* : élevée.
+- *Confidentialité* : élevée. — *Valeur* : forte.
+- **Tant qu'il n'existe pas, aucune formulation du produit ne doit laisser croire qu'un message est
+  parti** (R2). C'est la ligne rouge la plus facile à franchir par inadvertance.
+
+---
 
 ### CLASSE D — à ne pas implémenter
 
-- **D-a · Carte des personnes présentes ou vulnérables.** Explicitement exclue par le brief, et à
-  raison.
-- **D-b · Détection automatique d'un besoin d'assistance.** Ce serait un diagnostic.
-- **D-c · Niveau de gravité, tri, conduite à tenir.** Vocabulaire médical → risque MDR.
-- **D-d · Alerte automatique sans validation humaine.** Interdit par le brief, dangereux en soi.
-- **D-e · Contact automatique d'un service d'urgence.** Jamais. Afficher le numéro officiel, rien de
-  plus.
-- **D-f · Historique de présence d'une personne dans le temps.** C'est de la surveillance (R6).
-- **D-g · Déduction d'un fait sensible depuis un document importé, en `CONFIRMÉ`.** Une allergie ne
-  se déduit pas.
-- **D-h · Score de fiabilité ou de disponibilité d'une personne.** Notation des humains : non.
+| # | Innovation refusée | Raison |
+|---|---|---|
+| D-a | Carte des personnes présentes ou vulnérables | Exclue par le brief ; constitue un fichier de vulnérabilité |
+| D-b | Détection automatique d'un besoin d'assistance | Ce serait un diagnostic |
+| D-c | Niveau de gravité, tri, conduite à tenir | Vocabulaire médical → risque de qualification MDR |
+| D-d | Alerte automatique sans validation humaine | Interdit par le brief, dangereux en soi |
+| D-e | Contact automatique d'un service d'urgence | Jamais. Afficher le numéro officiel, rien de plus |
+| D-f | Historique de présence d'une personne | C'est de la surveillance (R6) |
+| D-g | Déduction d'un fait sensible en `CONFIRMÉ` depuis un import | Une allergie ne se déduit pas |
+| D-h | Score de fiabilité ou de disponibilité d'une personne | Notation des humains : non |
 
 ---
 
@@ -553,13 +796,25 @@ produit nouveau : c'est **une dimension de plus sur la même personne, avec une 
 **Faut-il le faire maintenant, et dans cet ordre ?** Non, pas dans l'ordre du brief. L'ordre
 défendable est celui du risque, pas celui de l'ambition :
 
-1. **B-10** — fermer la fuite qui existe déjà (`Guest.dietary` affiché sans contrôle). Rien d'autre
-   ne devrait être écrit avant.
-2. **B-09 + B-11** — le fait déclaré, son consentement, les trois capacités.
-3. **A-02, A-05, A-07, A-08** — l'agrégat, la procédure, le contact, le journal.
-4. **B-12, B-13** — expiration, effacement, non-indexation.
-5. **A-01, A-03, A-04, A-06, B-14, B-16** — la proximité par la pellicule, l'entraide, l'imprévu.
-6. **C-17, C-18** — seulement après une décision explicite sur un serveur, et une AIPD.
+1. **B-10** — fermer la fuite qui existe déjà (`Guest.dietary` affiché sans contrôle, et déjà
+   dédoublé par `phase.meal.allergies`). Rien d'autre ne devrait être écrit avant.
+2. **B-11 + B-12** — le fait déclaré, son consentement, les trois capacités.
+3. **A-02, A-05, A-07, A-08, A-09** — l'agrégat, la procédure, le contact, le journal, le manque.
+4. **B-13, B-14** — expiration, effacement, export, non-indexation.
+5. **A-01, A-03, A-04, A-06, B-15, B-16** — la proximité par la pellicule, l'entraide, l'imprévu,
+   les feuilles de route contextuelles, le mode référent.
+6. **B-18** puis **B-17** — le type « journée » et le type « mission » d'abord (faible coût, forte
+   portée), la timeline multi-jour ensuite, **seule, sur une passe entière**.
+7. **C-19, C-20** — seulement après une décision explicite sur un serveur, et une AIPD.
+
+**Sur l'universalité, une remarque que je dois faire** : le brief postule que la Timeline « devient
+potentiellement infinie ». Elle ne l'est pas — `canPlacePhase` la borne à trente heures, et
+vingt-trois affichages supposent une seule journée (§1.19). Mais l'universalité tient d'abord au
+**vocabulaire**, pas à la durée : le moteur porte déjà onze natures d'événement, chacune avec ses
+questions et sa trame. Deux schémas de plus (**B-18**, difficulté faible) ouvrent la journée
+ordinaire et la mission professionnelle **sans toucher à l'échelle**. La tournée et le voyage, eux,
+exigent réellement **B-17**. Faire B-18 avant B-17, c'est obtenir l'essentiel de la promesse pour un
+dixième du risque.
 
 **Ce que je recommande de refuser, même si le moteur pourrait l'écrire :** toute formulation qui
 laisse croire qu'une alerte part, qu'une personne a été prévenue, qu'une position est connue ou
