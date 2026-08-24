@@ -11,7 +11,7 @@
 // ---------------------------------------------------------------------------
 
 export type EventTypeId =
-  | 'mariage' | 'anniversaire' | 'corporate' | 'seminaire' | 'soiree' | 'bapteme' | 'autre';
+  | 'mariage' | 'anniversaire' | 'fete' | 'seminaire' | 'convention' | 'soiree' | 'autre';
 
 export interface EventTypeSchema {
   id: EventTypeId;
@@ -77,6 +77,7 @@ const PARTY_MOMENTS: EventTypeSchema['momentWords'] = [
   { re: /soir[ée]e|party|after/i, label: 'Soirée' },
 ];
 
+/** Kept for a christening-like day: still reachable through « Autre ». */
 const CEREMONY_MOMENTS: EventTypeSchema['momentWords'] = [
   { re: /accueil/i, label: 'Accueil' },
   { re: /c[ée]r[ée]monie|bapt[êe]me|b[ée]n[ée]diction|[ée]glise|temple/i, label: 'Cérémonie' },
@@ -119,19 +120,19 @@ export const EVENT_TYPES: EventTypeSchema[] = [
     intakeLine: 'Liste d’invités, devis du traiteur, playlist, photos de repérage.',
   },
   {
-    id: 'corporate',
-    label: 'Événement corporate',
-    principalsLabel: 'L’entreprise',
-    principalsQuestion: 'Quelle entreprise organise cet événement ? Le nom n’a pas été reconnu — écrivez-le.',
+    id: 'fete',
+    label: 'Fête',
+    principalsLabel: 'L’hôte',
+    principalsQuestion: 'Qui reçoit ? Le nom n’a pas été reconnu — écrivez-le.',
     fields: [
-      { key: 'principals', label: 'L’entreprise', placeholder: 'Nom de l’entreprise' },
+      { key: 'principals', label: 'L’hôte', placeholder: 'Nom ou prénom' },
       { key: 'date', label: 'Date', placeholder: 'AAAA-MM-JJ' },
-      { key: 'place', label: 'Lieu', placeholder: 'Siège, centre de conférences…' },
-      { key: 'headcount', label: 'Participants', placeholder: '250' },
+      { key: 'place', label: 'Lieu', placeholder: 'Maison, salle, jardin…' },
+      { key: 'headcount', label: 'Invités attendus', placeholder: '60' },
     ],
-    momentWords: PRO_MOMENTS,
-    headcountLabel: 'participants',
-    intakeLine: 'Programme, liste des participants, contrats prestataires, plan de salle.',
+    momentWords: PARTY_MOMENTS,
+    headcountLabel: 'invités',
+    intakeLine: 'Liste d’invités, playlist, devis du traiteur, plan du lieu.',
   },
   {
     id: 'seminaire',
@@ -164,19 +165,19 @@ export const EVENT_TYPES: EventTypeSchema[] = [
     intakeLine: 'Playlist, liste d’invités, devis, plan du lieu.',
   },
   {
-    id: 'bapteme',
-    label: 'Baptême',
-    principalsLabel: 'L’enfant',
-    principalsQuestion: 'Qui est baptisé ? Le prénom n’a pas été reconnu — écrivez-le.',
+    id: 'convention',
+    label: 'Convention',
+    principalsLabel: 'L’organisation',
+    principalsQuestion: 'Quelle organisation tient cette convention ? Le nom n’a pas été reconnu — écrivez-le.',
     fields: [
-      { key: 'principals', label: 'L’enfant', placeholder: 'Prénom' },
+      { key: 'principals', label: 'L’organisation', placeholder: 'Nom de l’entreprise ou de l’organisation' },
       { key: 'date', label: 'Date', placeholder: 'AAAA-MM-JJ' },
-      { key: 'place', label: 'Lieu', placeholder: 'Église, mairie, maison…' },
-      { key: 'headcount', label: 'Invités attendus', placeholder: '50' },
+      { key: 'place', label: 'Lieu', placeholder: 'Centre des congrès, siège…' },
+      { key: 'headcount', label: 'Participants', placeholder: '250' },
     ],
-    momentWords: CEREMONY_MOMENTS,
-    headcountLabel: 'invités',
-    intakeLine: 'Liste d’invités, traiteur, photographe, livret de cérémonie.',
+    momentWords: PRO_MOMENTS,
+    headcountLabel: 'participants',
+    intakeLine: 'Programme, liste des participants, contrats prestataires, plan de salle.',
   },
   {
     id: 'autre',
@@ -189,7 +190,7 @@ export const EVENT_TYPES: EventTypeSchema[] = [
       { key: 'place', label: 'Lieu', placeholder: 'Où cela se passe-t-il ?' },
       { key: 'headcount', label: 'Personnes attendues', placeholder: '30' },
     ],
-    momentWords: [...PARTY_MOMENTS, ...PRO_MOMENTS],
+    momentWords: [...PARTY_MOMENTS, ...PRO_MOMENTS, ...CEREMONY_MOMENTS],
     headcountLabel: 'personnes',
     intakeLine: 'Tout document décrivant le déroulé, les personnes ou les prestataires.',
   },

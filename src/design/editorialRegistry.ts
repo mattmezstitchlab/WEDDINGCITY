@@ -32,6 +32,8 @@ export interface EditorialAsset {
 export const EDITORIAL_PEOPLE: {
   id: string;
   role: string;
+  /** A first name for the demonstration — never a real guest of yours. */
+  firstName: string;
   name: string;
   portrait: EditorialAsset;
   /** The thread this person follows through the demonstration day. */
@@ -39,7 +41,8 @@ export const EDITORIAL_PEOPLE: {
 }[] = [
   {
     id: 'demo_mariee',
-    role: 'La mariée',
+    role: 'la mariée',
+    firstName: 'Émilie',
     name: 'Portrait de démonstration',
     portrait: {
       src: '/editorial/people/mariee.jpg',
@@ -49,12 +52,14 @@ export const EDITORIAL_PEOPLE: {
     thread: [
       { hour: '08:30', moment: 'Préparatifs' },
       { hour: '11:00', moment: 'Cérémonie' },
+      { hour: '17:30', moment: 'Cocktail' },
       { hour: '21:00', moment: 'Première danse' },
     ],
   },
   {
     id: 'demo_temoin',
-    role: 'Le témoin',
+    role: 'témoin',
+    firstName: 'Camille',
     name: 'Portrait de démonstration',
     portrait: {
       src: '/editorial/people/temoin.jpg',
@@ -69,7 +74,8 @@ export const EDITORIAL_PEOPLE: {
   },
   {
     id: 'demo_photographe',
-    role: 'Le photographe',
+    role: 'photographe',
+    firstName: 'Paul',
     name: 'Portrait de démonstration',
     portrait: {
       src: '/editorial/people/photographe.jpg',

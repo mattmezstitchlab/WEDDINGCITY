@@ -34,7 +34,37 @@ const CAUSALITY = [
   { icon: '👨‍🍳', label: 'Traiteur — service', from: '19:00', to: '19:30' },
 ];
 
-const SCENARIOS = [
+/**
+ * The two rails of the scenario demonstration. Positions come from the same
+ * 08:00 → 03:00 span the film uses, so the geometry is the real geometry of a
+ * day rather than a decorative bar.
+ */
+const RAIL_START = 8;
+const RAIL_END = 27;
+const railBlock = (hour: number, end: number, label: string, changed = false) => ({
+  label,
+  hour: `${String(Math.floor(hour) % 24).padStart(2, '0')}:${String(Math.round((hour % 1) * 60)).padStart(2, '0')}`,
+  left: ((hour - RAIL_START) / (RAIL_END - RAIL_START)) * 100,
+  width: Math.max(((end - hour) / (RAIL_END - RAIL_START)) * 100, 8),
+  changed,
+});
+
+const SCENARIO_RAILS = {
+  real: [
+    railBlock(11, 12.5, 'Cérémonie'),
+    railBlock(17.5, 19.5, 'Cocktail'),
+    railBlock(19.5, 21, 'Dîner'),
+    railBlock(23.5, 27, 'Party'),
+  ],
+  planB: [
+    railBlock(11, 12.5, 'Cérémonie'),
+    railBlock(17.5, 19.5, 'Cocktail · orangerie', true),
+    railBlock(20, 21.5, 'Dîner', true),
+    railBlock(23.5, 27, 'Party'),
+  ],
+};
+
+const LEGACY_SCENARIOS = [
   {
     id: 'A', title: 'Plan A', subtitle: 'Beau temps',
     lines: ['Cocktail dans le jardin', 'Photos au belvédère', 'Dîner sous l’orangerie'],
@@ -54,7 +84,6 @@ export function MirrorLanding() {
   const [projects, setProjects] = useState<ReturnType<typeof getStoredProjects>>([]);
   const [openMoment, setOpenMoment] = useState<number | null>(null);
   const [shifted, setShifted] = useState<{ from: number; delta: number } | null>(null);
-  const [scenario, setScenario] = useState('A');
   // The music demonstration recomputes its own hours from real durations.
   const [stretch, setStretch] = useState(0);
 
@@ -161,57 +190,47 @@ export function MirrorLanding() {
             Faites-la glisser dans les deux sens, zoomez, ouvrez une scène.
             C’est l’interface dans laquelle vous construirez la vôtre.
           </p>
-        </div>
-        <LandingFilm shifted={shifted} onOpenMoment={(i) => setOpenMoment(i)} />
-      </section>
-
-      {/* ======================================================= 03 CAUSALITÉ */}
-      <section className="wc-gj-band" aria-label="Un changement, tout se recalcule">
-        <div className="wc-gj-section-head">
-          <span className="wc-gj-index">03</span>
-          <h2 className="wc-gj-h2">Un changement. Tout se recalcule.</h2>
-          <p className="wc-gj-sub">
-            Décalez le cocktail d’une demi-heure : les photos, le dîner, la
-            musique, le DJ et le traiteur suivent. Le produit propose, vous
-            décidez — rien n’est réécrit sans vous.
-          </p>
-          <div className="wc-gj-actions">
-            <button
-              onClick={() => setShifted(shifted ? null : { from: 3, delta: 0.5 })}
-              className="wc-gj-cta"
-              data-landing="propagate"
-            >
-              {shifted ? 'Revenir en arrière' : '+30 min sur le cocktail'}
-            </button>
-            {shifted && <span className="wc-gj-note" data-landing="propagate-note">5 moments recalculés sur la pellicule.</span>}
+          <div className="wc-gj-demo-head" data-landing="demo-head">
+            <span className="wc-gj-demo-couple">MATT &amp; ÉMILIE</span>
+            <span className="wc-gj-demo-date">18 JUILLET 2027</span>
+            <span className="wc-gj-demo-tag">démonstration</span>
           </div>
         </div>
 
-        <ul className="wc-gj-cascade" data-landing="cascade">
-          {CAUSALITY.map((c) => (
-            <li key={c.label} className={`wc-gj-cascade-row${shifted ? ' is-shifted' : ''}`}>
-              <span aria-hidden className="wc-gj-cascade-icon">{c.icon}</span>
-              <span className="wc-gj-cascade-label">{c.label}</span>
-              <span className="wc-gj-cascade-time">{shifted ? c.to : c.from}</span>
-              {shifted && <span className="wc-gj-cascade-delta">+30 min</span>}
-            </li>
-          ))}
-        </ul>
-      </section>
+        <LandingFilm shifted={shifted} onOpenMoment={(i) => setOpenMoment(i)} />
 
-      {/* ========================================================= 04 MOMENTS */}
-      <SectionWithImage
-        index="04"
-        title="Chaque instant devient une scène."
-        body="Un moment n’est pas une ligne d’agenda : c’est un lieu, des personnes, des prestataires, une musique, un menu, des documents et des tâches — réunis à l’heure qui les concerne, et modifiables là."
-        asset={MOMENT_ASSETS.cocktail}
-        action={{ label: 'Ouvrir une scène', onClick: () => setOpenMoment(3), tag: 'open-scene' }}
-      />
+        {/* CAUSALITÉ — the control sits ON the film, so the consequence is read
+            without leaving it. Same engine as the product. */}
+        <div className="wc-gj-causality" data-landing="causality">
+          <button
+            onClick={() => setShifted(shifted ? null : { from: 3, delta: 0.5 })}
+            className="wc-gj-cta"
+            data-landing="propagate"
+          >
+            {shifted ? 'Revenir en arrière' : 'Décaler le cocktail de 30 min'}
+          </button>
+          <div className="wc-gj-causality-lines">
+            {CAUSALITY.map((c) => (
+              <span key={c.label} className={`wc-gj-causality-item${shifted ? ' is-shifted' : ''}`} data-landing="cascade-item">
+                <span aria-hidden>{c.icon}</span>
+                <span>{c.label}</span>
+                <b>{shifted ? c.to : c.from}</b>
+                {shifted && <em>+30 min</em>}
+              </span>
+            ))}
+          </div>
+          {shifted && (
+            <p className="wc-gj-note" data-landing="propagate-note">
+              5 moments recalculés sur la pellicule, et rien d’autre n’a bougé.
+            </p>
+          )}
+        </div>
+      </section>
 
       {/* ========================================================= 05 MUSIQUE */}
       <section className="wc-gj-cols" aria-label="La musique devient le temps">
         <div className="wc-gj-section-head">
-          <span className="wc-gj-index">05</span>
+          <span className="wc-gj-index">03</span>
           <h2 className="wc-gj-h2">La musique devient le temps.</h2>
           <p className="wc-gj-sub">
             Un morceau n’est pas une ligne de playlist : il a une durée, donc une
@@ -282,7 +301,7 @@ export function MirrorLanding() {
       {/* ========================================================== 06 PEOPLE */}
       <section className="wc-gj-cols" aria-label="Chaque personne trouve sa place">
         <div className="wc-gj-section-head">
-          <span className="wc-gj-index">06</span>
+          <span className="wc-gj-index">04</span>
           <h2 className="wc-gj-h2">Chaque personne trouve sa place.</h2>
           <p className="wc-gj-sub">
             Une personne n’est pas une ligne dans un tableur : c’est un fil qui
@@ -324,66 +343,85 @@ export function MirrorLanding() {
 
       {/* =================================================== 07 PLAN DE TABLE */}
       <SectionWithImage
-        index="07"
+        index="05"
         title="Les relations deviennent spatiales."
         body="Les tables sont des objets, pas des cellules. On porte un invité d’une table à l’autre, la table pleine le dit, et le plan reste lié au dîner : changer l’heure du repas ne casse pas le placement."
         asset={MOMENT_ASSETS.diner}
         reverse
       />
 
-      {/* ========================================================== 08 IMPORT */}
-      <section className="wc-gj-band" aria-label="Importez votre chaos">
-        <div className="wc-gj-section-head">
-          <span className="wc-gj-index">08</span>
-          <h2 className="wc-gj-h2">Importez votre chaos.</h2>
-          <p className="wc-gj-sub">
-            Contrats, devis, listes, captures, playlists, notes. Tout est lu
-            dans votre navigateur, rien n’est envoyé ailleurs, et rien n’est
-            inventé : ce qui n’a pas été lu vous est demandé.
-          </p>
-        </div>
-        <ol className="wc-gj-steps" data-landing="steps">
-          {['Lecture', 'Analyse', 'Structuration', 'Vérification', 'Timeline'].map((s, i) => (
-            <li key={s}><span>{String(i + 1).padStart(2, '0')}</span> {s}</li>
-          ))}
-        </ol>
-      </section>
-
-      {/* ======================================================= 09 SCÉNARIOS */}
+      {/* ======================================================= 03 SCÉNARIOS */}
       <section className="wc-gj-cols" aria-label="Scénarios">
         <div className="wc-gj-section-head">
-          <span className="wc-gj-index">09</span>
-          <h2 className="wc-gj-h2">Préparez le plan A, B et C.</h2>
+          <span className="wc-gj-index">06</span>
+          <h2 className="wc-gj-h2">Testez la pluie sans casser la journée.</h2>
           <p className="wc-gj-sub">
-            Une journée parallèle, posée à côté de la vraie : la pluie, un
-            retard, une salle changée. On regarde les conséquences sans rien
-            casser, et on bascule seulement si cela arrive.
+            Un scénario est une journée parallèle : on y décale, on y change de
+            salle, on compare. La journée réelle ne bouge que si on l’applique.
           </p>
         </div>
-        <div className="wc-gj-scenarios" data-landing="scenarios">
-          <div className="wc-gj-scenario-tabs" role="tablist" aria-label="Scénarios">
-            {SCENARIOS.map((s) => (
-              <button
-                key={s.id}
-                role="tab"
-                aria-selected={scenario === s.id}
-                onClick={() => setScenario(s.id)}
-                className={`wc-gj-scenario-tab${scenario === s.id ? ' is-active' : ''}`}
-                data-landing="scenario-tab"
-              >
-                {s.title} <span>{s.subtitle}</span>
-              </button>
+        <div className="wc-gj-rails" data-landing="scenarios">
+          <div className="wc-gj-rail-label">Journée réelle</div>
+          <div className="wc-gj-rail" data-landing="rail">
+            {SCENARIO_RAILS.real.map((m) => (
+              <span key={m.label} className="wc-gj-rail-block" style={{ left: `${m.left}%`, width: `${m.width}%` }}>
+                <b>{m.hour}</b><span>{m.label}</span>
+              </span>
             ))}
           </div>
-          <ul className="wc-gj-scenario-lines" data-landing="scenario-lines">
-            {(SCENARIOS.find((s) => s.id === scenario) ?? SCENARIOS[0]).lines.map((l) => (
-              <li key={l}>{l}</li>
+          <div className="wc-gj-rail-label">
+            Plan B — pluie <span>3 moments différents</span>
+          </div>
+          <div className="wc-gj-rail" data-landing="rail">
+            {SCENARIO_RAILS.planB.map((m) => (
+              <span
+                key={m.label}
+                className={`wc-gj-rail-block${m.changed ? ' is-changed' : ''}`}
+                style={{ left: `${m.left}%`, width: `${m.width}%` }}
+              >
+                <b>{m.hour}</b><span>{m.label}</span>
+              </span>
             ))}
+          </div>
+          <ul className="wc-gj-rail-diff" data-landing="scenario-lines">
+            <li>Cocktail — jardin → orangerie</li>
+            <li>Photos de groupe — 17:45 → 18:15</li>
+            <li>Dîner — 19:30 → 20:00</li>
           </ul>
           <p className="wc-gj-fineprint">
-            Démonstration de l’idée : dans votre événement, ces lignes seront
-            calculées à partir de vos propres moments.
+            {EDITORIAL_DISCLAIMER} Dans votre événement, ces deux rails sont
+            calculés depuis vos propres moments, et vous appliquez ligne par
+            ligne ou tout à la fois.
           </p>
+        </div>
+      </section>
+
+      {/* ======================================================= 07 DOCUMENTS */}
+      <section className="wc-gj-cols" aria-label="Documents">
+        <div className="wc-gj-section-head">
+          <span className="wc-gj-index">07</span>
+          <h2 className="wc-gj-h2">Le contrat vit à l’heure qu’il concerne.</h2>
+          <p className="wc-gj-sub">
+            Un document n’est pas rangé dans un dossier : il est accroché au
+            moment, au prestataire ou à la tâche qu’il concerne — et la
+            recherche le retrouve avec son contexte.
+          </p>
+        </div>
+        <div className="wc-gj-docs" data-landing="documents">
+          {[
+            { hour: '17:30', moment: 'Cocktail', docs: ['Plan traiteur', 'Horaires de service', 'Contact DJ'] },
+            { hour: '19:30', moment: 'Dîner', docs: ['Contrat traiteur', 'Menu', 'Plan de salle'] },
+            { hour: '21:00', moment: 'Première danse', docs: ['Fiche technique DJ', 'Playlist validée'] },
+          ].map((row) => (
+            <article key={row.hour} className="wc-gj-doc-row" data-landing="doc-row">
+              <span className="wc-gj-doc-hour">{row.hour}</span>
+              <span className="wc-gj-doc-moment">{row.moment}</span>
+              <span className="wc-gj-doc-list">
+                {row.docs.map((d) => <span key={d} className="wc-gj-doc-chip">📄 {d}</span>)}
+              </span>
+            </article>
+          ))}
+          <p className="wc-gj-fineprint">{EDITORIAL_DISCLAIMER}</p>
         </div>
       </section>
 
@@ -431,7 +469,7 @@ export function MirrorLanding() {
         />
         <div className="wc-gj-closing-scrim" aria-hidden />
         <div className="wc-gj-closing-body">
-          <span className="wc-gj-index">11</span>
+          <span className="wc-gj-index">09</span>
           {/* Universal by default — « un oui » only makes sense for a wedding,
               and a séminaire deserves its own sentence. */}
           <h2 className="wc-gj-closing-title" data-landing="closing-title">

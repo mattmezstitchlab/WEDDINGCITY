@@ -894,3 +894,185 @@
   .wc-gj-track-times { grid-column: 1 / -1; text-align: left; display: flex; gap: 14px; align-items: baseline; }
   .wc-gj-track-length { margin-top: 0; }
 }
+
+/* --- 02 the demonstration header on the film ---------------------------------- */
+.wc-gj-demo-head {
+  margin-top: clamp(16px, 2.6vw, 26px);
+  display: flex;
+  gap: 16px;
+  align-items: baseline;
+  flex-wrap: wrap;
+}
+
+.wc-gj-demo-couple {
+  font-size: clamp(18px, 2.6vw, 30px);
+  letter-spacing: 0.04em;
+  font-weight: 600;
+}
+
+.wc-gj-demo-date {
+  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: clamp(12px, 1.2vw, 15px);
+  letter-spacing: 0.16em;
+  color: rgba(246, 245, 243, 0.78);
+}
+
+.wc-gj-demo-tag {
+  font-size: 10px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  border: 1px solid rgba(246, 245, 243, 0.3);
+  border-radius: 999px;
+  padding: 4px 10px;
+  color: rgba(246, 245, 243, 0.7);
+}
+
+/* --- causality, on the film --------------------------------------------------- */
+.wc-gj-causality {
+  padding: clamp(20px, 3vw, 34px) clamp(18px, 5vw, 64px) 0;
+  display: grid;
+  gap: 16px;
+  justify-items: start;
+}
+
+.wc-gj-causality-lines {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.wc-gj-causality-item {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  border: 1px solid rgba(246, 245, 243, 0.16);
+  border-radius: 999px;
+  padding: 8px 14px;
+  font-size: 12px;
+  color: rgba(246, 245, 243, 0.78);
+}
+
+.wc-gj-causality-item b {
+  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: #f6f5f3;
+  font-size: 13px;
+}
+
+.wc-gj-causality-item.is-shifted { border-color: rgba(246, 245, 243, 0.5); }
+
+.wc-gj-causality-item em {
+  font-style: normal;
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  background: #f6f5f3;
+  color: #08090b;
+  border-radius: 999px;
+  padding: 3px 8px;
+}
+
+/* --- 06 scenario rails --------------------------------------------------------- */
+.wc-gj-rails { padding: 0 clamp(18px, 5vw, 64px); max-width: 1080px; }
+
+.wc-gj-rail-label {
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: rgba(246, 245, 243, 0.6);
+  margin: 18px 0 8px;
+}
+
+.wc-gj-rail-label span { color: rgba(246, 245, 243, 0.4); margin-left: 10px; }
+
+.wc-gj-rail {
+  position: relative;
+  height: 66px;
+  border-top: 1px solid rgba(246, 245, 243, 0.14);
+  border-bottom: 1px solid rgba(246, 245, 243, 0.14);
+}
+
+.wc-gj-rail-block {
+  position: absolute;
+  top: 8px;
+  bottom: 8px;
+  border: 1px solid rgba(246, 245, 243, 0.22);
+  border-radius: 3px;
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  overflow: hidden;
+  background: rgba(246, 245, 243, 0.06);
+  transition: left 500ms cubic-bezier(.2, .7, .2, 1);
+}
+
+.wc-gj-rail-block b {
+  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+}
+
+.wc-gj-rail-block span {
+  font-size: 11px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: rgba(246, 245, 243, 0.78);
+}
+
+.wc-gj-rail-block.is-changed {
+  background: #f6f5f3;
+  border-color: #f6f5f3;
+  color: #08090b;
+}
+
+.wc-gj-rail-block.is-changed span { color: rgba(8, 9, 11, 0.7); }
+
+.wc-gj-rail-diff {
+  list-style: none;
+  margin: 20px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.wc-gj-rail-diff li {
+  padding: 12px 0;
+  border-top: 1px solid rgba(246, 245, 243, 0.12);
+  font-size: clamp(13px, 1.2vw, 16px);
+}
+
+/* --- 07 documents -------------------------------------------------------------- */
+.wc-gj-docs { padding: 0 clamp(18px, 5vw, 64px); max-width: 1000px; }
+
+.wc-gj-doc-row {
+  display: grid;
+  grid-template-columns: 78px 180px 1fr;
+  gap: 16px;
+  align-items: center;
+  padding: 16px 0;
+  border-top: 1px solid rgba(246, 245, 243, 0.12);
+}
+
+.wc-gj-doc-hour {
+  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: clamp(15px, 1.7vw, 20px);
+}
+
+.wc-gj-doc-moment { font-size: clamp(13px, 1.2vw, 16px); font-weight: 600; }
+
+.wc-gj-doc-list { display: flex; gap: 8px; flex-wrap: wrap; }
+
+.wc-gj-doc-chip {
+  border: 1px solid rgba(246, 245, 243, 0.2);
+  border-radius: 999px;
+  padding: 6px 12px;
+  font-size: 12px;
+  color: rgba(246, 245, 243, 0.8);
+}
+
+.wc-gj-person-kind { color: rgba(246, 245, 243, 0.55); font-weight: 400; }
+
+@media (max-width: 680px) {
+  .wc-gj-doc-row { grid-template-columns: 70px 1fr; }
+  .wc-gj-doc-list { grid-column: 1 / -1; }
+}

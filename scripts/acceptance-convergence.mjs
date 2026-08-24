@@ -147,7 +147,7 @@ check('aucun bouton ne mène à une surface 3D', worldLinks === 0, String(worldL
 check('le hero est un outil : champ + import + types',
   await p.evaluate(() => !!document.querySelector('[data-landing="brief"]')
     && !!document.querySelector('[data-landing="files"]')
-    && document.querySelectorAll('[data-landing="type"] option').length >= 5));
+    && document.querySelectorAll('[data-landing="type"] option').length === 7));
 await shot('01-hero-outil');
 await noOverflow('Page publique');
 

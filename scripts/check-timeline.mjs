@@ -465,6 +465,53 @@ try {
   r.check(/scenarios: TimelineScenario\[\]/.test(schema) && /{ key: 'scenarios', kind: 'list' }/.test(schema),
     'scenarios are persisted with the project, and only with it');
 
+  // -------------------------------------------------------------------------
+  console.log('\n[10/10] V3 — one vocabulary per kind of day, fewer and bigger sequences');
+  // -------------------------------------------------------------------------
+  const types = read('design', 'eventTypes.ts');
+  for (const id of ['mariage', 'anniversaire', 'fete', 'seminaire', 'convention', 'soiree', 'autre']) {
+    r.check(types.includes(`id: '${id}'`), `the event type ${id} exists`);
+  }
+  r.check(!/id: 'corporate'/.test(types) && !/id: 'bapteme'/.test(types),
+    'and the previous list is gone, not kept in parallel');
+
+  const intake = await harness.load('../game/projectIntake', 'intakeV3');
+  const pro = intake.analyseIntake({
+    description: 'Convention annuelle le 12 octobre 2027 au Centre des Congrès, plénière à 9h, ateliers à 11h, déjeuner à 12h30, 250 participants.',
+    eventTypeId: 'convention',
+  });
+  r.check(pro.moments.map((m) => m.label).join('|') === 'Plénière|Atelier|Déjeuner',
+    'a convention reads professional moments', pro.moments.map((m) => m.label).join('|'));
+  r.check(pro.guestCountTarget === 250, 'and counts participants', String(pro.guestCountTarget));
+  r.check(!pro.questions.some((q) => /marie/i.test(q)),
+    'and is never asked who is getting married', pro.questions.join(' | '));
+
+  const wedding = intake.analyseIntake({
+    description: 'On se marie le 18 juillet 2027, cérémonie à 11h, cocktail à 17h, dîner à 20h.',
+    eventTypeId: 'mariage',
+  });
+  r.check(wedding.moments.map((m) => m.label).join('|') === 'Cérémonie|Cocktail|Dîner',
+    'a wedding reads wedding moments', wedding.moments.map((m) => m.label).join('|'));
+  r.check(wedding.questions.some((q) => /Qui se marie/.test(q)),
+    'and asks the one thing it must not guess');
+
+  const page = read('components', 'mirror', 'MirrorLanding.tsx');
+  r.check(/data-landing="demo-head"/.test(page) && /MATT/.test(page) && /démonstration/.test(page),
+    'the film carries a concrete example, labelled as a demonstration');
+  r.check(/data-landing="causality"/.test(page)
+    && page.indexOf('data-landing="causality"') > page.indexOf('<LandingFilm'),
+    'the causality control sits on the film, not in a far section');
+  r.check(/data-landing="rail"/.test(page) && /Plan B/.test(page),
+    'the scenario section compares two rails');
+  r.check(/data-landing="doc-row"/.test(page), 'and documents hang on hours');
+  r.check((page.match(/<section/g) || []).length <= 10,
+    'the page stays a sequence of big sections, not a catalogue',
+    String((page.match(/<section/g) || []).length));
+
+  const registryV3 = read('design', 'editorialRegistry.ts');
+  r.check(/firstName/.test(registryV3) && /Émilie/.test(registryV3),
+    'the demonstration people have a first name and a thread');
+
   un();
 } finally {
   harness.cleanup();

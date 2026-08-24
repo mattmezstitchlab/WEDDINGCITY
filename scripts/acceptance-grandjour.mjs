@@ -177,8 +177,9 @@ check('la pellicule arrive dans l’écran qui suit le hero', filmPos.gapScreens
 check('les 8 moments de la démonstration sont dessinés', filmPos.moments === 8, String(filmPos.moments));
 // The page tells the eleven innovations of the product, one section each —
 // and never more, so it stays a story rather than a catalogue.
-check('la page raconte onze sections, pas davantage',
-  filmPos.sections >= 9 && filmPos.sections <= 12, String(filmPos.sections));
+// V3: fewer, bigger sequences — each one proving an innovation.
+check('la page tient en huit à dix séquences',
+  filmPos.sections >= 7 && filmPos.sections <= 10, String(filmPos.sections));
 
 await p.evaluate(() => document.getElementById('film')?.scrollIntoView());
 await wait(900);
@@ -306,7 +307,7 @@ const movedCount = afterShift.filter((h, i) => Math.abs(h - beforeShift[i]) > 1e
 check('la démonstration décale bien la suite de la journée', movedCount === 5, `${movedCount} moments`);
 check('et l’explique en une ligne',
   await p.evaluate(() => !!document.querySelector('[data-landing="propagate-note"]')));
-const cascade = await p.evaluate(() => [...document.querySelectorAll('[data-landing="cascade"] li')]
+const cascade = await p.evaluate(() => [...document.querySelectorAll('[data-landing="cascade-item"]')]
   .map((li) => li.textContent.replace(/\s+/g, ' ').trim()));
 say('  ' + JSON.stringify(cascade));
 check('la cascade montre photos, dîner, musique, DJ et traiteur',
@@ -318,8 +319,8 @@ const editorial = await p.evaluate(() => {
   const t = document.body.innerText;
   return {
     indexes: [...document.querySelectorAll('.wc-gj-index')].map((x) => x.textContent.trim()),
-    scenarios: document.querySelectorAll('[data-landing="scenario-tab"]').length,
-    steps: document.querySelectorAll('[data-landing="steps"] li').length,
+    scenarios: document.querySelectorAll('[data-landing="rail"]').length,
+    steps: document.querySelectorAll('[data-landing="doc-row"]').length,
     people: document.querySelectorAll('[data-landing="people"] .wc-gj-person').length,
     music: document.querySelectorAll('[data-landing="track"]').length,
     closing: /commence par un oui|commence par un moment/.test(t),
@@ -329,9 +330,9 @@ const editorial = await p.evaluate(() => {
   };
 });
 say('  ' + JSON.stringify(editorial));
-check('les sections numérotées 02 → 11 sont là', editorial.indexes.length >= 8, editorial.indexes.join(' '));
-check('la section scénarios propose trois plans', editorial.scenarios === 3, String(editorial.scenarios));
-check('l’import est raconté en cinq étapes', editorial.steps === 5, String(editorial.steps));
+check('les séquences sont numérotées', editorial.indexes.length >= 7, editorial.indexes.join(' '));
+check('la section scénarios montre deux rails comparés', editorial.scenarios === 2, String(editorial.scenarios));
+check('les documents sont rattachés à trois moments', editorial.steps === 3, String(editorial.steps));
 check('la section people montre les liens', editorial.people === 3, String(editorial.people));
 check('la section musique montre pochette, heure et durée', editorial.music === 3, String(editorial.music));
 check('la dernière section porte une accroche émotionnelle', editorial.closing);
@@ -339,15 +340,13 @@ check('l’ancienne phrase administrative a disparu', !editorial.oldLine);
 check('aucune pochette ni portrait n’est inventé, et c’est écrit',
   editorial.honestMusic && editorial.honestPeople);
 
-// scenarios really switch
-await p.evaluate(() => {
-  const b = [...document.querySelectorAll('[data-landing="scenario-tab"]')].find((x) => /Plan B/.test(x.textContent));
-  b?.click();
-});
-await wait(500);
-const planB = await p.evaluate(() => [...document.querySelectorAll('[data-landing="scenario-lines"] li')]
-  .map((li) => li.textContent.trim()));
-check('le plan B montre ses conséquences', planB.some((l) => /intérieur/i.test(l)), planB.join(' · '));
+// the two rails really differ
+const railDiff = await p.evaluate(() => ({
+  changed: document.querySelectorAll('[data-landing="rail"] .is-changed').length,
+  lines: [...document.querySelectorAll('[data-landing="scenario-lines"] li')].map((l) => l.textContent.trim()),
+}));
+check('le plan B montre ses moments changés', railDiff.changed === 2, String(railDiff.changed));
+check('et les explique en clair', railDiff.lines.length === 3, railDiff.lines.join(' · '));
 await shot('04b-scenarios');
 await clickTag('landing', 'propagate'); await wait(600);
 
@@ -356,7 +355,7 @@ say('\n=== 5c. LE TYPE D’ÉVÉNEMENT CHANGE LES QUESTIONS ===');
 await p.evaluate(() => {
   const sel = document.querySelector('[data-landing="type"]');
   const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set;
-  setter.call(sel, 'corporate');
+  setter.call(sel, 'convention');
   sel.dispatchEvent(new Event('change', { bubbles: true }));
 });
 await wait(400);
@@ -380,9 +379,10 @@ const corporate = await p.evaluate(() => {
   };
 });
 say('  ' + JSON.stringify(corporate));
-check('un événement corporate ne demande jamais les mariés', !corporate.asksBride);
-check('il demande l’entreprise et les participants',
-  corporate.labels.some((l) => /entreprise/i.test(l)) && corporate.labels.some((l) => /participants/i.test(l)),
+check('une convention ne demande jamais les mariés', !corporate.asksBride);
+check('elle demande l’organisation et les participants',
+  corporate.labels.some((l) => /entreprise|organisation/i.test(l))
+  && corporate.labels.some((l) => /participants/i.test(l)),
   corporate.labels.join(' | '));
 check('le vocabulaire des moments est professionnel',
   corporate.moments.some((m) => /Plénière|Atelier|Déjeuner/i.test(m)), corporate.moments.join(', '));
@@ -433,16 +433,20 @@ const mk = async (name, start, minutes) => {
   await clickTag('jourj', 'moment-create');
   await wait(500);
 };
-await mk('Cocktail', Math.max(7.5, Math.min(25.5, nowH - 0.5)), 90);
-await mk('Dîner', Math.max(9, Math.min(26, nowH + 2)), 120);
-await mk('Soirée', Math.max(11, Math.min(27, nowH + 4)), 120);
+// The night rule needs a daytime anchor to know that "01:30" means the night
+// of the wedding day: when the test runs in the small hours, it plants one.
+if (nowH >= 24) await mk('Cérémonie', 15, 60);
+const clampH = (h) => Math.max(7.5, Math.min(28.5, h));
+await mk('Cocktail', clampH(nowH - 0.5), 60);
+await mk('Dîner', clampH(nowH + 1), 60);
+await mk('Soirée', clampH(nowH + 2), 60);
 // A late moment typed as "01:04" must be read as the NIGHT of the wedding day.
 const nightMoment = (await stateOf()).phases.find((x) => x.name === 'Soirée');
 check('un moment tapé après minuit est placé dans la nuit du jour J',
-  !nightMoment || nightMoment.start >= 12 || nowH + 4 < 24,
+  !nightMoment || nightMoment.start >= 12 || nowH + 2 < 24,
   nightMoment ? String(nightMoment.start) : 'absent');
 s = await stateOf();
-check('trois moments existent', s.phases.length === 3, String(s.phases.length));
+check('les moments de test existent', s.phases.length >= 3, String(s.phases.length));
 
 // --- 7. MODE JOUR J ---------------------------------------------------------
 say('\n=== 7. MODE JOUR J (NOW) ===');
@@ -503,7 +507,8 @@ const rows = await p.evaluate(() =>
     const r = el.getBoundingClientRect();
     return { id: el.getAttribute('data-phase-id'), top: Math.round(r.top), left: Math.round(r.left), h: Math.round(r.height) };
   }));
-check('le programme est listé dans le Canvas', rows.length === 3, String(rows.length));
+// Three moments, plus the daytime anchor when the test runs after midnight.
+check('le programme est listé dans le Canvas', rows.length >= 3, String(rows.length));
 const handle = await p.evaluate(() => {
   const h = document.querySelector('[data-canvas="moment-row"] [data-canvas="drag-handle"]');
   const r = h.getBoundingClientRect();
@@ -557,7 +562,7 @@ say('\n=== 10. RELOAD ===');
 await p.reload({ waitUntil: 'domcontentloaded', timeout: 60000 });
 await wait(3000);
 const reloaded = await stateOf();
-check('tout est conservé', reloaded.phases.length === 3 && reloaded.tracks.length === 1,
+check('tout est conservé', reloaded.phases.length === afterApply.phases.length && reloaded.tracks.length === 1,
   `${reloaded.phases.length} moments / ${reloaded.tracks.length} morceau`);
 check('les horaires recalculés sont conservés',
   JSON.stringify(reloaded.phases.map((x) => x.start)) === JSON.stringify(afterApply.phases.map((x) => x.start)),

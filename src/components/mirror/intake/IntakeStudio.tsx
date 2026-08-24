@@ -120,6 +120,7 @@ export function IntakeStudio({ description, files, projectType, onClose }: {
 
         {stage === 'review' && plan && (
           <div data-intake="review">
+            <div style={eyebrow}>Lecture du projet</div>
             <div style={title}>Votre journée prend forme</div>
 
             <div style={countsRow}>

@@ -159,7 +159,7 @@ export function analyseIntake(input: {
   if (type.id === 'mariage') {
     const couple = /\b([A-ZÉÈÀÂÎÔÛ][\p{Ll}'-]{2,})\s*(?:&|et)\s*([A-ZÉÈÀÂÎÔÛ][\p{Ll}'-]{2,})\b/u.exec(description);
     if (couple) coupleNames = `${couple[1]} & ${couple[2]}`;
-  } else if (type.id === 'corporate' || type.id === 'seminaire') {
+  } else if (type.id === 'convention' || type.id === 'seminaire') {
     const company = /\b(?:pour|chez|avec|société|entreprise)\s+([A-ZÉÈÀÂÎÔÛ][\p{L}&'-]+(?:\s+[A-ZÉÈÀÂÎÔÛ][\p{L}&'-]+){0,2})/u.exec(description);
     if (company) coupleNames = company[1].trim();
   } else {
