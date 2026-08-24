@@ -118,11 +118,15 @@ function ProductNav() {
               {e.label}
             </button>
           ))}
+          {/* The calendar is a PLACE of the product, like the timeline or the
+              people — not an action. Putting it back with the other places also
+              keeps the action group short enough to hold one line at 1440px,
+              where it had started to wrap. */}
+          <button onClick={() => setCalendarOpen(true)} style={productNavBtn} data-jourj="nav-calendar">
+            Calendrier
+          </button>
         </div>
         <span style={{ flex: 1 }} />
-        <button onClick={() => setCalendarOpen(true)} style={productNavBtn} data-jourj="nav-calendar">
-          Calendrier
-        </button>
         <button onClick={() => setSearchOpen(true)} style={productNavBtn} data-jourj="nav-search" aria-label="Recherche">
           Rechercher
         </button>
@@ -397,7 +401,7 @@ const productNavStyle: React.CSSProperties = {
 const productNavBtn: React.CSSProperties = {
   appearance: 'none', background: 'transparent', border: 'none', cursor: 'pointer',
   color: 'rgba(246,245,243,0.78)', fontSize: typography.editorial.caption,
-  fontFamily: typography.family.sans, padding: '8px 10px',
+  fontFamily: typography.family.sans, padding: '8px 8px', whiteSpace: 'nowrap',
 };
 
 const productNavCta: React.CSSProperties = {

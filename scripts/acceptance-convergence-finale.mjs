@@ -101,6 +101,19 @@ const noOverflow = async (label) => {
     `${m.sw}/${m.vw}${m.offenders.length ? ' — ' + m.offenders.join(' | ') : ''}`);
 };
 
+
+// LOCATOR ADAPTED (panneau du Jour J) — the moment panel now folds into six
+// sections that announce their state. A closed section unmounts its fields, so
+// the test unfolds the panel with its own « Tout déplier » control, exactly as
+// a user would. Every field is still there, and still writes to the same place.
+const unfoldHub = async () => {
+  await p.evaluate(() => {
+    const btn = document.querySelector('[data-jourj="hub-expand-all"]');
+    if (btn && /déplier/i.test(btn.textContent || '')) btn.click();
+  });
+  await new Promise((r) => setTimeout(r, 300));
+};
+
 // ═══════════════════════════════════════════════════════════════════════════
 say(`### CONVERGENCE FINALE — ${WIDTH}px`);
 
@@ -253,6 +266,7 @@ await p.evaluate(() => {
   cocktail?.querySelector('[data-jourj="open-moment"]')?.click();
 });
 await wait(1000);
+await unfoldHub();
 const hub = await p.evaluate(() => ({
   state: document.querySelectorAll('[data-jourj="hub-state-line"]').length,
   actions: ['hub-action-generate', 'hub-action-task', 'hub-action-planb']

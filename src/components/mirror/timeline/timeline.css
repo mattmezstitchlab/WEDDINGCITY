@@ -190,3 +190,88 @@
 @media (max-width: 900px) {
   .wc-product-nav-links { order: 3; width: 100%; }
 }
+
+/* ---------------------------------------------------------------------------
+   THE PANEL FOLDS.
+   Twelve always-open sections became six that announce themselves. The head is
+   a real button: a title, the state of the section in words, a chevron that
+   turns. Closed, the panel reads like a control card; open, it is the same
+   forms as before, untouched.
+   --------------------------------------------------------------------------- */
+.wc-hub-expand {
+  padding: 12px clamp(16px, 5vw, 28px) 0;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.wc-hub-section {
+  border-top: 1px solid rgba(246, 245, 243, 0.1);
+}
+
+.wc-hub-section-head {
+  appearance: none;
+  cursor: pointer;
+  width: 100%;
+  background: transparent;
+  border: none;
+  color: #f6f5f3;
+  font: inherit;
+  text-align: left;
+  padding: 16px clamp(16px, 5vw, 28px);
+  display: grid;
+  grid-template-columns: 1fr auto;
+  grid-template-areas: 'title chevron' 'summary chevron';
+  gap: 2px 14px;
+  align-items: center;
+}
+
+.wc-hub-section-head:hover .wc-hub-section-title { opacity: 1; }
+.wc-hub-section-head:focus-visible { outline: 2px solid rgba(246, 245, 243, 0.6); outline-offset: -2px; }
+
+.wc-hub-section-title {
+  grid-area: title;
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  font-weight: 700;
+  opacity: 0.72;
+}
+
+.wc-hub-section-summary {
+  grid-area: summary;
+  font-size: 13px;
+  line-height: 1.45;
+  color: rgba(246, 245, 243, 0.66);
+}
+
+.wc-hub-chevron {
+  grid-area: chevron;
+  font-size: 12px;
+  color: rgba(246, 245, 243, 0.6);
+  transition: transform 180ms ease;
+}
+
+.wc-hub-chevron.is-open { transform: rotate(180deg); }
+
+/* Inside an open section the old blocks keep their own rhythm, without the
+   heavy divider that used to separate twelve equals. */
+.wc-hub-section-body > .wc-hub-dim:first-child { border-top: none; padding-top: 0; }
+.wc-hub-section-body > .wc-hub-dim { border-top-color: rgba(246, 245, 243, 0.06); }
+.wc-hub-section-body { padding-bottom: 8px; }
+
+/* The event panel shares the moment panel's geometry (.wc-hub): one shell. */
+.wc-hub-event-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  padding: clamp(18px, 4vw, 28px) clamp(16px, 5vw, 28px);
+  border-bottom: 1px solid rgba(246, 245, 243, 0.1);
+}
+
+/* MEASURED at 1440px: with « Calendrier » and « Administration » added, the
+   product navigation wrapped onto a second line — which reads like an accident.
+   The places scroll inside their own row; the actions stay on one line. */
+@media (min-width: 1100px) {
+  .wc-product-nav-links { flex: 1 1 auto; min-width: 0; }
+}

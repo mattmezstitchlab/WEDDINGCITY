@@ -4,6 +4,7 @@ import { typography } from '../../../design/tokens';
 import { momentImage, MOMENT_TEMPLATES } from '../../../design/momentImagery';
 import { PRODUCT_NAME } from '../../../design/productIdentity';
 import { MomentHub } from './MomentHub';
+import { EventPanel } from './EventPanel';
 import { CERTAINTY } from '../../../design/certainty';
 import './timeline.css';
 
@@ -124,6 +125,24 @@ export function TimelineStudio() {
   const [draftStart, setDraftStart] = useState('15:00');
   const [draftDuration, setDraftDuration] = useState('60');
   const [ripple, setRipple] = useState<{ phaseId: string; delta: number; count: number } | null>(null);
+  const [eventPanelOpen, setEventPanelOpen] = useState(false);
+
+  // ONE DOOR, WHEREVER YOU CAME FROM. The calendar, the search, a mission or a
+  // document all ask the store to open a moment; the timeline is the only thing
+  // that knows how. The request is consumed once, so nothing re-opens by itself.
+  useEffect(() => {
+    const requested = store.focusPhaseId;
+    if (!requested) return;
+    const exists = store.phases.some((p) => p.id === requested);
+    store.consumeMomentFocus();
+    if (!exists) return;
+    setOpenPhaseId(requested);
+    requestAnimationFrame(() => {
+      document.querySelector(`[data-phase-id="${requested}"]`)
+        ?.scrollIntoView({ inline: 'center', block: 'nearest' });
+    });
+  }, [store.focusPhaseId, store.version]);
+
   const [nowMode, setNowMode] = useState(false);
   const [clock, setClock] = useState(() => nowHour());
 
@@ -335,6 +354,9 @@ export function TimelineStudio() {
         </div>
 
         <div className="wc-jourj-tools">
+          <button onClick={() => setEventPanelOpen(true)} style={ghostBtn} data-jourj="open-event">
+            L’événement
+          </button>
           <button onClick={() => setComposing((v) => !v)} style={primaryBtn} data-jourj="add-moment">
             + Ajouter un moment
           </button>
@@ -708,6 +730,9 @@ export function TimelineStudio() {
       {openPhaseId && (
         <MomentHub phaseId={openPhaseId} onClose={() => setOpenPhaseId(null)} />
       )}
+
+      {/* The same panel geometry, the other context: the day as a whole. */}
+      {eventPanelOpen && <EventPanel onClose={() => setEventPanelOpen(false)} />}
     </section>
   );
 }

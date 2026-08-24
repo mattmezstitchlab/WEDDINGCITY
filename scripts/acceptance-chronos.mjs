@@ -122,6 +122,19 @@ const createEvent = async (type, sentence, principals) => {
   await wait(3000);
 };
 
+
+// LOCATOR ADAPTED (panneau du Jour J) — the moment panel now folds into six
+// sections that announce their state. A closed section unmounts its fields, so
+// the test unfolds the panel with its own « Tout déplier » control, exactly as
+// a user would. Every field is still there, and still writes to the same place.
+const unfoldHub = async () => {
+  await p.evaluate(() => {
+    const btn = document.querySelector('[data-jourj="hub-expand-all"]');
+    if (btn && /déplier/i.test(btn.textContent || '')) btn.click();
+  });
+  await new Promise((r) => setTimeout(r, 300));
+};
+
 // ═══════════════════════════════════════════════════════════════════════════
 say(`### CHRONOS — ${WIDTH}px`);
 
@@ -254,6 +267,7 @@ await p.evaluate(() => {
   card?.querySelector('[data-jourj="open-moment"]')?.click();
 });
 await wait(1000);
+await unfoldHub();
 await commit('jourj', 'hub-start', '10:00');
 // Attach a real person to this moment: the derived agenda must have someone to
 // derive. Nothing is invented — the name is typed, exactly as a human would,

@@ -354,6 +354,35 @@ function Entry({ entry, onOpen, big }: {
       <button style={{ ...openBtn, marginTop: 10 }} onClick={() => onOpen(entry.projectId)} data-cal="open-timeline">
         Ouvrir la journée <span aria-hidden>→</span>
       </button>
+
+      {/* CALENDRIER → 18 JUILLET → CÉRÉMONIE → le moment lui-même.
+          Only for the event already open: reading another event's moments would
+          mean loading it, and a list should never do that behind one's back. */}
+      {big && entry.isCurrent && entry.moments > 0 && (
+        <ul style={momentList} data-cal="day-moments">
+          {weddingStore.phases
+            .slice()
+            .sort((a, b) => a.startHour - b.startHour)
+            .map((phase) => (
+              <li key={phase.id}>
+                <button
+                  style={momentBtn}
+                  onClick={() => {
+                    weddingStore.openMoment(phase.id, entry.projectId);
+                    onOpen(entry.projectId);
+                  }}
+                  data-cal="open-moment"
+                  data-phase={phase.id}
+                >
+                  <span style={{ fontFamily: typography.family.mono, fontSize: 12 }}>
+                    {clock(phase.startHour)}
+                  </span>
+                  <span>{phase.name}</span>
+                </button>
+              </li>
+            ))}
+        </ul>
+      )}
     </article>
   );
 }
@@ -455,6 +484,17 @@ const entryBig: React.CSSProperties = {
 const agendaRow: React.CSSProperties = {
   borderLeft: '2px solid rgba(246,245,243,0.24)', paddingLeft: 14,
   fontSize: typography.editorial.caption,
+};
+
+const momentList: React.CSSProperties = {
+  listStyle: 'none', margin: '14px 0 0', padding: 0, display: 'grid', gap: 6,
+};
+
+const momentBtn: React.CSSProperties = {
+  appearance: 'none', cursor: 'pointer', background: 'transparent', color: '#f6f5f3',
+  border: 'none', borderBottom: '1px solid rgba(246,245,243,0.12)',
+  padding: '6px 0', font: 'inherit', fontSize: 13, textAlign: 'left', width: '100%',
+  display: 'flex', gap: 12, alignItems: 'baseline',
 };
 
 const emptyBox: React.CSSProperties = {

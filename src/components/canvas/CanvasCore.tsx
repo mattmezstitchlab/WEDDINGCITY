@@ -327,30 +327,34 @@ function ProgrammeSurface({ model }: { model: ReturnType<typeof projectWorldMode
               </span>
             </div>
 
-            {/* time + title, both editable in place */}
+            {/* ONE DOOR PER PIECE OF INFORMATION.
+                AUDITED: the hour, the title, the place, the vendors and the
+                notes of a moment were editable BOTH here and in the moment's
+                own panel — five duplicates, and no way for a user to know
+                which one was « the real » form. They are shown here, because
+                composing a programme means reading it; they are edited where
+                they belong, on the moment itself. Nothing was removed: the
+                same fields are one click away, and they write to the same
+                place they always did. */}
             <div style={{ display: 'flex', gap: 14, alignItems: 'flex-start', flexWrap: 'wrap' }}>
               <div style={{ width: 92 }}>
                 <div style={fieldLabelStyle}>Heure</div>
-                <InlineText
-                  value={m.time}
-                  mono
-                  size={typography.size.bodyLg}
-                  bold
-                  onCommit={(next) => {
-                    const parsed = parseHour(next);
-                    if (parsed !== null) store.setPhaseTime(m.phaseId, parsed);
-                  }}
-                />
+                <div style={{ fontFamily: typography.family.mono, fontSize: typography.size.bodyLg, fontWeight: 700 }}>
+                  {m.time}
+                </div>
               </div>
               <div style={{ flex: 1, minWidth: 200 }}>
                 <div style={fieldLabelStyle}>Moment</div>
-                <InlineText
-                  value={m.title}
-                  size={typography.size.bodyLg}
-                  bold
-                  onCommit={(next) => store.setPhaseTitle(m.phaseId, next)}
-                />
+                <div style={{ fontSize: typography.size.bodyLg, fontWeight: 700 }}>{m.title}</div>
               </div>
+              <button
+                onClick={() => { store.closeCanvas(); store.openMoment(m.phaseId); }}
+                style={{ ...addBtnStyle, borderStyle: 'solid' }}
+                data-canvas="open-moment"
+                title="Régler ce moment sur la pellicule"
+              >
+                Régler ce moment →
+              </button>
               <button
                 onClick={() => store.showEventInWorld(m.phaseId)}
                 style={{ ...addBtnStyle, borderStyle: 'solid' }}
@@ -364,12 +368,9 @@ function ProgrammeSurface({ model }: { model: ReturnType<typeof projectWorldMode
               {/* PLACE */}
               <FieldRow label="Lieu">
                 <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-                  <InlineSelect
-                    value={m.placeId}
-                    options={places.map((p) => ({ value: p.id, label: p.label }))}
-                    placeholder="Aucun lieu"
-                    onCommit={(next) => store.setPhasePlace(m.phaseId, next)}
-                  />
+                  <span style={{ fontSize: typography.size.body }}>
+                    {places.find((p) => p.id === m.placeId)?.label ?? 'Aucun lieu'}
+                  </span>
                   {m.placeId && (
                     <button onClick={() => store.showPlaceInWorld(m.placeId!)} style={linkBtnStyle}>
                       Explorer →
@@ -388,24 +389,21 @@ function ProgrammeSurface({ model }: { model: ReturnType<typeof projectWorldMode
                       sub={v.explicit ? undefined : 'via lieu'}
                       tone={v.explicit ? 'default' : 'derived'}
                       onClick={() => store.setCanvasFocus({ kind: 'vendor', id: v.vendorId })}
-                      onRemove={v.explicit ? () => store.detachVendorFromPhase(m.phaseId, v.vendorId) : undefined}
                     />
                   ))}
-                  <InlinePicker
-                    placeholder="Ajouter un prestataire"
-                    items={store.vendors
-                      .filter((v) => !m.vendors.some((x) => x.vendorId === v.id))
-                      .map((v) => ({ id: v.id, label: v.companyName, sub: v.category }))}
-                    onPick={(id) => store.attachVendorToPhase(m.phaseId, id)}
-                    onCreate={() => {
-                      const created = store.createVendor({ companyName: 'Nouveau prestataire', category: 'autre' });
-                      if (created) {
-                        store.attachVendorToPhase(m.phaseId, created.id);
-                        store.setCanvasFocus({ kind: 'vendor', id: created.id });
-                      }
-                    }}
-                    createLabel="+ Créer un prestataire"
-                  />
+                  {m.vendors.length === 0 && (
+                    <span style={{ fontSize: typography.size.caption, color: K.textMuted }}>
+                      Aucun prestataire sur ce moment
+                    </span>
+                  )}
+                  {/* Attaching or detaching happens on the moment — one door. */}
+                  <button
+                    onClick={() => { store.closeCanvas(); store.openMoment(m.phaseId); }}
+                    style={linkBtnStyle}
+                    data-canvas="vendors-on-moment"
+                  >
+                    Régler sur ce moment →
+                  </button>
                 </div>
               </FieldRow>
 
@@ -462,12 +460,9 @@ function ProgrammeSurface({ model }: { model: ReturnType<typeof projectWorldMode
 
               {/* NOTES */}
               <FieldRow label="Notes">
-                <InlineText
-                  value={m.notes}
-                  multiline
-                  placeholder="Ajouter une note…"
-                  onCommit={(next) => store.setPhaseNotes(m.phaseId, next)}
-                />
+                <div style={{ fontSize: typography.size.body, color: m.notes ? undefined : K.textMuted, whiteSpace: 'pre-wrap' }}>
+                  {m.notes || 'La note de ce moment s’écrit sur le moment.'}
+                </div>
               </FieldRow>
             </div>
           </article>

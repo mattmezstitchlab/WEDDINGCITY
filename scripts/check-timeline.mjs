@@ -474,7 +474,7 @@ try {
     'scenarios are persisted with the project, and only with it');
 
   // -------------------------------------------------------------------------
-  console.log('\n[10/14] V3 — one vocabulary per kind of day, fewer and bigger sequences');
+  console.log('\n[10/15] V3 — one vocabulary per kind of day, fewer and bigger sequences');
   // -------------------------------------------------------------------------
   const types = read('design', 'eventTypes.ts');
   for (const id of ['mariage', 'anniversaire', 'fete', 'seminaire', 'convention', 'soiree', 'autre']) {
@@ -541,7 +541,7 @@ try {
     'the demonstration people have a first name and a thread');
 
   // -------------------------------------------------------------------------
-  console.log('\n[11/14] SPECTACLE — a performer is a Person with a craft');
+  console.log('\n[11/15] SPECTACLE — a performer is a Person with a craft');
   // -------------------------------------------------------------------------
   const identityTypes = read('types', 'identity.ts');
   r.check(/export interface PersonCraft/.test(identityTypes) && /craft\?: PersonCraft/.test(identityTypes),
@@ -618,7 +618,7 @@ try {
   r.check(/SPECTACLE_CRAFTS/.test(landingCrew), 'with the crafts named from the registry');
 
   // -------------------------------------------------------------------------
-  console.log('\n[12/14] ORCHESTRATION — several events, one identity, no second base');
+  console.log('\n[12/15] ORCHESTRATION — several events, one identity, no second base');
   // -------------------------------------------------------------------------
   const weddingTypes = read('types', 'wedding.ts');
   r.check(/assignedPersonId\?: string/.test(weddingTypes) && /status\?: 'todo'/.test(weddingTypes),
@@ -685,7 +685,7 @@ try {
   r.check(!/fetch\(|https?:\/\//.test(crewSrc), 'and the surface calls nothing outside');
 
   // -------------------------------------------------------------------------
-  console.log('\n[13/14] CONVERGENCE FINALE — five certainties, a first day, one desk');
+  console.log('\n[13/15] CONVERGENCE FINALE — five certainties, a first day, one desk');
   // -------------------------------------------------------------------------
   const cert = read('design', 'certainty.ts');
   for (const level of ['confirmed', 'inferred', 'estimated', 'to_confirm', 'missing']) {
@@ -774,7 +774,7 @@ try {
     'and the administration is offered only to those who orchestrate');
 
   // -------------------------------------------------------------------------
-  console.log('\n[14/14] CHRONOS — the calendar is a projection, not a second agenda');
+  console.log('\n[14/15] CHRONOS — the calendar is a projection, not a second agenda');
   // -------------------------------------------------------------------------
   const cal = store;
 
@@ -827,6 +827,64 @@ try {
   }
   r.check(!/id: 'tournee'/.test(typesSrc),
     'a tour is several events read together, not a fifteenth type');
+
+  // -------------------------------------------------------------------------
+  console.log('\n[15/15] PANNEAU DU JOUR J — one door per piece of information');
+  // -------------------------------------------------------------------------
+  const hubUx = read('components', 'mirror', 'timeline', 'MomentHub.tsx');
+  const eventPanel = read('components', 'mirror', 'timeline', 'EventPanel.tsx');
+  const sectionSrc = read('components', 'mirror', 'timeline', 'PanelSection.tsx');
+  const canvasUx = read('components', 'canvas', 'CanvasCore.tsx');
+
+  // One folding mechanism, used by both contexts of the one panel.
+  r.check(/export function PanelSection/.test(sectionSrc), 'there is one folding section component');
+  r.check(/from '\.\/PanelSection'/.test(hubUx) && /from '\.\/PanelSection'/.test(eventPanel),
+    'and both the moment and the event use it — not two mechanics');
+  r.check(/className="wc-hub"/.test(eventPanel),
+    'the event panel reuses the moment panel geometry — one shell');
+  r.check((hubUx.match(/<PanelSection/g) || []).length === 6,
+    'the moment folds into six sections', String((hubUx.match(/<PanelSection/g) || []).length));
+  r.check(/summary=/.test(hubUx) && /summary=/.test(eventPanel),
+    'a closed section always carries a summary of its own state');
+
+  // The five duplicates found by the audit are gone from the composition surface.
+  for (const [call, what] of [
+    ['setPhaseTime', 'the hour'], ['setPhaseTitle', 'the title'], ['setPhasePlace', 'the place'],
+    ['setPhaseNotes', 'the notes'], ['attachVendorToPhase', 'the vendors'],
+  ]) {
+    r.check(!new RegExp(`store\\.${call}\\(`).test(canvasUx),
+      `${what} of a moment is no longer edited in the composition surface`);
+  }
+  r.check(/openMoment\(/.test(canvasUx), 'it leads to the moment instead');
+  r.check(/testId="hub-title"/.test(hubUx) && /store\.setPhaseTitle\(/.test(hubUx),
+    'and the title is edited on the moment itself');
+
+  // The event's own fields have exactly one writer.
+  r.check((read('game', 'weddingStore.ts').match(/public updateEvent\(/g) || []).length === 1,
+    'the event has exactly one writer for its name, date, place and nature');
+  r.check(store.updateEvent({ weddingDate: 'demain' }) === false,
+    'a date that is not a date is refused');
+  const beforeDate = store.currentProject.weddingDate;
+  r.check(store.updateEvent({}) === false && store.currentProject.weddingDate === beforeDate,
+    'and an empty patch changes nothing');
+  r.check(store.updateEvent({ locationName: 'ORANGERIE TEST' })
+    && store.currentProject.locationName === 'ORANGERIE TEST', 'a real change is written once');
+
+  // One contextual door, used by every entrance.
+  r.check(typeof store.openMoment === 'function' && store.openMoment('phase_inconnue') === false,
+    'opening an unknown moment fails honestly');
+  const firstPhase = store.phases[0];
+  r.check(store.openMoment(firstPhase.id) && store.focusPhaseId === firstPhase.id,
+    'a moment can be requested from anywhere');
+  r.check(store.consumeMomentFocus() === firstPhase.id && store.focusPhaseId === null,
+    'and the request is consumed once, so nothing re-opens by itself');
+  const searchUx = read('components', 'mirror', 'GlobalSearch.tsx');
+  r.check(/store\.openMoment\(/.test(searchUx) && !/open-moment"\]/.test(searchUx),
+    'the search no longer reaches into the DOM to open a moment');
+  r.check(/openMoment\(/.test(read('components', 'mirror', 'calendar', 'CalendarStudio.tsx')),
+    'the calendar opens a moment through the same door');
+  r.check(/openMoment\(/.test(read('components', 'mirror', 'admin', 'AdminConsole.tsx')),
+    'and so does the administration');
 
   un();
 } finally {

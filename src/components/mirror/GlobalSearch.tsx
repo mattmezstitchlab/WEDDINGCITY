@@ -36,13 +36,12 @@ export function GlobalSearch({ onClose }: { onClose: () => void }) {
 
   const results = useMemo(() => store.searchEverything(query), [query, store.version]);
 
+  // MEASURED: this used to reach into the DOM — querySelector(...).click() —
+  // so a renamed attribute would have broken the link in silence. The product
+  // now has ONE way to open a moment, and every entrance uses it.
   const goToMoment = (id: string) => {
+    store.openMoment(id);
     onClose();
-    requestAnimationFrame(() => {
-      const card = document.querySelector(`[data-phase-id="${id}"]`);
-      card?.scrollIntoView({ inline: 'center', block: 'nearest' });
-      (card?.querySelector('[data-jourj="open-moment"]') as HTMLElement | null)?.click();
-    });
   };
 
   return (

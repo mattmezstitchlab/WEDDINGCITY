@@ -3323,6 +3323,80 @@ class WeddingStore {
   // stored. No Date arithmetic across time zones, no library, no drift.
   // -------------------------------------------------------------------------
 
+  // -------------------------------------------------------------------------
+  // ONE DOOR TO A MOMENT, WHEREVER YOU COME FROM.
+  //
+  // The calendar, the search, a document, a mission and the administration all
+  // need to say « open THAT moment ». Before this, only the search could, and
+  // it did it by reaching into the DOM: querySelector(...).click(). One broken
+  // selector and the link died silently.
+  //
+  // Now there is one request, read by the timeline: it loads the right event if
+  // needed, then opens the moment. Nothing else knows how the panel works.
+  // -------------------------------------------------------------------------
+  public focusPhaseId: string | null = null;
+
+  public openMoment(phaseId: string, projectId?: string): boolean {
+    if (!phaseId) return false;
+    if (projectId && projectId !== this.currentProject.id) {
+      this.loadProject(projectId);
+    } else if (!this.phases.some((p) => p.id === phaseId)) {
+      return false;
+    }
+    this.focusPhaseId = phaseId;
+    this.notify();
+    return true;
+  }
+
+  /** The timeline consumes the request once, so it cannot re-open by itself. */
+  public consumeMomentFocus(): string | null {
+    const id = this.focusPhaseId;
+    this.focusPhaseId = null;
+    return id;
+  }
+
+  /**
+   * The event itself: what a whole day is called, when and where it happens.
+   *
+   * MEASURED: since the World surfaces were closed, these four fields had no
+   * door left in the product — a couple could not fix a date typo. This is the
+   * ONLY writer; the project stays the single source of truth for them.
+   */
+  public updateEvent(patch: {
+    coupleNames?: string;
+    weddingDate?: string;
+    locationName?: string;
+    eventTypeId?: string;
+    guestCountTarget?: number;
+  }): boolean {
+    if (!this.projectChosen) return false;
+    const next = { ...this.currentProject };
+    let changed = false;
+    if (patch.coupleNames !== undefined && patch.coupleNames.trim() !== next.coupleNames) {
+      next.coupleNames = patch.coupleNames.trim(); changed = true;
+    }
+    if (patch.weddingDate !== undefined && patch.weddingDate.trim() !== next.weddingDate) {
+      // A date is either empty or a real day. Nothing in between is stored.
+      const clean = patch.weddingDate.trim();
+      if (clean && !/^\d{4}-\d{2}-\d{2}$/.test(clean)) return false;
+      next.weddingDate = clean; changed = true;
+    }
+    if (patch.locationName !== undefined && patch.locationName.trim() !== next.locationName) {
+      next.locationName = patch.locationName.trim(); changed = true;
+    }
+    if (patch.eventTypeId !== undefined && patch.eventTypeId !== next.eventTypeId) {
+      next.eventTypeId = patch.eventTypeId; changed = true;
+    }
+    if (patch.guestCountTarget !== undefined && patch.guestCountTarget !== next.guestCountTarget) {
+      next.guestCountTarget = patch.guestCountTarget; changed = true;
+    }
+    if (!changed) return false;
+    this.currentProject = next;
+    saveWeddingProject(this.currentProject);
+    this.notify();
+    return true;
+  }
+
   /** Days are strings here, on purpose: no time zone can shift a string. */
   private static dayToParts(iso: string): { y: number; m: number; d: number } | null {
     const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec((iso || '').trim());

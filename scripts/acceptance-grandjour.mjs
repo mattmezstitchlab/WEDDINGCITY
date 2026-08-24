@@ -108,6 +108,19 @@ const stateOf = () => p.evaluate(() => {
 
 const fmt = (h) => `${String(Math.floor(h) % 24).padStart(2, '0')}:${String(Math.round((h % 1) * 60)).padStart(2, '0')}`;
 
+
+// LOCATOR ADAPTED (panneau du Jour J) — the moment panel now folds into six
+// sections that announce their state. A closed section unmounts its fields, so
+// the test unfolds the panel with its own « Tout déplier » control, exactly as
+// a user would. Every field is still there, and still writes to the same place.
+const unfoldHub = async () => {
+  await p.evaluate(() => {
+    const btn = document.querySelector('[data-jourj="hub-expand-all"]');
+    if (btn && /déplier/i.test(btn.textContent || '')) btn.click();
+  });
+  await new Promise((r) => setTimeout(r, 300));
+};
+
 // ═══════════════════════════════════════════════════════════════════════════
 say(`### LE GRAND JOUR® — acceptation ${WIDTH}px — profil vierge`);
 
@@ -507,6 +520,7 @@ await p.evaluate(() => {
   card?.querySelector('[data-jourj="open-moment"]')?.click();
 });
 await wait(900);
+await unfoldHub();
 await setField('hub-track-new', 'PERFECT — ED SHEERAN');
 await clickTag('jourj', 'hub-track-new-submit'); await wait(800);
 await commitField('hub-track-duration', '3:45'); await wait(700);

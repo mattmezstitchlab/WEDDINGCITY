@@ -134,6 +134,19 @@ const noOverflow = async (label) => {
 
 const fmt = (h) => `${String(Math.floor(h) % 24).padStart(2, '0')}:${String(Math.round((h % 1) * 60)).padStart(2, '0')}`;
 
+
+// LOCATOR ADAPTED (panneau du Jour J) — the moment panel now folds into six
+// sections that announce their state. A closed section unmounts its fields, so
+// the test unfolds the panel with its own « Tout déplier » control, exactly as
+// a user would. Every field is still there, and still writes to the same place.
+const unfoldHub = async () => {
+  await p.evaluate(() => {
+    const btn = document.querySelector('[data-jourj="hub-expand-all"]');
+    if (btn && /déplier/i.test(btn.textContent || '')) btn.click();
+  });
+  await new Promise((r) => setTimeout(r, 300));
+};
+
 // ═══════════════════════════════════════════════════════════════════════════
 say(`### SPECTACLE — ${WIDTH}px`);
 
@@ -238,6 +251,7 @@ const attach = async (phaseName, personName) => {
     card?.querySelector('[data-jourj="open-moment"]')?.click();
   }, phaseId);
   await wait(900);
+  await unfoldHub();
   const ok = await p.evaluate((personName) => {
     const sel = document.querySelector('[data-jourj="hub-person-existing"]');
     if (!sel) return false;
@@ -355,6 +369,7 @@ await p.evaluate((id) => {
   card?.querySelector('[data-jourj="open-moment"]')?.click();
 }, dinerId);
 await wait(900);
+await unfoldHub();
 await p.evaluate(() => {
   const sel = document.querySelector('[data-jourj="hub-person-existing"]');
   const opt = [...(sel?.options ?? [])].find((o) => o.textContent.includes('MATT SAXO'));
@@ -389,6 +404,8 @@ await p.evaluate((id) => {
   card?.scrollIntoView({ inline: 'center' });
   card?.querySelector('[data-jourj="open-moment"]')?.click();
 }, cocktailId);
+await wait(600);
+await unfoldHub();
 await wait(900);
 const fileInput = await p.$('[data-jourj="hub-file"]');
 if (fileInput) { await fileInput.uploadFile(DOC); await wait(1600); }

@@ -5,6 +5,7 @@ import { momentImage } from '../../../design/momentImagery';
 import { extractDocumentFacts, suggestMoments, describeFacts, type MomentCandidate } from '../../../game/documentIntelligence';
 import { formatHour, formatHourWithDay, normalizeNightHour } from './TimelineStudio';
 import { TrackArt } from '../TrackArt';
+import { PanelSection } from './PanelSection';
 
 // ---------------------------------------------------------------------------
 // THE MOMENT IS A HUB.
@@ -23,6 +24,9 @@ export function MomentHub({ phaseId, onClose }: { phaseId: string; onClose: () =
   const store = weddingStore;
   const hub = store.getPhaseHub(phaseId);
   const surfaceRef = useRef<HTMLDivElement>(null);
+  // One switch for the whole panel: a user who wants the old wall can have it,
+  // and a keyboard user reaches every field without twelve clicks.
+  const [expandAll, setExpandAll] = useState(false);
 
   // Escape closes; the page behind must not scroll under the panel.
   useEffect(() => {
@@ -69,200 +73,280 @@ export function MomentHub({ phaseId, onClose }: { phaseId: string; onClose: () =
              the moment to find them. */}
       <MomentState phaseId={phase.id} onClose={onClose} />
 
-      {/* ---- when ---- */}
-      <Dimension title="Heure" hint="Déplacer ici, ou glisser le bloc sur la pellicule.">
-        <div style={row}>
-          <ClockField
-            label="Début"
-            value={formatHour(phase.startHour)}
-            onCommit={(h) => store.setPhaseTime(phase.id, normalizeNightHour(h, store.phases))}
-            testId="hub-start"
-          />
-          <NumberField
-            label="Durée (min)"
-            value={Math.round(duration * 60)}
-            onCommit={(m) => store.setPhaseDuration(phase.id, m / 60)}
-            testId="hub-duration"
-          />
-        </div>
-        <Inline
-          value={phase.subtitle || ''}
-          placeholder="Une phrase sur ce moment"
-          onCommit={(v) => store.setPhaseSubtitle(phase.id, v)}
-          testId="hub-subtitle"
-        />
-      </Dimension>
+      {/* ---- SIX SECTIONS, AND EACH ONE SAYS WHAT IT HOLDS WHEN CLOSED ----
+             Same twelve blocks as before, not one field removed: only the wall
+             is gone. « Quand & où » is open on arrival because it is what one
+             comes to fix nine times out of ten; the rest waits, and announces
+             itself. */}
+      <div className="wc-hub-expand">
+        <button onClick={() => setExpandAll((v) => !v)} style={linkBtn} data-jourj="hub-expand-all">
+          {expandAll ? 'Tout replier' : 'Tout déplier'}
+        </button>
+      </div>
 
-      {/* ---- where ---- */}
-      <Dimension title="Lieu" hint={place ? undefined : 'Aucun lieu rattaché à ce moment.'}>
-        <PlacePicker phaseId={phase.id} currentPlaceId={phase.primaryPlaceId} />
-        {place && (
-          <div style={{ ...muted, marginTop: 8 }}>
-            {place.address || 'Adresse non renseignée'}
-            {place.capacity ? ` · ${place.capacity} places` : ''}
+      <PanelSection
+        title="Quand & où"
+        summary={`${formatHour(phase.startHour)} → ${formatHour(phase.endHour)}${place ? ` · ${place.name}` : ' · aucun lieu'}`}
+        defaultOpen
+        forceOpen={expandAll}
+        testId="when"
+      >
+        {/* The name of the moment lives WITH the moment. It used to be editable
+            only in the composition surface — the one place the user was not. */}
+        <Dimension title="Nom du moment">
+          <Inline
+            value={phase.name}
+            placeholder="Cérémonie, cocktail, balance…"
+            onCommit={(v) => store.setPhaseTitle(phase.id, v)}
+            testId="hub-title"
+          />
+        </Dimension>
+        {/* ---- when ---- */}
+        <Dimension title="Heure" hint="Déplacer ici, ou glisser le bloc sur la pellicule.">
+          <div style={row}>
+            <ClockField
+              label="Début"
+              value={formatHour(phase.startHour)}
+              onCommit={(h) => store.setPhaseTime(phase.id, normalizeNightHour(h, store.phases))}
+              testId="hub-start"
+            />
+            <NumberField
+              label="Durée (min)"
+              value={Math.round(duration * 60)}
+              onCommit={(m) => store.setPhaseDuration(phase.id, m / 60)}
+              testId="hub-duration"
+            />
           </div>
-        )}
-      </Dimension>
-
-      {/* ---- who ---- */}
-      <Dimension title="Personnes" hint={persons.length === 0 ? 'Personne n’est encore attendu à ce moment.' : undefined}>
-        <PeopleRow
-          persons={persons as { id: string; displayName: string; portraitMediaId?: string; craft?: { role: string } }[]}
-          onRemove={(id) => store.detachPersonFromPhase(phase.id, id)}
-        />
-        <AddExisting
-          placeholder="Ajouter une personne déjà connue"
-          options={store.persons
-            .filter((p) => !(phase.personIds ?? []).includes(p.id))
-            .map((p) => ({ id: p.id, label: p.displayName }))}
-          onPick={(id) => store.attachPersonToPhase(phase.id, id)}
-          testId="hub-person-existing"
-        />
-        <AddNew
-          placeholder="…ou créer une personne : Prénom Nom"
-          onSubmit={(name) => {
-            const person = store.createPerson({ displayName: name, asGuest: true, rsvp: 'pending' });
-            if (person) store.attachPersonToPhase(phase.id, person.id);
-          }}
-          testId="hub-person-new"
-        />
-      </Dimension>
-
-      {/* ---- with whom ---- */}
-      <Dimension title="Prestataires" hint={vendors.length === 0 ? 'Aucun prestataire sur ce moment.' : undefined}>
-        <VendorRow
-          vendors={vendors as { id: string; companyName: string; category: string }[]}
-          onRemove={(id) => store.detachVendorFromPhase(phase.id, id)}
-        />
-        <AddExisting
-          placeholder="Ajouter un prestataire du mariage"
-          options={store.vendors
-            .filter((v) => !(phase.vendorIds ?? []).includes(v.id))
-            .map((v) => ({ id: v.id, label: v.companyName }))}
-          onPick={(id) => store.attachVendorToPhase(phase.id, id)}
-          testId="hub-vendor-existing"
-        />
-        <AddNew
-          placeholder="…ou créer un prestataire : nom de l’entreprise"
-          onSubmit={(name) => {
-            const vendor = store.createVendor({ companyName: name, category: 'autre' });
-            if (vendor) store.attachVendorToPhase(phase.id, vendor.id);
-          }}
-          testId="hub-vendor-new"
-        />
-      </Dimension>
-
-      {/* ---- music: a temporal layer of the moment ---- */}
-      <MusicDimension phaseId={phase.id} />
-
-      {/* ---- shots ---- */}
-      <Dimension title="Photo / Vidéo" hint={(phase.shots ?? []).length === 0 ? 'Aucun plan demandé pour l’instant.' : undefined}>
-        <ul style={list}>
-          {(phase.shots ?? []).map((shot, i) => (
-            <li key={`${shot}-${i}`} style={listItem}>
-              <span>{shot}</span>
-              <button onClick={() => store.removePhaseShot(phase.id, i)} style={linkBtn}>retirer</button>
-            </li>
-          ))}
-        </ul>
-        <AddNew
-          placeholder="Plan indispensable : « les grands-parents avec les mariés »"
-          onSubmit={(v) => store.addPhaseShot(phase.id, v)}
-          testId="hub-shot-new"
-        />
-      </Dimension>
-
-      {/* ---- meal ---- */}
-      <Dimension title="Repas">
-        <Inline
-          value={phase.meal?.menu ?? ''}
-          placeholder="Menu servi à ce moment"
-          onCommit={(v) => store.setPhaseMeal(phase.id, { menu: v })}
-          testId="hub-menu"
-        />
-        <div className="wc-hub-grid" style={{ marginTop: 8 }}>
           <Inline
-            value={phase.meal?.allergies ?? ''}
-            placeholder="Allergies et régimes"
-            onCommit={(v) => store.setPhaseMeal(phase.id, { allergies: v })}
-            testId="hub-allergies"
+            value={phase.subtitle || ''}
+            placeholder="Une phrase sur ce moment"
+            onCommit={(v) => store.setPhaseSubtitle(phase.id, v)}
+            testId="hub-subtitle"
           />
+        </Dimension>
+        {/* ---- where ---- */}
+        <Dimension title="Lieu" hint={place ? undefined : 'Aucun lieu rattaché à ce moment.'}>
+          <PlacePicker phaseId={phase.id} currentPlaceId={phase.primaryPlaceId} />
+          {place && (
+            <div style={{ ...muted, marginTop: 8 }}>
+              {place.address || 'Adresse non renseignée'}
+              {place.capacity ? ` · ${place.capacity} places` : ''}
+            </div>
+          )}
+        </Dimension>
+      </PanelSection>
+
+      <PanelSection
+        title="Qui"
+        summary={[
+          persons.length ? `${persons.length} personne${persons.length > 1 ? 's' : ''}` : 'personne',
+          vendors.length ? `${vendors.length} prestataire${vendors.length > 1 ? 's' : ''}` : 'aucun prestataire',
+        ].join(' · ')}
+        forceOpen={expandAll}
+        testId="who"
+      >
+        {/* ---- who ---- */}
+        <Dimension title="Personnes" hint={persons.length === 0 ? 'Personne n’est encore attendu à ce moment.' : undefined}>
+          <PeopleRow
+            persons={persons as { id: string; displayName: string; portraitMediaId?: string; craft?: { role: string } }[]}
+            onRemove={(id) => store.detachPersonFromPhase(phase.id, id)}
+          />
+          <AddExisting
+            placeholder="Ajouter une personne déjà connue"
+            options={store.persons
+              .filter((p) => !(phase.personIds ?? []).includes(p.id))
+              .map((p) => ({ id: p.id, label: p.displayName }))}
+            onPick={(id) => store.attachPersonToPhase(phase.id, id)}
+            testId="hub-person-existing"
+          />
+          <AddNew
+            placeholder="…ou créer une personne : Prénom Nom"
+            onSubmit={(name) => {
+              const person = store.createPerson({ displayName: name, asGuest: true, rsvp: 'pending' });
+              if (person) store.attachPersonToPhase(phase.id, person.id);
+            }}
+            testId="hub-person-new"
+          />
+        </Dimension>
+
+        {/* ---- with whom ---- */}
+        <Dimension title="Prestataires" hint={vendors.length === 0 ? 'Aucun prestataire sur ce moment.' : undefined}>
+          <VendorRow
+            vendors={vendors as { id: string; companyName: string; category: string }[]}
+            onRemove={(id) => store.detachVendorFromPhase(phase.id, id)}
+          />
+          <AddExisting
+            placeholder="Ajouter un prestataire du mariage"
+            options={store.vendors
+              .filter((v) => !(phase.vendorIds ?? []).includes(v.id))
+              .map((v) => ({ id: v.id, label: v.companyName }))}
+            onPick={(id) => store.attachVendorToPhase(phase.id, id)}
+            testId="hub-vendor-existing"
+          />
+          <AddNew
+            placeholder="…ou créer un prestataire : nom de l’entreprise"
+            onSubmit={(name) => {
+              const vendor = store.createVendor({ companyName: name, category: 'autre' });
+              if (vendor) store.attachVendorToPhase(phase.id, vendor.id);
+            }}
+            testId="hub-vendor-new"
+          />
+        </Dimension>
+
+        {/* ---- music: a temporal layer of the moment ---- */}
+      </PanelSection>
+
+      <PanelSection
+        title="Ce qu’on y vit"
+        summary={[
+          tracks.length ? `${tracks.length} morceau${tracks.length > 1 ? 'x' : ''}` : 'aucune musique',
+          (phase.shots ?? []).length ? `${(phase.shots ?? []).length} plan${(phase.shots ?? []).length > 1 ? 's' : ''}` : 'aucun plan',
+          phase.meal?.menu ? 'repas renseigné' : 'aucun repas',
+        ].join(' · ')}
+        forceOpen={expandAll}
+        testId="life"
+      >
+        <MusicDimension phaseId={phase.id} />
+
+        {/* ---- shots ---- */}
+        <Dimension title="Photo / Vidéo" hint={(phase.shots ?? []).length === 0 ? 'Aucun plan demandé pour l’instant.' : undefined}>
+          <ul style={list}>
+            {(phase.shots ?? []).map((shot, i) => (
+              <li key={`${shot}-${i}`} style={listItem}>
+                <span>{shot}</span>
+                <button onClick={() => store.removePhaseShot(phase.id, i)} style={linkBtn}>retirer</button>
+              </li>
+            ))}
+          </ul>
+          <AddNew
+            placeholder="Plan indispensable : « les grands-parents avec les mariés »"
+            onSubmit={(v) => store.addPhaseShot(phase.id, v)}
+            testId="hub-shot-new"
+          />
+        </Dimension>
+
+        {/* ---- meal ---- */}
+        <Dimension title="Repas">
           <Inline
-            value={phase.meal?.headcount ? String(phase.meal.headcount) : ''}
-            placeholder="Nombre de couverts"
-            onCommit={(v) => store.setPhaseMeal(phase.id, { headcount: Number(v) })}
-            testId="hub-headcount"
+            value={phase.meal?.menu ?? ''}
+            placeholder="Menu servi à ce moment"
+            onCommit={(v) => store.setPhaseMeal(phase.id, { menu: v })}
+            testId="hub-menu"
           />
-        </div>
-      </Dimension>
+          <div className="wc-hub-grid" style={{ marginTop: 8 }}>
+            <Inline
+              value={phase.meal?.allergies ?? ''}
+              placeholder="Allergies et régimes"
+              onCommit={(v) => store.setPhaseMeal(phase.id, { allergies: v })}
+              testId="hub-allergies"
+            />
+            <Inline
+              value={phase.meal?.headcount ? String(phase.meal.headcount) : ''}
+              placeholder="Nombre de couverts"
+              onCommit={(v) => store.setPhaseMeal(phase.id, { headcount: Number(v) })}
+              testId="hub-headcount"
+            />
+          </div>
+        </Dimension>
 
-      {/* ---- logistics & tasks ---- */}
-      <Dimension title="Logistique">
-        <Inline
-          value={phase.logistics ?? ''}
-          placeholder="Installation, livraison, transport, heures d’arrivée…"
-          multiline
-          onCommit={(v) => store.setPhaseLogistics(phase.id, v)}
-          testId="hub-logistics"
-        />
-        <ul style={{ ...list, marginTop: 10 }}>
-          {tasks.map((t) => (
-            <li key={t.id} style={listItem}>
-              <label style={{ display: 'flex', gap: 8, alignItems: 'center', cursor: 'pointer' }}>
-                <input type="checkbox" checked={t.isDone} onChange={() => store.toggleTaskDone(t.id)} />
-                <span style={{ textDecoration: t.isDone ? 'line-through' : 'none' }}>{t.title}</span>
-              </label>
-              {t.cost ? <span style={muted}>{t.cost} €</span> : null}
-            </li>
-          ))}
-        </ul>
-        <AddNew
-          placeholder="Ajouter une tâche pour ce moment"
-          onSubmit={(v) => store.createTaskForPhase(phase.id, v)}
-          testId="hub-task-new"
-        />
-      </Dimension>
+        {/* ---- logistics & tasks ---- */}
+      </PanelSection>
 
-      {/* ---- money ---- */}
-      <Dimension title="Budget" hint={phase.budget ? undefined : 'Aucun montant saisi pour ce moment.'}>
-        <div className="wc-hub-grid">
+      <PanelSection
+        title="Logistique & budget"
+        summary={[
+          (phase.logistics ?? '').trim() ? 'logistique écrite' : 'aucune logistique',
+          phase.budget?.amount ? `${phase.budget.amount} €` : 'aucun montant',
+        ].join(' · ')}
+        forceOpen={expandAll}
+        testId="logistics"
+      >
+        <Dimension title="Logistique">
           <Inline
-            value={phase.budget?.amount !== undefined ? String(phase.budget.amount) : ''}
-            placeholder="Coût (€)"
-            onCommit={(v) => store.setPhaseBudget(phase.id, { amount: Number(v) })}
-            testId="hub-cost"
+            value={phase.logistics ?? ''}
+            placeholder="Installation, livraison, transport, heures d’arrivée…"
+            multiline
+            onCommit={(v) => store.setPhaseLogistics(phase.id, v)}
+            testId="hub-logistics"
           />
+          <ul style={{ ...list, marginTop: 10 }}>
+            {tasks.map((t) => (
+              <li key={t.id} style={listItem}>
+                <label style={{ display: 'flex', gap: 8, alignItems: 'center', cursor: 'pointer' }}>
+                  <input type="checkbox" checked={t.isDone} onChange={() => store.toggleTaskDone(t.id)} />
+                  <span style={{ textDecoration: t.isDone ? 'line-through' : 'none' }}>{t.title}</span>
+                </label>
+                {t.cost ? <span style={muted}>{t.cost} €</span> : null}
+              </li>
+            ))}
+          </ul>
+          <AddNew
+            placeholder="Ajouter une tâche pour ce moment"
+            onSubmit={(v) => store.createTaskForPhase(phase.id, v)}
+            testId="hub-task-new"
+          />
+        </Dimension>
+
+        {/* ---- money ---- */}
+        <Dimension title="Budget" hint={phase.budget ? undefined : 'Aucun montant saisi pour ce moment.'}>
+          <div className="wc-hub-grid">
+            <Inline
+              value={phase.budget?.amount !== undefined ? String(phase.budget.amount) : ''}
+              placeholder="Coût (€)"
+              onCommit={(v) => store.setPhaseBudget(phase.id, { amount: Number(v) })}
+              testId="hub-cost"
+            />
+            <Inline
+              value={phase.budget?.deposit !== undefined ? String(phase.budget.deposit) : ''}
+              placeholder="Acompte versé (€)"
+              onCommit={(v) => store.setPhaseBudget(phase.id, { deposit: Number(v) })}
+              testId="hub-deposit"
+            />
+          </div>
+          <label style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 10, cursor: 'pointer' }}>
+            <input
+              type="checkbox"
+              checked={Boolean(phase.budget?.paid)}
+              onChange={(e) => store.setPhaseBudget(phase.id, { paid: e.target.checked })}
+              data-jourj="hub-paid"
+            />
+            <span style={muted}>Soldé</span>
+          </label>
+        </Dimension>
+
+        {/* ---- paperwork ---- */}
+      </PanelSection>
+
+      <PanelSection
+        title="Documents & tâches"
+        summary={[
+          media.length ? `${media.length} document${media.length > 1 ? 's' : ''}` : 'aucun document',
+          tasks.length ? `${tasks.filter((t) => !t.isDone).length} tâche(s) en cours` : 'aucune tâche',
+        ].join(' · ')}
+        forceOpen={expandAll}
+        testId="documents"
+      >
+        <DocumentsDimension phaseId={phase.id} />
+
+        {/* ---- notes ---- */}
+      </PanelSection>
+
+      <PanelSection
+        title="Notes"
+        summary={(phase.notes ?? '').trim() ? 'une note écrite' : 'aucune note'}
+        forceOpen={expandAll}
+        testId="notes"
+      >
+        <Dimension title="Notes">
           <Inline
-            value={phase.budget?.deposit !== undefined ? String(phase.budget.deposit) : ''}
-            placeholder="Acompte versé (€)"
-            onCommit={(v) => store.setPhaseBudget(phase.id, { deposit: Number(v) })}
-            testId="hub-deposit"
+            value={phase.notes ?? ''}
+            placeholder="Consignes, informations importantes, notes privées"
+            multiline
+            onCommit={(v) => store.setPhaseNotes(phase.id, v)}
+            testId="hub-notes"
           />
-        </div>
-        <label style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 10, cursor: 'pointer' }}>
-          <input
-            type="checkbox"
-            checked={Boolean(phase.budget?.paid)}
-            onChange={(e) => store.setPhaseBudget(phase.id, { paid: e.target.checked })}
-            data-jourj="hub-paid"
-          />
-          <span style={muted}>Soldé</span>
-        </label>
-      </Dimension>
-
-      {/* ---- paperwork ---- */}
-      <DocumentsDimension phaseId={phase.id} />
-
-      {/* ---- notes ---- */}
-      <Dimension title="Notes">
-        <Inline
-          value={phase.notes ?? ''}
-          placeholder="Consignes, informations importantes, notes privées"
-          multiline
-          onCommit={(v) => store.setPhaseNotes(phase.id, v)}
-          testId="hub-notes"
-        />
-      </Dimension>
+        </Dimension>
+      </PanelSection>
 
       <div className="wc-hub-dim" style={{ paddingBottom: 40 }}>
         <button

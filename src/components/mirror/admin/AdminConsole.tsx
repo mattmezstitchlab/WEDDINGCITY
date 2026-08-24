@@ -313,6 +313,21 @@ export function AdminConsole({ onClose }: { onClose: () => void }) {
                       <li key={d.id} style={line} data-admin="dossier-document">
                         <span style={{ fontWeight: 600 }}>{d.title}</span>
                         <span style={muted}> · {d.projectName}</span>
+                        {(() => {
+                          // A document attached to a moment opens that moment.
+                          const asset = store.media.find((m) => m.id === d.id);
+                          if (!asset || asset.ownerKind !== 'event') return null;
+                          if (!store.phases.some((p) => p.id === asset.ownerId)) return null;
+                          return (
+                            <button
+                              style={{ ...linkBtn, marginLeft: 10 }}
+                              onClick={() => { store.openMoment(asset.ownerId); onClose(); }}
+                              data-admin="document-open-moment"
+                            >
+                              ouvrir le moment
+                            </button>
+                          );
+                        })()}
                       </li>
                     ))}
                   </ul>
@@ -327,6 +342,17 @@ export function AdminConsole({ onClose }: { onClose: () => void }) {
                       <li key={m.id} style={line} data-admin="dossier-mission">
                         <span style={{ fontWeight: 600 }}>{m.title}</span>
                         <span style={muted}> · {m.status ?? (m.isDone ? 'done' : 'todo')}</span>
+                        {/* A mission belongs to a moment: it opens it, rather
+                            than leaving the reader to look for it. */}
+                        {m.phaseId && store.phases.some((p) => p.id === m.phaseId) && (
+                          <button
+                            style={{ ...linkBtn, marginLeft: 10 }}
+                            onClick={() => { store.openMoment(m.phaseId!); onClose(); }}
+                            data-admin="mission-open-moment"
+                          >
+                            ouvrir le moment
+                          </button>
+                        )}
                       </li>
                     ))}
                   </ul>

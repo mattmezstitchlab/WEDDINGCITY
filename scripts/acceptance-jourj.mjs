@@ -156,6 +156,21 @@ const noOverflow = async (label) => {
 
 const fmt = (h) => `${String(Math.floor(h) % 24).padStart(2, '0')}:${String(Math.round((h % 1) * 60)).padStart(2, '0')}`;
 
+
+// LOCATOR ADAPTED (panneau du Jour J) — the moment panel now folds into six
+// sections that announce their state, instead of twelve permanently open
+// forms. A closed section unmounts its fields, so the test unfolds the panel
+// first, with the panel's own « Tout déplier » control, exactly as a user
+// would. The guarantee is unchanged: every field is still there, and still
+// writes to the same place.
+const unfoldHub = async () => {
+  await p.evaluate(() => {
+    const btn = document.querySelector('[data-jourj="hub-expand-all"]');
+    if (btn && /déplier/i.test(btn.textContent || '')) btn.click();
+  });
+  await new Promise((r) => setTimeout(r, 300));
+};
+
 // ═══════════════════════════════════════════════════════════════════════════
 say(`### JOUR J — acceptation ${WIDTH}px — profil vierge`);
 
@@ -258,6 +273,7 @@ await p.evaluate((id) => {
   card?.querySelector('[data-jourj="open-moment"]')?.click();
 }, dinerId);
 await wait(900);
+await unfoldHub();
 check('le hub du Dîner est ouvert', (await state()).dom.hub);
 
 await setField('hub-place-new', 'ORANGERIE DU DOMAINE');
