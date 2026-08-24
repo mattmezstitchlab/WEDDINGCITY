@@ -441,3 +441,120 @@
 @media (max-width: 900px) {
   .wc-sim-body { grid-template-columns: 1fr; gap: 26px; }
 }
+
+/* ---------------------------------------------------------------------------
+   MON GRAND JOUR — a band of type, never a dashboard.
+   Four facts on one line at a desk, stacked on a phone. The percentage opens
+   the eight markers it is made of: a number one cannot audit is a claim.
+   --------------------------------------------------------------------------- */
+.wc-cockpit {
+  border-bottom: 1px solid var(--jourj-line, rgba(246, 245, 243, 0.14));
+  padding: clamp(16px, 2.4vw, 26px) clamp(18px, 5vw, 64px);
+}
+
+.wc-cockpit-row {
+  display: grid;
+  grid-template-columns: auto repeat(3, minmax(0, 1fr));
+  gap: clamp(16px, 3vw, 44px);
+  align-items: start;
+}
+
+.wc-cockpit-score {
+  appearance: none;
+  cursor: pointer;
+  background: transparent;
+  border: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  padding: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.wc-cockpit-percent {
+  font-size: clamp(30px, 4.4vw, 52px);
+  font-weight: 600;
+  letter-spacing: -0.04em;
+  line-height: 0.95;
+}
+
+.wc-cockpit-unit { font-size: 0.45em; margin-left: 2px; opacity: 0.6; }
+
+.wc-cockpit-legend {
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: rgba(246, 245, 243, 0.6);
+  white-space: nowrap;
+}
+
+.wc-cockpit-more { opacity: 0.7; }
+
+.wc-cockpit-cell { display: grid; gap: 4px; min-width: 0; }
+
+.wc-cockpit-label {
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  font-weight: 700;
+  color: rgba(246, 245, 243, 0.5);
+}
+
+.wc-cockpit-value {
+  font-size: 14px;
+  line-height: 1.4;
+  color: #f6f5f3;
+  display: flex;
+  gap: 6px;
+  align-items: baseline;
+  flex-wrap: wrap;
+}
+
+.wc-cockpit-detail {
+  font-size: 11px;
+  line-height: 1.45;
+  color: rgba(246, 245, 243, 0.55);
+}
+
+.wc-cockpit-markers {
+  list-style: none;
+  margin: 20px 0 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 10px 28px;
+}
+
+.wc-cockpit-markers li {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  grid-template-areas: 'icon label' '. detail';
+  gap: 1px 8px;
+  font-size: 12px;
+  align-items: baseline;
+  color: rgba(246, 245, 243, 0.55);
+}
+
+.wc-cockpit-markers li.is-done { color: #f6f5f3; }
+.wc-cockpit-markers li svg { grid-area: icon; }
+.wc-cockpit-marker-label { grid-area: label; }
+.wc-cockpit-marker-detail { grid-area: detail; font-size: 11px; color: rgba(246, 245, 243, 0.45); }
+
+.wc-cockpit-rule {
+  grid-column: 1 / -1;
+  display: block !important;
+  font-size: 11px;
+  line-height: 1.55;
+  color: rgba(246, 245, 243, 0.42);
+  max-width: 62ch;
+  margin-top: 6px;
+}
+
+@media (max-width: 900px) {
+  .wc-cockpit-row { grid-template-columns: 1fr 1fr; gap: 18px; }
+}
+
+@media (max-width: 520px) {
+  .wc-cockpit-row { grid-template-columns: 1fr; gap: 14px; }
+  .wc-cockpit-legend { white-space: normal; }
+}

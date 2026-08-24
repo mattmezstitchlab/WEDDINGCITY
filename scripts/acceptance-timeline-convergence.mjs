@@ -134,6 +134,56 @@ check('plus un seul bouton « Composer » dans le récit', surfaces.compose === 
 await shot('01-journee');
 await noOverflow('La journée');
 
+// --- 1b. MON GRAND JOUR: a band of type, and an auditable number -------------
+say('\n=== 1b. MON GRAND JOUR ===');
+const cockpit = await p.evaluate(() => {
+  const c = document.querySelector('[data-jourj="cockpit"]');
+  if (!c) return null;
+  const strip = document.querySelector('[data-jourj="strip"]');
+  return {
+    percent: document.querySelector('[data-jourj="cockpit-score"]')?.textContent.trim(),
+    next: document.querySelector('[data-jourj="cockpit-next"]')?.innerText.replace(/\s+/g, ' '),
+    alerts: document.querySelector('[data-jourj="cockpit-alerts"]')?.innerText.replace(/\s+/g, ' '),
+    moment: document.querySelector('[data-jourj="cockpit-moment"]')?.innerText.replace(/\s+/g, ' '),
+    markersHidden: !document.querySelector('[data-jourj="cockpit-markers"]'),
+    aboveFilm: strip
+      ? c.getBoundingClientRect().top + window.scrollY < strip.getBoundingClientRect().top + window.scrollY
+      : false,
+  };
+});
+say('  ' + JSON.stringify(cockpit));
+check('le cockpit existe, au-dessus de la pellicule', Boolean(cockpit?.aboveFilm));
+check('il annonce un avancement chiffré', /%/.test(cockpit?.percent || ''), cockpit?.percent);
+check('il dit sur combien de repères il compte', /sur 8/.test(cockpit?.percent || ''), cockpit?.percent);
+check('il donne la prochaine chose à faire', (cockpit?.next || '').length > 20, cockpit?.next?.slice(0, 60));
+check('il dit s’il y a un conflit', /conflit/i.test(cockpit?.alerts || ''), cockpit?.alerts);
+check('il annonce le prochain moment', /\d{2}:\d{2}/.test(cockpit?.moment || ''), cockpit?.moment);
+check('et la règle du chiffre reste repliée tant qu’on ne la demande pas', cockpit?.markersHidden);
+
+await click('jourj', 'cockpit-score');
+await wait(500);
+const ruler = await p.evaluate(() => ({
+  markers: [...document.querySelectorAll('[data-jourj="cockpit-marker"]')]
+    .map((n) => ({ label: n.querySelector('.wc-cockpit-marker-label')?.textContent, done: n.dataset.done })),
+  rule: document.querySelector('[data-jourj="cockpit-rule"]')?.textContent.replace(/\s+/g, ' ') || '',
+}));
+check('les huit repères sont montrés, un par un', ruler.markers.length === 8, String(ruler.markers.length));
+check('chacun dit s’il est tenu', ruler.markers.every((m) => m.done === 'yes' || m.done === 'no'));
+check('et le produit dit qu’il n’y a pas d’autre règle',
+  /aucun n’est pondéré/.test(ruler.rule) && /aucun n’est deviné/.test(ruler.rule), ruler.rule.slice(0, 80));
+const declared = await p.evaluate(() => {
+  const id = localStorage.getItem('wedding_city_active_project_id_v1');
+  const st = JSON.parse(localStorage.getItem('wedding_city_state_' + id) || '{}');
+  return { docs: (st.media || []).filter((m) => m.kind === 'document').length };
+});
+const docMarker = ruler.markers.find((m) => /document/i.test(m.label || ''));
+check('un repère non tenu n’est jamais présenté comme acquis',
+  (declared.docs > 0) === (docMarker?.done === 'yes'),
+  `${declared.docs} document(s) · repère ${docMarker?.done}`);
+await shot('01b-cockpit');
+await click('jourj', 'cockpit-score');
+await wait(300);
+
 // --- 2. a navigation of four destinations -----------------------------------
 say('\n=== 2. UNE NAVIGATION DE QUATRE DESTINATIONS ===');
 const nav = await p.evaluate(() => {

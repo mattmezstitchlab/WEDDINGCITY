@@ -2557,6 +2557,94 @@ class WeddingStore {
     return out;
   }
 
+  /**
+   * WHERE THIS DAY STANDS — and on exactly what the product counts.
+   *
+   * « 68 % préparé » means nothing if nobody can see the ruler. So there is no
+   * hidden weighting here and no secret model: EIGHT markers, each one a fact
+   * the project either holds or does not, each one shown to the user with its
+   * own answer. The score is how many are held.
+   *
+   * A projection, like every reading in this product: it stores nothing, and it
+   * invents nothing — a marker nobody has answered counts as not held, never as
+   * « probably fine ».
+   */
+  public readiness(): {
+    score: number;
+    total: number;
+    markers: { id: string; label: string; done: boolean; detail: string }[];
+    nextAction: { title: string; detail: string } | null;
+    conflicts: number;
+    nextMoment: { id: string; name: string; startHour: number } | null;
+  } {
+    const project = this.currentProject;
+    const phases = [...this.phases].sort((a, b) => a.startHour - b.startHour);
+    const documents = this.media.filter((m) => m.kind === 'document');
+    const engaged = this.vendors.filter((v) => v.status === 'contracted');
+    const unconfirmed = phases.filter((p) => p.confidence && p.confidence !== 'confirmed');
+    const withoutPlace = phases.filter((p) => !p.primaryPlaceId);
+    const withPeople = phases.filter((p) => (p.personIds ?? []).length > 0);
+
+    const markers = [
+      {
+        id: 'date', label: 'Une date', done: Boolean(project.weddingDate),
+        detail: project.weddingDate || 'pas encore décidée',
+      },
+      {
+        id: 'place', label: 'Un lieu principal', done: Boolean(project.locationName),
+        detail: project.locationName || 'pas encore choisi',
+      },
+      {
+        id: 'moments', label: 'Des moments', done: phases.length > 0,
+        detail: phases.length ? `${phases.length} posés sur la pellicule` : 'la journée est vide',
+      },
+      {
+        id: 'hours', label: 'Des horaires confirmés',
+        done: phases.length > 0 && unconfirmed.length === 0,
+        detail: phases.length === 0
+          ? 'aucun horaire'
+          : unconfirmed.length === 0 ? 'tous confirmés' : `${unconfirmed.length} encore estimés`,
+      },
+      {
+        id: 'places', label: 'Un lieu par moment',
+        done: phases.length > 0 && withoutPlace.length === 0,
+        detail: phases.length === 0
+          ? 'aucun moment'
+          : withoutPlace.length === 0 ? 'chaque moment a le sien' : `${withoutPlace.length} sans lieu`,
+      },
+      {
+        id: 'people', label: 'Des personnes attendues', done: withPeople.length > 0,
+        detail: withPeople.length
+          ? `${withPeople.length} moment${withPeople.length > 1 ? 's' : ''} avec quelqu’un`
+          : 'personne n’est encore rattaché',
+      },
+      {
+        id: 'vendors', label: 'Un prestataire engagé', done: engaged.length > 0,
+        detail: engaged.length
+          ? engaged.map((v) => v.companyName).join(', ')
+          : `${this.vendors.length} prestataire(s), aucun marqué engagé`,
+      },
+      {
+        id: 'documents', label: 'Un document', done: documents.length > 0,
+        detail: documents.length ? `${documents.length} rattaché(s)` : 'aucun document',
+      },
+    ];
+
+    const findings = this.projectFindings();
+    const firstGap = findings.find((f) => f.level === 'gap') ?? null;
+    const clock = this.time;
+    const next = phases.find((p) => p.startHour > clock) ?? phases[0] ?? null;
+
+    return {
+      score: markers.filter((m) => m.done).length,
+      total: markers.length,
+      markers,
+      nextAction: firstGap ? { title: firstGap.title, detail: firstGap.detail } : null,
+      conflicts: findings.filter((f) => f.level === 'conflict').length,
+      nextMoment: next ? { id: next.id, name: next.name, startHour: next.startHour } : null,
+    };
+  }
+
   /** Declare that a moment happens outside. The product never guesses it. */
   public setPhaseOutdoor(phaseId: string, outdoor: boolean): boolean {
     const phase = this.phases.find((p) => p.id === phaseId);

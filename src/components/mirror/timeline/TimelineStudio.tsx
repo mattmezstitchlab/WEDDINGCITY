@@ -6,6 +6,7 @@ import { PRODUCT_NAME } from '../../../design/productIdentity';
 import { MomentHub } from './MomentHub';
 import { EventPanel } from './EventPanel';
 import { SimulationBar } from './SimulationBar';
+import { Cockpit } from './Cockpit';
 import { CERTAINTY } from '../../../design/certainty';
 import './timeline.css';
 
@@ -340,6 +341,11 @@ export function TimelineStudio() {
 
   return (
     <section className="wc-jourj" id="jour-j" aria-label="Le Jour J">
+      {/* MON GRAND JOUR — where the day stands, above the film it describes.
+          Not a page, not a dashboard: four sentences and a ruler one can open.
+          Only drawn once there is a day to say something about. */}
+      {phases.length > 0 && <Cockpit />}
+
       {/* ---- the head: whose day, which day, and the tools of the film ---- */}
       <div className="wc-jourj-head">
         <div style={{ minWidth: 0 }}>
