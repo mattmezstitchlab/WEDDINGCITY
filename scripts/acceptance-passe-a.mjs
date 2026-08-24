@@ -92,6 +92,15 @@ try {
   check('le projet réel est créé', Boolean(created.id));
   check('la Timeline contient les moments du projet', created.phases.length === 3, String(created.phases.length));
   check('le projet ne passe pas par Composer pour arriver au Jour J', await page.$('#jour-j') !== null);
+  const firstFrame = await page.evaluate(() => {
+    const strip = document.querySelector('[data-jourj="strip"]');
+    const card = document.querySelector('[data-jourj="moment"]');
+    if (!strip || !card) return null;
+    const sr = strip.getBoundingClientRect();
+    const cr = card.getBoundingClientRect();
+    return { scrollLeft: strip.scrollLeft, visible: cr.right > sr.left && cr.left < sr.right };
+  });
+  check('la première arrivée cadre le premier moment réel', Boolean(firstFrame?.visible), JSON.stringify(firstFrame));
 
   say('\n=== 2. LA TIMELINE OUVRE LE MOMENT ===');
   check('une seule pellicule de pilotage est montée', await page.$$('[data-jourj="strip"]').then((x) => x.length === 1));
@@ -165,7 +174,8 @@ try {
     strips: document.querySelectorAll('[data-jourj="strip"]').length,
   }));
   say('  ' + JSON.stringify(navigation));
-  check('la navigation principale est allégée', navigation.topButtons.length === 7, navigation.topButtons.join(' | '));
+  check('la navigation principale est réduite aux actions', navigation.topButtons.length <= 3, navigation.topButtons.join(' | '));
+  check('les fiches s’ouvrent depuis la Timeline plutôt que la navigation globale', await page.$('[data-jourj="open-transverse"]') !== null);
   check('le Calendrier n’est plus au même niveau que les lieux', !navigation.hasCalendarTop);
   check('aucune action de l’expérience principale ne mène au World', navigation.visibleWorld.length === 0, navigation.visibleWorld.join(' | '));
   check('il n’existe pas de seconde pellicule', navigation.strips === 1);

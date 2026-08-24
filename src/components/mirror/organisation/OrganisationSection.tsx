@@ -2,8 +2,8 @@ import { useState } from 'react';
 import { weddingStore } from '../../../game/weddingStore';
 import { typography } from '../../../design/tokens';
 import { SeatingPlan } from './SeatingPlan';
-import { ScenariosPanel } from './ScenariosPanel';
 import { CrewPanel } from './CrewPanel';
+import { IconAlert, IconCheck } from '../../ui/Icons';
 
 // ---------------------------------------------------------------------------
 // ORGANISATION — the part of the day that is not an hour.
@@ -42,8 +42,13 @@ export function OrganisationSection() {
           <ul style={list} data-org="lab-findings">
             {findings.map((f, i) => (
               <li key={i} style={{ ...listItem, borderLeft: `2px solid ${f.level === 'conflict' ? '#e0736a' : f.level === 'ok' ? '#7fb08a' : 'rgba(246,245,243,0.3)'}` }}>
-                <span style={{ fontWeight: 600 }}>
-                  {f.level === 'conflict' ? '⚠ ' : f.level === 'ok' ? '✓ ' : '· '}{f.title}
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontWeight: 600 }}>
+                  {f.level === 'conflict'
+                    ? <IconAlert size={13} color="currentColor" />
+                    : f.level === 'ok'
+                      ? <IconCheck size={13} color="currentColor" />
+                      : null}
+                  {f.title}
                 </span>
                 <span style={muted}>{f.detail}</span>
               </li>
@@ -58,10 +63,18 @@ export function OrganisationSection() {
         <CrewPanel />
       </div>
 
-      {/* ---- scenarios: a parallel day ---- */}
+      {/* Scenarios are driven from the Timeline and its SimulationBar. This
+          section only acknowledges the existing branches; it is not a second
+          scenario editor. */}
       <div style={block} id="scenarios">
         <h3 style={h3}>Scénarios</h3>
-        <ScenariosPanel />
+        <p style={muted}>
+          Les variantes se créent depuis « Et si… » ou depuis le moment concerné,
+          puis restent comparables sans quitter la journée.
+          {store.scenarios.length > 0
+            ? ` ${store.scenarios.length} scénario${store.scenarios.length > 1 ? 's' : ''} existe${store.scenarios.length > 1 ? 'nt' : ''}.`
+            : ' Aucun scénario pour l’instant.'}
+        </p>
       </div>
 
       {/* ---- seating ---- */}

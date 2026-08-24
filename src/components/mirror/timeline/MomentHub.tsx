@@ -6,7 +6,7 @@ import { extractDocumentFacts, suggestMoments, describeFacts, type MomentCandida
 import { formatHour, formatHourWithDay, normalizeNightHour } from './TimelineStudio';
 import { TrackArt } from '../TrackArt';
 import { PanelSection } from './PanelSection';
-import { IconDocument } from '../../ui/Icons';
+import { IconAlert, IconCheck, IconDocument } from '../../ui/Icons';
 
 // ---------------------------------------------------------------------------
 // THE MOMENT IS A HUB.
@@ -846,7 +846,9 @@ function MomentState({ phaseId, onClose }: { phaseId: string; onClose: () => voi
         {gaps.map((f, i) => (
           <li key={`gap-${i}`} style={{ ...stateRow, borderLeftColor: f.level === 'conflict' ? '#e0736a' : '#e0a06a' }} data-jourj="hub-state-line" data-level={f.level}>
             <div>
-              <strong>⚠ {f.title}</strong>
+              <strong style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                <IconAlert size={13} color="currentColor" /> {f.title}
+              </strong>
               <div style={{ ...muted, marginTop: 3 }}>{f.detail}</div>
             </div>
             {f.docKind && (
@@ -863,7 +865,9 @@ function MomentState({ phaseId, onClose }: { phaseId: string; onClose: () => voi
         {oks.map((f, i) => (
           <li key={`ok-${i}`} style={{ ...stateRow, borderLeftColor: 'rgba(169,198,162,0.7)' }} data-jourj="hub-state-line" data-level="ok">
             <div>
-              <strong>✓ {f.title}</strong>
+              <strong style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                <IconCheck size={13} color="currentColor" /> {f.title}
+              </strong>
               <div style={{ ...muted, marginTop: 3 }}>{f.detail}</div>
             </div>
           </li>

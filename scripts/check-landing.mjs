@@ -109,10 +109,10 @@ try {
     r.check(['Mariage', 'Festival', 'Concert', 'Gala', 'Spectacle', 'Journée', 'Mission', 'Voyage']
       .every((label) => [...typeOptions].some((o) => o.textContent.trim() === label)),
       'and it really carries the kinds of day the engine knows');
-    r.check(/const start = \(\) =>/.test(landingSrc) && /: create\(\)/.test(landingSrc),
-      'and every way in ends on the same single handler');
-    r.check(/store\.startWeddingCreation\(\)/.test(landingSrc),
-      'which is the store\u2019s one creation entry point');
+    r.check(/const start = \(\) => setIntakeOpen\(true\)/.test(landingSrc),
+      'and every way in ends on the same Intake handler');
+    r.check(/<IntakeStudio/.test(landingSrc) && !/store\.startWeddingCreation\(\)/.test(landingSrc),
+      'which is the landing’s one creation surface');
     r.check(!/createRealWedding\(/.test(landingSrc),
       'the landing never reimplements the creation logic');
 
@@ -207,8 +207,10 @@ try {
     const text = doc.body.textContent.replace(/\s+/g, ' ');
     r.check(!/devient un monde/.test(text), 'the landing steps aside');
     r.check(/Clara/.test(text), 'and the wedding is the subject again');
-    const sections = [...doc.querySelectorAll('section[id^="mirror-"]')];
-    r.check(sections.length >= 6, `its sections render (${sections.length})`);
+    r.check(!!doc.querySelector('#jour-j') && doc.querySelectorAll('[data-jourj="strip"]').length === 1,
+      'the opened wedding is the Timeline product, with one film');
+    r.check(doc.querySelectorAll('section[id^="mirror-"]').length === 0,
+      'no second editorial management page is mounted');
   }
 
   // ---------------------------------------------------------------------------

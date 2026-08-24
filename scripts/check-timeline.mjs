@@ -209,24 +209,25 @@ try {
   const studio = read('components', 'mirror', 'timeline', 'TimelineStudio.tsx');
   const css = read('components', 'mirror', 'timeline', 'timeline.css');
 
-  r.check(site.indexOf('<TimelineStudio />') > 0, 'the timeline is what the Mirror renders first');
-  r.check(site.indexOf('<TimelineStudio />') < site.indexOf('<MirrorProjection'),
-    'and the editorial story comes after the day, in the same page');
+  r.check(site.indexOf('<TimelineStudio />') > 0, 'the Timeline is the first product surface');
+  r.check(/data-jourj="transverse-context"/.test(site)
+    && /data-jourj="reading-context"/.test(site),
+    'transverse resources and reading are folded contexts, not sibling pages');
+  r.check(!/<MirrorProjection embedded/.test(site),
+    'the former full editorial management page is not mounted in the day');
   r.check(!/setProjection\('world'\)/.test(site) && !/setProjection\('world'\)/.test(nav),
     'nothing in the product sends the couple into the 3D World');
   r.check(!/<ProjectionSwitcher \/>/.test(app), 'and the projection capsule is gone from the surface');
-  // PRODUCT DECISION (convergence pass): the navigation is the definitive one —
-  // the places of a wedding day, plus search, my weddings and create. Still one
-  // bar, still no sidebar, and still nothing that leads to a 3D world.
-  // PRODUCT DECISION (convergence de la Timeline): eight destinations became
-  // four — « La journée », « Les gens », « L'organisation », « Souvenirs ».
-  // Nothing was removed: the merged doors keep their own hooks in `aliases`,
-  // so every destination that existed still exists and is still named.
+  // PRODUCT DECISION (Timeline as product): the day is already visible, so the
+  // principal bar keeps only actions. Places and resources open in context from
+  // the Timeline, not through a second section navigation.
+  for (const tag of ['nav-search', 'nav-weddings']) {
+    r.check(site.includes(`data-jourj="${tag}"`), `the action remains available: ${tag}`);
+  }
   for (const tag of ['nav-today', 'nav-jourj', 'nav-people', 'nav-organisation',
-    'nav-music', 'nav-documents', 'nav-memories', 'nav-search', 'nav-weddings', 'nav-create']) {
-    r.check(site.includes(`data-jourj="${tag}"`) || site.includes(`tag: '${tag}'`)
-      || site.includes(`'${tag}'`),
-      `the navigation still carries ${tag}`);
+    'nav-music', 'nav-documents', 'nav-memories', 'nav-create']) {
+    r.check(!site.includes(`data-jourj="${tag}"`),
+      `the redundant destination is removed from the principal bar: ${tag}`);
   }
 
   const storeSrc = read('game', 'weddingStore.ts');
@@ -238,7 +239,7 @@ try {
   // The drag surface is the CARD, not a handle — the reported bug.
   r.check(/className={`wc-jourj-moment/.test(studio) && /onPointerDown={\(e\) => onMomentPointerDown\(e, phase\.id\)}/.test(studio),
     'the whole card is the drag surface, so an icon can never travel alone');
-  r.check(/const left = isDragged \? drag!\.left : xForHour\(phase\.startHour\)/.test(studio),
+  r.check(/const left = isDragged \? drag!\.left : xForHour\(projectedStart\)/.test(studio),
     'and the card itself is repositioned during the drag');
   r.check(/data-jourj="drop-time"/.test(studio), 'the target hour is shown while dragging');
 
@@ -436,12 +437,11 @@ try {
     'and one sentence every demonstration must show');
 
   const landingSrc2 = read('components', 'mirror', 'MirrorLanding.tsx');
-  r.check(/EDITORIAL_PEOPLE/.test(landingSrc2) && /EDITORIAL_TRACKS/.test(landingSrc2),
-    'the public page uses the registry rather than inventing its own assets');
-  r.check(/data-landing="closing-title"/.test(landingSrc2)
-    && /Tout commence par un moment/.test(landingSrc2)
-    && /Un mariage commence par un oui/.test(landingSrc2),
-    'the closing line is universal, with a wedding variant');
+  r.check(/<LandingFilm/.test(landingSrc2) && /data-landing="timeline-intro"/.test(landingSrc2),
+    'the public page uses the same film language as the Timeline');
+  r.check(/data-landing="report-intro"/.test(landingSrc2)
+    && /Dites-le comme vous l’avez/.test(landingSrc2),
+    'the entry explains the report before creation, without a second manager');
 
   // A scenario is a branch: created, changed, compared, applied, discarded —
   // and the real day never moves on its own. Executed, not read.
@@ -525,14 +525,15 @@ try {
     'and asks the one thing it must not guess');
 
   const page = read('components', 'mirror', 'MirrorLanding.tsx');
-  r.check(/data-landing="demo-head"/.test(page) && /MATT/.test(page) && /démonstration/.test(page),
-    'the film carries a concrete example, labelled as a demonstration');
-  r.check(/data-landing="causality"/.test(page)
-    && page.indexOf('data-landing="causality"') > page.indexOf('<LandingFilm'),
-    'the causality control sits on the film, not in a far section');
-  r.check(/data-landing="rail"/.test(page) && /Plan B/.test(page),
-    'the scenario section compares two rails');
-  r.check(/data-landing="doc-row"/.test(page), 'and documents hang on hours');
+  r.check(/<LandingFilm/.test(page) && /Démonstration/.test(film),
+    'the landing shows the product film, labelled as a demonstration');
+  const simulationSrc = read('components', 'mirror', 'timeline', 'SimulationBar.tsx');
+  r.check(/SimulationBar/.test(studioSrc) && /data-jourj="simulation"/.test(simulationSrc),
+    'the causal simulation belongs to the real Timeline, not to the landing');
+  r.check(/createScenario/.test(studioSrc) && /scenarioDiff/.test(read('components', 'mirror', 'organisation', 'ScenariosPanel.tsx')),
+    'the scenario branch reuses the existing engine');
+  r.check(/data-landing="report-intro"/.test(page),
+    'the entry keeps the report hand-off visible and concise');
   // PRODUCT DECISION (convergence finale): two sequences were added — IMPORTER
   // LE CHAOS and L'ADMINISTRATION INVISIBLE — both demanded by the brief and
   // both demonstrating a real function. The ceiling moves from 10 to 12; the
@@ -616,11 +617,10 @@ try {
     'the crew surface reads the projection and writes nothing of its own');
   r.check(/Ma journée/.test(crewUi), 'and it is called « Ma journée »');
 
-  const landingCrew = read('components', 'mirror', 'MirrorLanding.tsx');
-  r.check(/data-landing="spectacle"/.test(landingCrew)
-    && /Un moment ne se produit jamais par hasard/.test(landingCrew),
-    'the public page carries the spectacle section');
-  r.check(/SPECTACLE_CRAFTS/.test(landingCrew), 'with the crafts named from the registry');
+  r.check(!/data-landing="spectacle"/.test(page) && /CrewPanel/.test(orgSrc),
+    'spectacle remains a transverse crew capability, not a second landing section');
+  r.check(/PersonCraft/.test(read('types', 'identity.ts')) && /setPersonCraft/.test(crewUi),
+    'with the craft kept on the existing Person entity');
 
   // -------------------------------------------------------------------------
   console.log('\n[12/15] ORCHESTRATION — several events, one identity, no second base');

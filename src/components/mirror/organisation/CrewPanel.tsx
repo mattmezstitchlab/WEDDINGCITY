@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { weddingStore } from '../../../game/weddingStore';
 import { typography } from '../../../design/tokens';
+import { IconAlert } from '../../ui/Icons';
 
 // ---------------------------------------------------------------------------
 // ÉQUIPE DU JOUR — ceux qui donnent vie au moment.
@@ -253,7 +254,10 @@ export function CrewPanel() {
               data-crew="finding"
               data-level={f.level}
             >
-              <span style={{ fontWeight: 600 }}>{f.level === 'conflict' ? '⚠ ' : '· '}{f.title}</span>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontWeight: 600 }}>
+                {f.level === 'conflict' && <IconAlert size={13} color="currentColor" />}
+                {f.title}
+              </span>
               <span style={mutedInline}>{f.detail}</span>
             </li>
           ))}
@@ -374,7 +378,9 @@ function CrossEvents() {
           <ul style={{ ...list, marginTop: 10 }} data-crew="crossevents-list">
             {conflicts.map((c, i) => (
               <li key={i} style={{ ...row, paddingLeft: 12, borderLeft: '2px solid #e0736a' }} data-crew="crossevent">
-                <span style={{ fontWeight: 600 }}>⚠ {c.personName} · double réservation</span>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontWeight: 600 }}>
+                  <IconAlert size={13} color="currentColor" /> {c.personName} · double réservation
+                </span>
                 <span style={mutedInline}>
                   Ici : {c.here} — {c.otherProjectName} : {c.there}. À confirmer : le
                   rapprochement se fait sur le nom, deux homonymes ne sont pas la même personne.

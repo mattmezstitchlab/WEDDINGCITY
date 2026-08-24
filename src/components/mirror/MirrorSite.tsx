@@ -40,30 +40,32 @@ export function MirrorSite() {
 
   // Before any wedding has been opened or created in this browser, the Mirror
   // is not a projection of anything: it is the public face of the product.
-  // No project data is read at all in that state — in particular, never the
-  // demo (see MirrorLanding).
+  // No project model is computed in that state — in particular, never the demo.
   if (!store.projectChosen) return <MirrorLanding />;
+  return <TimelineProduct />;
+}
 
-  // ---------------------------------------------------------------------
-  // THE PRODUCT IS THE DAY.
-  //
-  // Until this pass the Mirror opened on a magazine cover and the day was a
-  // section inside it — and, before that, the way in was the 3D World. Both
-  // are the wrong priority: what a couple builds, day after day, is the
-  // timeline of the Jour J. So the Jour J now owns the first screen, and the
-  // editorial story stays right below it, in the same scroll: it is the same
-  // data seen as a site, not another destination.
-  // ---------------------------------------------------------------------
+/** The only active wedding surface: Timeline first, optional contexts inside it. */
+function TimelineProduct() {
+  const store = weddingStore;
+  const model = useMemo(() => projectWorldModel(), [store.version]);
+
   return (
     <div id="wc-mirror" style={productPageStyle} className="wc-jourj">
       <ProductNav />
       <TimelineStudio />
-      <OrganisationSection />
-      <div style={storyDividerStyle}>
-        <span>Le récit</span>
-        <span style={{ opacity: 0.62 }}>ce que vos invités verront de cette journée</span>
-      </div>
-      <MirrorProjection embedded />
+
+      <details className="wc-jourj-context" data-jourj="transverse-context">
+        <summary>Ressources transverses</summary>
+        <OrganisationSection />
+      </details>
+
+      <details className="wc-jourj-reading" data-jourj="reading-context">
+        <summary>Lire le déroulé</summary>
+        <div className="wc-jourj-reading-body" style={{ background: '#f7f5f0', color: M.textPrimary }}>
+          <MirrorTimeline moments={model.programme.moments} />
+        </div>
+      </details>
     </div>
   );
 }
@@ -82,35 +84,11 @@ function ProductNav() {
     window.addEventListener('wc-open-calendar', openCalendar);
     return () => window.removeEventListener('wc-open-calendar', openCalendar);
   }, []);
-  const go = (id: string) => {
-    const el = document.getElementById(id);
-    el?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  };
 
-  // -------------------------------------------------------------------------
-  // WHAT YOU SEE DEPENDS ON WHAT YOU DO HERE.
-  //
-  // One engine, one navigation — but a couple living their own day has no use
-  // for delegation, travel or cross-event administration, and showing it to
-  // them is showing them someone else's job. The product asks the permission
-  // model that already exists (ProjectMembership → store.currentRole()); it
-  // does not invent a second one. Local single-user mode is the owner of their
-  // own day, and sees everything about it.
-  // -------------------------------------------------------------------------
-  // A couple lives their day; they do not administer a portfolio of events.
+  // The day is already on screen: no section catalogue belongs in this bar.
+  // Search, switching event and administration remain actions, not destinations
+  // that compete with the Timeline.
   const showsAdmin = store.pilotsSeveralEvents();
-
-  // AUDITED: eight entries plus three actions plus the wordmark — twelve objects
-  // in one bar, which wrapped onto two lines at 1440px. They are now four
-  // destinations. Nothing disappeared: every former entry still exists, and
-  // still carries its own data-jourj hook, so every door that worked still
-  // works — they are simply grouped by what they are.
-  const ENTRIES: { id: string; label: string; tag: string; aliases?: string[] }[] = [
-    { id: 'jour-j', label: 'La journée', tag: 'nav-jourj', aliases: ['nav-today'] },
-    { id: 'mirror-guests', label: 'Les gens', tag: 'nav-people', aliases: ['nav-crew'] },
-    { id: 'organisation', label: 'L’organisation', tag: 'nav-organisation', aliases: ['nav-documents', 'nav-music'] },
-    { id: 'mirror-gallery', label: 'Souvenirs', tag: 'nav-memories' },
-  ];
 
   return (
     <>
@@ -119,21 +97,6 @@ function ProductNav() {
           {PRODUCT_NAME}
           <span style={{ fontSize: '0.6em', verticalAlign: 'super', marginLeft: 2 }}>{PRODUCT_MARK}</span>
         </span>
-        <div className="wc-product-nav-links">
-          {ENTRIES.map((e) => (
-            <button
-              key={e.tag}
-              onClick={() => go(e.id)}
-              style={productNavBtn}
-              data-jourj={e.tag}
-              // The doors that were merged keep their own hooks: a link, a test
-              // or a bookmark that pointed at « Musique » still lands right.
-              data-jourj-also={e.aliases?.join(' ')}
-            >
-              {e.label}
-            </button>
-          ))}
-        </div>
         <span style={{ flex: 1 }} />
         <button onClick={() => setSearchOpen(true)} style={productNavBtn} data-jourj="nav-search" aria-label="Recherche">
           Rechercher
@@ -144,7 +107,6 @@ function ProductNav() {
           </button>
         )}
         <button onClick={() => store.returnToLanding()} style={productNavBtn} data-jourj="nav-weddings">Mes mariages</button>
-        <button onClick={() => store.startWeddingCreation()} style={productNavCta} data-jourj="nav-create">Créer</button>
       </nav>
       {searchOpen && <GlobalSearch onClose={() => setSearchOpen(false)} />}
       {adminOpen && <AdminConsole onClose={() => setAdminOpen(false)} />}

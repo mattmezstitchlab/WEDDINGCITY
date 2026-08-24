@@ -558,3 +558,134 @@
   .wc-cockpit-row { grid-template-columns: 1fr; gap: 14px; }
   .wc-cockpit-legend { white-space: normal; }
 }
+
+/* ---------------------------------------------------------------------------
+   ONE DAY, OPTIONAL CONTEXTS
+   The product spine remains the film. Cross-day resources and the editorial
+   reading are disclosed in-place, with no new route or competing navigation.
+   --------------------------------------------------------------------------- */
+.wc-jourj-context,
+.wc-jourj-reading {
+  border-top: 1px solid var(--jourj-line, rgba(246, 245, 243, 0.14));
+  background: #0b0c0e;
+  color: #f6f5f3;
+}
+
+.wc-jourj-context > summary,
+.wc-jourj-reading > summary {
+  cursor: pointer;
+  list-style: none;
+  padding: 18px clamp(18px, 5vw, 64px);
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 14px;
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  font-weight: 700;
+}
+
+.wc-jourj-context > summary::-webkit-details-marker,
+.wc-jourj-reading > summary::-webkit-details-marker { display: none; }
+
+.wc-jourj-context > summary::after,
+.wc-jourj-reading > summary::after {
+  content: '＋';
+  font-size: 14px;
+  color: rgba(246, 245, 243, 0.55);
+}
+
+.wc-jourj-context[open] > summary::after,
+.wc-jourj-reading[open] > summary::after { content: '−'; }
+
+.wc-jourj-context > summary:focus-visible,
+.wc-jourj-reading > summary:focus-visible {
+  outline: 2px solid #f6f5f3;
+  outline-offset: -3px;
+}
+
+.wc-jourj-context > section {
+  border-top: 1px solid rgba(246, 245, 243, 0.08);
+}
+
+.wc-jourj-reading-body {
+  padding: 8px clamp(18px, 5vw, 64px) 56px;
+  background: #f7f5f0;
+  color: #16181d;
+}
+
+@media (max-width: 520px) {
+  .wc-jourj-context > summary,
+  .wc-jourj-reading > summary { padding-top: 16px; padding-bottom: 16px; }
+}
+
+/* ---------------------------------------------------------------------------
+   TEMPORARY SIMULATION PROJECTION
+   The real phases never receive these classes. The film simply renders the
+   same cards at projected positions until the user applies or cancels.
+   --------------------------------------------------------------------------- */
+.wc-jourj-simulation-state {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+  padding: 10px clamp(18px, 5vw, 64px);
+  border-top: 1px solid rgba(224, 160, 106, 0.48);
+  border-bottom: 1px solid rgba(224, 160, 106, 0.28);
+  background: rgba(224, 160, 106, 0.08);
+  color: #e7c6a4;
+  font-size: 12px;
+}
+
+.wc-jourj-simulation-reset {
+  appearance: none;
+  cursor: pointer;
+  border: 1px solid rgba(246, 245, 243, 0.34);
+  border-radius: 999px;
+  background: transparent;
+  color: #f6f5f3;
+  padding: 7px 13px;
+  font: inherit;
+  font-size: 11px;
+}
+
+.wc-jourj-moment.is-simulated {
+  border-color: rgba(224, 160, 106, 0.95);
+  box-shadow: 0 0 0 2px rgba(224, 160, 106, 0.18), 0 18px 40px rgba(0, 0, 0, 0.34);
+}
+
+.wc-jourj-moment.is-weather-affected {
+  border-color: rgba(133, 169, 195, 0.94);
+  box-shadow: 0 0 0 2px rgba(133, 169, 195, 0.18);
+}
+
+.wc-jourj-simulated-time {
+  display: inline-block;
+  margin-left: 8px;
+  color: #e7c6a4;
+  font-size: 10px;
+  letter-spacing: 0.04em;
+}
+
+.wc-jourj-weather-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  pointer-events: none;
+  background:
+    linear-gradient(180deg, rgba(62, 91, 111, 0.16), rgba(7, 14, 20, 0.34)),
+    repeating-linear-gradient(112deg, transparent 0 18px, rgba(178, 207, 224, 0.12) 19px 20px, transparent 21px 36px);
+  background-size: 100% 100%, 100% 160px;
+  animation: wc-rain-drift 900ms linear infinite;
+}
+
+@keyframes wc-rain-drift {
+  from { background-position: 0 0, 0 -20px; }
+  to { background-position: 0 0, 0 140px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wc-jourj-weather-layer { animation: none; }
+}

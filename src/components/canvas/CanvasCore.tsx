@@ -11,6 +11,7 @@ import {
   getCachedResult, isEnrichmentAvailable, isItunesEnabled, setItunesEnabled,
   describeActivation, EnrichmentCandidate,
 } from '../../game/enrichment';
+import { IconAlert } from '../ui/Icons';
 
 // ---------------------------------------------------------------------------
 // CANVAS CORE — the composition logic, with NO layout of its own.
@@ -83,7 +84,7 @@ export function SaveIndicator() {
   const s = map[state];
   return (
     <span style={{ fontSize: typography.size.caption, color: s.color, whiteSpace: 'nowrap' }}>
-      {state === 'error' ? '⚠ ' : ''}{s.text}
+      {state === 'error' && <IconAlert size={12} color={s.color} style={{ verticalAlign: '-2px', marginRight: 4 }} />}{s.text}
     </span>
   );
 }

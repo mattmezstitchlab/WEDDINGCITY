@@ -5,9 +5,10 @@ import { momentImage, MOMENT_TEMPLATES } from '../../../design/momentImagery';
 import { PRODUCT_NAME } from '../../../design/productIdentity';
 import { MomentHub } from './MomentHub';
 import { EventPanel } from './EventPanel';
-import { SimulationBar } from './SimulationBar';
+import { SimulationBar, type TimelineSimulation } from './SimulationBar';
 import { Cockpit } from './Cockpit';
 import { CERTAINTY } from '../../../design/certainty';
+import { IconAlert, IconCheck } from '../../ui/Icons';
 import './timeline.css';
 
 // ---------------------------------------------------------------------------
@@ -128,6 +129,9 @@ export function TimelineStudio() {
   const [draftDuration, setDraftDuration] = useState('60');
   const [ripple, setRipple] = useState<{ phaseId: string; delta: number; count: number } | null>(null);
   const [eventPanelOpen, setEventPanelOpen] = useState(false);
+  // Simulation is a projection owned by the Timeline, never a second phase
+  // collection. SimulationBar only changes this ephemeral view state.
+  const [simulation, setSimulation] = useState<TimelineSimulation | null>(null);
 
   // ONE DOOR, WHEREVER YOU CAME FROM. The calendar, the search, a mission or a
   // document all ask the store to open a moment; the timeline is the only thing
@@ -160,6 +164,7 @@ export function TimelineStudio() {
 
   const stripRef = useRef<HTMLDivElement>(null);
   const panRef = useRef<{ startX: number; startScroll: number } | null>(null);
+  const initialFocusProjectRef = useRef<string | null>(null);
 
   // The film always covers at least the usual day, and always covers the data.
   const DAY_START = Math.min(DEFAULT_DAY_START, ...phases.map((p) => Math.floor(p.startHour)));
@@ -169,6 +174,23 @@ export function TimelineStudio() {
   const xForHour = (h: number) => (h - DAY_START) * pxPerHour;
   const hourForX = (x: number) => DAY_START + x / pxPerHour;
   const snap = (h: number) => Math.round(h * (60 / SNAP_MINUTES)) / (60 / SNAP_MINUTES);
+
+  // A project must arrive on its actual day, not on an empty ruler before it.
+  // This only changes the scroll position; the phases and their hours remain
+  // untouched. A later phase/project change gets its own first-frame focus.
+  useEffect(() => {
+    if (phases.length === 0 || initialFocusProjectRef.current === store.currentProject.id) return;
+    const projectId = store.currentProject.id;
+    requestAnimationFrame(() => {
+      const strip = stripRef.current;
+      const first = phases[0];
+      if (!strip || !first) return;
+      const cardWidth = Math.max((first.endHour - first.startHour) * pxPerHour, MIN_CARD_PX);
+      const desired = xForHour(first.startHour) + cardWidth / 2 - strip.clientWidth / 2;
+      strip.scrollLeft = Math.max(0, Math.min(desired, strip.scrollWidth - strip.clientWidth));
+      initialFocusProjectRef.current = projectId;
+    });
+  }, [phases.length, store.currentProject.id, DAY_START, DAY_END, pxPerHour]);
 
   // --- zoom, keeping the instant under the cursor still ---------------------
   /**
@@ -338,9 +360,17 @@ export function TimelineStudio() {
   const dayLabel = project.weddingDate
     ? new Date(project.weddingDate).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
     : null;
+  const delayedIds = simulation?.delay
+    ? new Set([simulation.delay.phaseId, ...store.phasesAfter(simulation.delay.phaseId).map((phase) => phase.id)])
+    : null;
+  const simulatedWeather = simulation && simulation.weather.intensity > 0 ? simulation.weather : null;
 
   return (
-    <section className="wc-jourj" id="jour-j" aria-label="Le Jour J">
+    <section
+      className={`wc-jourj${simulation ? ' is-simulating' : ''}${simulatedWeather ? ' is-weather-simulating' : ''}`}
+      id="jour-j"
+      aria-label="Le Jour J"
+    >
       {/* MON GRAND JOUR — where the day stands, above the film it describes.
           Not a page, not a dashboard: four sentences and a ruler one can open.
           Only drawn once there is a day to say something about. */}
@@ -361,6 +391,9 @@ export function TimelineStudio() {
         </div>
 
         <div className="wc-jourj-tools">
+          <button onClick={() => store.openCanvas()} style={ghostBtn} data-jourj="open-transverse">
+            Fiches
+          </button>
           <button onClick={() => setEventPanelOpen(true)} style={ghostBtn} data-jourj="open-event">
             L’événement
           </button>
@@ -403,6 +436,23 @@ export function TimelineStudio() {
           </button>
         </div>
       </div>
+
+      {simulation && (
+        <div className="wc-jourj-simulation-state" data-jourj="simulation-state" role="status">
+          <span>
+            Simulation · les cartes montrent une projection temporaire
+            {simulation.delay ? ` · +${Math.round(simulation.delay.deltaHours * 60)} min` : ''}
+            {simulatedWeather ? ` · pluie simulée ${simulatedWeather.intensity}%` : ''}
+          </span>
+          <button
+            onClick={() => setSimulation(null)}
+            className="wc-jourj-simulation-reset"
+            data-jourj="simulation-reset"
+          >
+            Revenir à la réalité
+          </button>
+        </div>
+      )}
 
       {/* ---- inline composer: a moment is one line, not a form ---- */}
       {composing && (
@@ -496,11 +546,28 @@ export function TimelineStudio() {
           )}
 
           {/* the moments */}
+          {simulatedWeather && (
+            <div
+              className="wc-jourj-weather-layer"
+              style={{ opacity: Math.min(0.8, simulatedWeather.intensity / 100) }}
+              data-jourj="weather-atmosphere"
+              aria-hidden="true"
+            />
+          )}
+
           {phases.map((phase) => {
             const isDragged = drag?.phaseId === phase.id;
-            const duration = phase.endHour - phase.startHour;
-            const left = isDragged ? drag!.left : xForHour(phase.startHour);
+            const isDelayed = Boolean(delayedIds?.has(phase.id));
+            const projectedStart = isDelayed
+              ? phase.startHour + (simulation?.delay?.deltaHours ?? 0)
+              : phase.startHour;
+            const projectedEnd = isDelayed
+              ? phase.endHour + (simulation?.delay?.deltaHours ?? 0)
+              : phase.endHour;
+            const duration = projectedEnd - projectedStart;
+            const left = isDragged ? drag!.left : xForHour(projectedStart);
             const cardWidth = Math.max(duration * pxPerHour, MIN_CARD_PX);
+            const weatherAffected = Boolean(simulatedWeather?.exposedIds.includes(phase.id));
             const own = store.media.find((m) => m.ownerKind === 'event' && m.ownerId === phase.id && m.kind === 'image');
             const image = momentImage(phase.name, own?.source);
             const hub = store.getPhaseHub(phase.id);
@@ -508,7 +575,10 @@ export function TimelineStudio() {
             // What this scene is still missing, read from the same engine the
             // whole product uses. Gaps and conflicts come first: a card should
             // announce a problem before it announces a success.
-            const allFindings = store.phaseFindings(phase.id);
+            // The certainty is already the single signal beside the hour. Do
+            // not repeat it as a second warning line on the same card.
+            const allFindings = store.phaseFindings(phase.id)
+              .filter((finding) => !/^Horaire /.test(finding.title));
             const findings = [
               ...allFindings.filter((f) => f.level === 'conflict'),
               ...allFindings.filter((f) => f.level === 'gap'),
@@ -518,7 +588,7 @@ export function TimelineStudio() {
             return (
               <article
                 key={phase.id}
-                className={`wc-jourj-moment${isDragged ? ' is-dragging' : ''}`}
+                className={`wc-jourj-moment${isDragged ? ' is-dragging' : ''}${isDelayed ? ' is-simulated' : ''}${weatherAffected ? ' is-weather-affected' : ''}`}
                 style={{ left, width: cardWidth }}
                 onPointerDown={(e) => onMomentPointerDown(e, phase.id)}
                 onPointerMove={onMomentPointerMove}
@@ -527,12 +597,19 @@ export function TimelineStudio() {
                 data-jourj="moment"
                 data-phase-id={phase.id}
                 data-start={phase.startHour}
+                data-projected-start={projectedStart}
+                data-simulation={isDelayed || weatherAffected ? 'yes' : 'no'}
               >
                 <img src={image.src} alt={image.alt} width={image.width} height={image.height} loading="lazy" decoding="async" />
                 <div style={momentScrim} />
                 <div style={momentBody}>
                   <div style={momentHour}>
-                    {formatHour(phase.startHour)}
+                    {formatHour(projectedStart)}
+                    {isDelayed && (
+                      <span className="wc-jourj-simulated-time" data-jourj="simulated-time">
+                        {formatHour(phase.startHour)} → {formatHour(projectedStart)}
+                      </span>
+                    )}
                     {phase.confidence && phase.confidence !== 'confirmed' && (
                       <span
                         style={{ ...estimateTag, color: CERTAINTY[phase.confidence].color, borderColor: CERTAINTY[phase.confidence].color }}
@@ -567,7 +644,10 @@ export function TimelineStudio() {
                               data-jourj="moment-state-line"
                               data-level={f.level}
                             >
-                              {f.level === 'ok' ? '✓' : '⚠'} {f.title}
+                              {f.level === 'ok'
+                                ? <IconCheck size={12} color="currentColor" />
+                                : <IconAlert size={12} color="currentColor" />}
+                              <span>{f.title}</span>
                             </li>
                           ))}
                           {extraFindings > 0 && (
@@ -708,7 +788,10 @@ export function TimelineStudio() {
                 <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'grid', gap: 6 }} data-jourj="ripple-conflicts">
                   {impact.conflicts.map((c, i) => (
                     <li key={i} style={conflictLine} data-jourj="ripple-conflict">
-                      <strong>⚠ {c.title}</strong> — {c.detail}
+                      <strong style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                        <IconAlert size={12} color="currentColor" /> {c.title}
+                      </strong>
+                      {' — '}{c.detail}
                     </li>
                   ))}
                 </ul>
@@ -754,7 +837,10 @@ export function TimelineStudio() {
 
       {/* « ET SI… » — inside the film, because a consequence is only readable
           next to the thing it changes. */}
-      <SimulationBar onOpenMoment={(id) => setOpenPhaseId(id)} />
+      <SimulationBar
+        onOpenMoment={(id) => setOpenPhaseId(id)}
+        onPreviewChange={setSimulation}
+      />
 
       {openPhaseId && (
         <MomentHub phaseId={openPhaseId} onClose={() => setOpenPhaseId(null)} />
@@ -1008,6 +1094,7 @@ const stateList: React.CSSProperties = {
 };
 
 const stateLine: React.CSSProperties = {
+  display: 'flex', alignItems: 'center', gap: 5,
   fontSize: 11, lineHeight: 1.4, whiteSpace: 'nowrap',
   overflow: 'hidden', textOverflow: 'ellipsis',
 };

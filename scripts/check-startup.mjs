@@ -214,8 +214,16 @@ function checkDeadModules() {
   // the product — the Mirror is the product and the 3D World is no longer
   // offered as a destination. The component is kept, unreferenced, rather than
   // deleted, because the World tooling still uses that vocabulary.
-  const KNOWN_DEAD = ['SceneShell.tsx', 'game/ChaseCamera.tsx', 'game/GameFlow.tsx', 'game/loop.ts', 'game/mouseLook.ts',
-    'components/ui/ProjectionSwitcher.tsx'];
+  const KNOWN_DEAD = [
+    'SceneShell.tsx',
+    'game/ChaseCamera.tsx', 'game/GameFlow.tsx', 'game/loop.ts', 'game/mouseLook.ts',
+    'components/ui/ProjectionSwitcher.tsx',
+    // Timeline-first product: the old Organisation scenario editor and the
+    // long landing asset registry are intentionally not mounted in the main
+    // wedding experience. Their source remains for the dormant/legacy surfaces.
+    'components/mirror/organisation/ScenariosPanel.tsx',
+    'design/editorialRegistry.ts',
+  ];
   const unexpected = dead.filter((f) => !KNOWN_DEAD.includes(f));
   const revived = KNOWN_DEAD.filter((f) => !dead.includes(f));
 

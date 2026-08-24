@@ -1,7 +1,7 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { weddingStore } from '../../../game/weddingStore';
 import { typography } from '../../../design/tokens';
-import { IconAlert, IconCheck, IconClock } from '../../ui/Icons';
+import { IconAlert, IconCheck, IconClock, IconSparkles } from '../../ui/Icons';
 import { formatHour } from './TimelineStudio';
 import './timeline.css';
 
@@ -22,7 +22,18 @@ import './timeline.css';
 // is a slider the user moves, the page says so, and no forecast is displayed.
 // ---------------------------------------------------------------------------
 
-export function SimulationBar({ onOpenMoment }: { onOpenMoment: (phaseId: string) => void }) {
+export interface TimelineSimulation {
+  delay: { phaseId: string; deltaHours: number } | null;
+  weather: { intensity: number; hour: number; exposedIds: string[] };
+}
+
+export function SimulationBar({
+  onOpenMoment,
+  onPreviewChange,
+}: {
+  onOpenMoment: (phaseId: string) => void;
+  onPreviewChange?: (simulation: TimelineSimulation | null) => void;
+}) {
   const store = weddingStore;
   const phases = useMemo(
     () => [...store.phases].sort((a, b) => a.startHour - b.startHour),
@@ -47,10 +58,26 @@ export function SimulationBar({ onOpenMoment }: { onOpenMoment: (phaseId: string
   );
   const weather = useMemo(() => store.weatherImpact(hour), [hour, store.version]);
   const raining = rain >= 50;
+  const exposedIds = weather.exposed.map((phase) => phase.id).join('|');
+
+  // The bar owns the controls; TimelineStudio owns the visible projection.
+  // Nothing is persisted here. Closing the bar clears the temporary state.
+  useEffect(() => {
+    if (!open || phases.length === 0 || !target) {
+      onPreviewChange?.(null);
+      return;
+    }
+    onPreviewChange?.({
+      delay: { phaseId: target.id, deltaHours: minutes / 60 },
+      weather: { intensity: rain, hour, exposedIds: exposedIds ? exposedIds.split('|') : [] },
+    });
+  }, [open, target?.id, minutes, rain, hour, exposedIds, phases.length]);
 
   if (phases.length === 0 || !target) return null;
 
   const planB = (name: string, shift: boolean) => {
+    onPreviewChange?.(null);
+    setOpen(false);
     const scenario = store.createScenario(name);
     if (!scenario) return;
     if (shift) store.scenarioShiftPhase(scenario.id, target.id, minutes / 60, true);
@@ -62,7 +89,11 @@ export function SimulationBar({ onOpenMoment }: { onOpenMoment: (phaseId: string
     <section className={`wc-sim${raining ? ' is-raining' : ''}`} data-jourj="simulation" data-rain={raining ? 'yes' : 'no'}>
       <button
         className="wc-sim-head"
-        onClick={() => setOpen(!open)}
+        onClick={() => {
+          const next = !open;
+          setOpen(next);
+          if (!next) onPreviewChange?.(null);
+        }}
         aria-expanded={open}
         data-jourj="sim-toggle"
       >
@@ -150,7 +181,11 @@ export function SimulationBar({ onOpenMoment }: { onOpenMoment: (phaseId: string
 
                 <div className="wc-sim-actions">
                   <button
-                    onClick={() => { store.shiftPhaseAndFollowing(target.id, target.startHour + minutes / 60); }}
+                    onClick={() => {
+                      onPreviewChange?.(null);
+                      setOpen(false);
+                      store.shiftPhaseAndFollowing(target.id, target.startHour + minutes / 60);
+                    }}
                     className="wc-sim-primary"
                     data-jourj="sim-apply"
                   >
@@ -163,11 +198,19 @@ export function SimulationBar({ onOpenMoment }: { onOpenMoment: (phaseId: string
                   >
                     Créer un plan B
                   </button>
-                  <button onClick={() => onOpenMoment(target.id)} className="wc-sim-ghost" data-jourj="sim-open">
+                  <button
+                    onClick={() => { onPreviewChange?.(null); setOpen(false); onOpenMoment(target.id); }}
+                    className="wc-sim-ghost"
+                    data-jourj="sim-open"
+                  >
                     Ouvrir ce moment
                   </button>
-                  <button onClick={() => setMinutes(15)} className="wc-sim-ghost" data-jourj="sim-reset">
-                    Ne rien changer
+                  <button
+                    onClick={() => { setMinutes(15); setRain(0); setOpen(false); onPreviewChange?.(null); }}
+                    className="wc-sim-ghost"
+                    data-jourj="sim-reset"
+                  >
+                    Revenir à la réalité
                   </button>
                 </div>
               </div>
@@ -177,8 +220,8 @@ export function SimulationBar({ onOpenMoment }: { onOpenMoment: (phaseId: string
           {/* ------------------------------------------------------- MÉTÉO */}
           <div className="wc-sim-block" data-jourj="sim-weather">
             <div className="wc-sim-block-head">
-              <span aria-hidden>☀</span>
-              <span>Une averse</span>
+              <IconSparkles size={15} color="rgba(246,245,243,0.7)" />
+              <span>Une hypothèse météo</span>
             </div>
 
             <div className="wc-sim-controls">
@@ -193,7 +236,7 @@ export function SimulationBar({ onOpenMoment }: { onOpenMoment: (phaseId: string
                 aria-label="Du beau temps à la pluie"
                 data-jourj="sim-rain"
               />
-              <span aria-hidden>☔</span>
+              {raining && <IconAlert size={14} color="#86a9c3" />}
               <input
                 type="range"
                 min={Math.floor(phases[0].startHour)}

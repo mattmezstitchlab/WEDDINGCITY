@@ -144,15 +144,11 @@ try {
   const desktop = await render(MIRROR_ENTRY, { width: 1440 });
   {
     const doc = desktop.document;
-    const sections = [...doc.querySelectorAll('section[id^="mirror-"]')].map((s) => s.id);
-    r.check(sections.length >= 6, `the six editorial sections render (${sections.length})`, sections.join(', '));
-
-    // Every rendered section must carry real content, not just a heading.
-    const thin = [];
-    for (const section of doc.querySelectorAll('section[id^="mirror-"]')) {
-      if (section.textContent.replace(/\s+/g, ' ').trim().length < 80) thin.push(section.id);
-    }
-    r.check(thin.length === 0, 'no section renders as an empty shell', thin.join(', '));
+    r.check(!!doc.querySelector('#jour-j'), 'the opened wedding is the Jour J surface');
+    r.check(doc.querySelectorAll('[data-jourj="strip"]').length === 1,
+      'and it mounts exactly one Timeline film');
+    r.check(doc.querySelectorAll('details[data-jourj="transverse-context"], details[data-jourj="reading-context"]').length === 2,
+      'secondary resources are folded contexts, not sibling pages');
 
     r.check(doc.querySelectorAll('h1').length === 1, 'exactly one h1 — the couple');
     const h1 = doc.querySelector('h1').textContent;
@@ -165,9 +161,9 @@ try {
       .filter((word) => body.includes(word));
     r.check(jargon.length === 0, 'no technical vocabulary is shown to the visitor', jargon.join(', '));
 
-    // The hour is the anchor of the programme, and it is really there.
-    const hours = [...doc.querySelectorAll('#mirror-programme div')]
-      .map((d) => ownText(d)).filter((t) => /^\d{2}:\d{2}$/.test(t));
+    // The hour is the anchor of the one film, and it is really there.
+    const hours = [...doc.querySelectorAll('[data-jourj="moment"]')]
+      .filter((d) => /\d{2}:\d{2}/.test(d.textContent || ''));
     r.check(hours.length >= 7, `every moment shows its hour (${hours.length})`);
   }
 
@@ -196,11 +192,10 @@ try {
 
       r.check(h1 > Math.max(...h2), `${label}: the couple dominates every section title`,
         `${Math.round(h1)} > ${Math.round(Math.max(...h2))}`);
-      r.check(Math.max(...h2) > Math.max(...h3), `${label}: section titles dominate the moments`,
-        `${Math.round(Math.max(...h2))} > ${Math.round(Math.max(...h3))}`);
-      r.check(new Set(h2.map(Math.round)).size >= 2,
-        `${label}: sections carry unequal weight (dominant / normal / quiet)`,
-        [...new Set(h2.map(Math.round))].join('/'));
+      r.check(h2.length === 0 || h1 >= Math.max(...h2), `${label}: the Timeline dominates secondary headings`,
+        `${Math.round(h1)} >= ${h2.length ? Math.round(Math.max(...h2)) : 'none'}`);
+      r.check(h2.length === 0 || new Set([Math.round(h1), ...h2.map(Math.round)]).size >= 2,
+        `${label}: the Timeline and secondary contexts have unequal weight`);
 
       // Nothing unreadable, and no control at the smallest tier.
       const nodes = textNodes(doc, width);
@@ -236,40 +231,22 @@ try {
   {
     const doc = desktop.document;
 
-    // A human named as a vendor must not be repeated as a guest of the moment.
-    for (const article of doc.querySelectorAll('#mirror-programme article')) {
-      const names = [...article.querySelectorAll('button, span')]
-        .map((el) => ownText(el)).filter((t) => t.length > 3 && /[A-ZÉÈ]/.test(t[0]));
-      const counts = new Map();
-      for (const n of names) counts.set(n, (counts.get(n) || 0) + 1);
-      const twice = [...counts.entries()].filter(([, n]) => n > 1).map(([k]) => k);
-      r.check(twice.length === 0, 'a moment never names the same human twice', twice.join(', '));
-      break; // the first moment is representative; all are built identically
+    // The Timeline card is the one visible summary of a moment. It must not
+    // repeat a relation simply because the page has another renderer.
+    for (const article of doc.querySelectorAll('[data-jourj="moment"]')) {
+      const labels = [...article.querySelectorAll('[data-jourj="moment-state-line"]')]
+        .map((el) => el.textContent?.replace(/[✓⚠]\s*/g, '').trim())
+        .filter(Boolean);
+      const duplicates = labels.filter((label, i) => labels.indexOf(label) !== i);
+      r.check(duplicates.length === 0, 'a moment does not repeat the same state line', duplicates.join(', '));
+      break;
     }
 
-    // A vendor works in a place once.
-    for (const article of doc.querySelectorAll('#mirror-vendors article')) {
-      const places = [...article.querySelectorAll('button')].map((b) => ownText(b));
-      const dupes = places.filter((p, i) => p && places.indexOf(p) !== i);
-      r.check(dupes.length === 0, 'a vendor never lists the same place twice', dupes.join(', '));
-    }
-
-    // Initials must be letters. "Jean-Luc (Chauffeur)" produced "J(" before.
-    const marks = [...doc.querySelectorAll('span')]
-      .map((s) => ownText(s))
-      .filter((t) => /^[A-ZÉÈÀÇ·]{1,2}$/.test(t));
-    const broken = marks.filter((t) => /[^\p{L}·]/u.test(t));
-    r.check(broken.length === 0, 'portrait initials contain letters only', broken.join(', '));
-
-    // No Play control may exist without a real audio source.
-    const playButtons = [...doc.querySelectorAll('button[aria-label^="Écouter"]')];
-    r.check(playButtons.length === 0,
-      'with no audio attached, no Play control is rendered at all', String(playButtons.length));
-    const notes = [...doc.querySelectorAll('#mirror-music span')]
-      .filter((s) => /écoute indisponible/.test(ownText(s)));
-    r.check(notes.length === 0,
-      'and the unavailability is stated once for the section, not on all ten lines',
-      String(notes.length));
+    // The folded contexts are present but do not become a second set of visible
+    // Timeline cards. MirrorTimeline remains a reading projection only.
+    r.check(doc.querySelectorAll('[data-jourj="moment"]').length >= 7
+      && doc.querySelectorAll('[data-jourj="reading-context"] [data-jourj="moment"]').length === 0,
+      'the product has one pilot film and a folded reading context');
 
     // No stock imagery, ever.
     const imgs = [...doc.querySelectorAll('img')];
@@ -282,7 +259,9 @@ try {
   console.log('\n[5/6] A real media instantly changes the page');
   // ---------------------------------------------------------------------------
   {
-    // Nothing is seeded: the assets are created here, observed, then removed.
+    // A real media attached to a moment belongs to the Timeline card. The
+    // public editorial cover is not mounted in the day, so it cannot confuse a
+    // product asset with a wedding cover.
     const entry = `
       import { createRoot } from 'react-dom/client';
       import { weddingStore } from '../../../src/game/weddingStore';
@@ -290,59 +269,21 @@ try {
       export async function mount() {
         const store = weddingStore;
         store.loadProject('proj_demo_clara_alexandre');
-        const person = store.guests[0].personId;
-        const song = store.tracks[0].id;
-        store.addMedia({ kind: 'image', source: 'data:image/png;base64,COVER',
-          ownerKind: 'wedding', ownerId: store.currentProject.id, title: 'Couverture' });
-        store.addMedia({ kind: 'image', source: 'data:image/png;base64,FACE',
-          ownerKind: 'person', ownerId: person, title: 'Portrait' });
-        store.addMedia({ kind: 'image', source: 'data:image/png;base64,ART',
-          ownerKind: 'song', ownerId: song, title: 'Pochette' });
-        store.addMedia({ kind: 'audio', source: 'data:audio/mpeg;base64,SND',
-          ownerKind: 'song', ownerId: song, title: 'Extrait' });
+        const phase = store.phases[0];
+        store.addMedia({ kind: 'image', source: 'data:image/png;base64,MOMENT',
+          ownerKind: 'event', ownerId: phase.id, title: 'Photographie du moment' });
         createRoot(document.getElementById('root')).render(<MirrorSite />);
       }
     `;
     const withMedia = await render(entry, { width: 1440 });
     const doc = withMedia.document;
-
-    const hero = doc.querySelector('header img');
-    r.check(!!hero && hero.getAttribute('src') === 'data:image/png;base64,COVER',
-      'HERO IMAGE: a real cover attached to the wedding becomes the cover');
-    r.check(/mariage|Photographie|Couverture/i.test(hero.getAttribute('alt') || ''),
-      'and it carries a real alternative text', hero.getAttribute('alt'));
-
-    const portrait = [...doc.querySelectorAll('#mirror-guests img')]
-      .find((i) => i.getAttribute('src') === 'data:image/png;base64,FACE');
-    r.check(!!portrait, '02 PERSONNES: the real photo replaces the initials');
-    r.check(portrait.getAttribute('loading') === 'lazy', 'portraits stay lazy');
-
-    const covers = [...doc.querySelectorAll('img')]
-      .filter((i) => i.getAttribute('src') === 'data:image/png;base64,ART');
-    r.check(covers.length >= 2,
-      'the same artwork appears in 05 MUSIQUE and in 01 PROGRAMME', String(covers.length));
-
-    const play = [...doc.querySelectorAll('button[aria-label^="Écouter"]')];
-    r.check(play.length >= 2,
-      'a real audio source makes the Play control appear — in both places', String(play.length));
-
-    const gallery = doc.querySelectorAll('.wc-gallery figure');
-    r.check(gallery.length === 3, '06 MÉDIAS composes the real images', String(gallery.length));
-    const captions = [...doc.querySelectorAll('.wc-gallery figcaption')].map((c) => c.textContent);
-    r.check(captions.some((c) => /Clara|Alexandre|Portrait|Couverture|Pochette/.test(c)),
-      'each image says what it belongs to', captions.join(' | '));
-
-    r.check(contrastFailures(doc, 1440).length === 0,
-      'the page with media still passes AA everywhere (photo-backed text excluded)');
-
-    // Over a photograph, contrast cannot be computed — so the design must
-    // guarantee it structurally: a scrim between the image and the type.
-    const scrim = [...doc.querySelectorAll('header div')]
-      .find((d) => /linear-gradient/.test(String(d.style.background || '')));
-    r.check(!!scrim, 'HERO IMAGE keeps a scrim between the photograph and the type');
-    const headerColor = String(doc.querySelector('header').style.color || '');
-    r.check(/#fff|rgb\(255, 255, 255\)/.test(headerColor),
-      'and the type switches to white over the image', headerColor);
+    const momentImage = [...doc.querySelectorAll('[data-jourj="moment"] img')]
+      .find((image) => image.getAttribute('src') === 'data:image/png;base64,MOMENT');
+    r.check(!!momentImage, 'un média réel rattaché à un moment devient visible sur sa carte');
+    r.check(doc.querySelectorAll('[data-jourj="strip"]').length === 1,
+      'ce média ne crée pas une seconde pellicule');
+    r.check(doc.querySelectorAll('details[data-jourj="reading-context"]').length === 1,
+      'la lecture éditoriale reste un contexte replié');
   }
 
   // ---------------------------------------------------------------------------

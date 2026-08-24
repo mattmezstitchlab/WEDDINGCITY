@@ -113,6 +113,19 @@ say(`### CONVERGENCE DE LA TIMELINE — ${WIDTH}px`);
 
 await p.goto('http://localhost:5173/', { waitUntil: 'domcontentloaded', timeout: 60000 });
 await wait(3000);
+const landing = await p.evaluate(() => ({
+  hero: !!document.querySelector('[data-landing="hero"]'),
+  film: !!document.querySelector('[data-landing="film"]'),
+  report: !!document.querySelector('[data-landing="report-intro"]'),
+  oldSections: ['chaos', 'administration', 'causality', 'scenarios']
+    .filter((name) => !!document.querySelector(`[data-landing="${name}"]`)),
+  sections: document.querySelectorAll('[data-landing="timeline-intro"], [data-landing="report-intro"]').length,
+}));
+say('  ' + JSON.stringify(landing));
+check('la Landing introduit directement la pellicule', landing.hero && landing.film && landing.report);
+check('elle ne monte plus les anciennes pages de démonstration concurrentes', landing.oldSections.length === 0, landing.oldSections.join(','));
+check('le passage Hero → pellicule reste court', landing.sections === 2, String(landing.sections));
+await shot('00-landing');
 await setField('landing', 'brief',
   'Nous nous marions le 18 juillet 2027 au Château de Vaux. Cérémonie à 15h, photos à 17h, cocktail à 17h30, dîner à 20h.');
 await click('landing', 'hero-create');
@@ -207,11 +220,10 @@ const nav = await p.evaluate(() => {
   };
 });
 say('  ' + JSON.stringify(nav));
-check('cinq entrées au plus dans la barre (journée, gens, organisation, souvenirs, calendrier)',
-  nav.links.length <= 5, `${nav.links.length} : ${nav.links.join(' · ')}`);
-check('les destinations fusionnées gardent leurs points d’entrée',
-  nav.aliases.join(' ').includes('nav-music') && nav.aliases.join(' ').includes('nav-documents'),
-  nav.aliases.join(' | '));
+check('la barre principale ne liste plus de destinations concurrentes',
+  nav.links.length === 0, `${nav.links.length} : ${nav.links.join(' · ')}`);
+check('les fiches transverses s’ouvrent depuis la Timeline',
+  await p.evaluate(() => !!document.querySelector('[data-jourj="open-transverse"]')));
 check('un couple ne voit AUCUNE administration dans son mariage', !nav.admin);
 
 // --- 3. click a moment → the panel, folded ----------------------------------
@@ -294,6 +306,14 @@ const sim45 = await p.evaluate(() => ({
 }));
 check('changer le retard recalcule réellement', sim45.minutes === '+45 min'
   && sim45.consequences !== sim.consequences, `${sim.minutes} → ${sim45.minutes}`);
+const projected = await p.evaluate(() => [...document.querySelectorAll('[data-jourj="moment"]')]
+  .map((card) => ({ real: Number(card.dataset.start), projected: Number(card.dataset.projectedStart), simulation: card.dataset.simulation })));
+check('les cartes de la Timeline montrent les heures projetées',
+  projected.some((card) => card.projected > card.real) && projected.filter((card) => card.simulation === 'yes').length >= 2,
+  JSON.stringify(projected));
+check('la barre identifie la projection temporaire',
+  await p.evaluate(() => /projection temporaire/i.test(
+    document.querySelector('[data-jourj="simulation-state"]')?.textContent || '')));
 const before = await state();
 check('et la journée n’a pas bougé d’une minute tant qu’on n’applique pas',
   JSON.stringify(before.phases.map((x) => x.start)) === JSON.stringify(s1.phases.map((x) => x.start)));
@@ -314,6 +334,10 @@ say('  ' + JSON.stringify({ ...weather, honesty: weather.honesty.slice(0, 70) })
 check('elle dit qu’aucune météo réelle n’existe ici',
   /aucune météo réelle/i.test(weather.honesty) && /pas une prévision/i.test(weather.honesty));
 check('la pluie simulée se voit', weather.raining === 'yes');
+check('elle produit une atmosphère animée dans la pellicule',
+  await p.evaluate(() => !!document.querySelector('[data-jourj="weather-atmosphere"]')));
+check('les cartes extérieures impactées sont identifiées',
+  await p.evaluate(() => document.querySelectorAll('[data-jourj="moment"].is-weather-affected').length) >= 1);
 check('elle ne cite que les moments déclarés en extérieur, ou dit qu’il n’y en a pas',
   weather.exposed >= 1 || weather.none, `${weather.exposed} exposé(s)`);
 if (weather.exposed >= 1) {
