@@ -177,3 +177,60 @@ lisent dans des données existantes.
 - **Supprimer une entrée de navigation** : elles sont regroupées, aucune destination ne disparaît.
 - **Toucher au moteur temporel** : ni les 30 heures, ni Chronos, ni les scénarios.
 - **Un second jeu d'icônes**, un second panneau, une seconde Timeline.
+
+
+---
+
+## 15. ÉTAT APRÈS IMPLÉMENTATION
+
+Vérifié dans Chromium réel (149.0.7827.0) à **1440 / 1024 / 768 / 390 px** :
+`scripts/acceptance-timeline-convergence.mjs` — **0 échec aux quatre largeurs**.
+`pnpm run verify` — 0 échec. Build : `✓ built in 8,0 s`.
+Les **neuf** acceptations navigateur (`jourj`, `spectacle`, `grandjour`, `v2`, `convergence`,
+`convergence-finale`, `chronos`, `panneau`, `timeline-convergence`) — **0 échec**.
+
+### Une décision de l'audit a été corrigée par les tests — et c'est le point important
+
+L'audit (§5) concluait que la surface « Programme » du Composer devait disparaître : une seconde
+lecture du jour, donc une Timeline 2. **Je l'ai retirée, et une acceptation existante est passée au
+rouge — elle avait raison.** Cette surface porte le **geste de poignée** explicitement demandé au
+cours du projet : *le bloc reste immobile, seule la poignée voyage, puis « Modifications
+détectées » valide*. Ce geste n'existe nulle part ailleurs, et supprimer une fonction pour ranger une
+interface est exactement ce que cette passe interdit.
+
+**Décision révisée, appliquée :** la surface reste, **vidée de ce qui était réellement dupliqué** —
+ses cinq éditeurs de champs (heure, titre, lieu, notes, prestataires) sont partis, le moment les
+détient. Ce qui reste est un **ordre**, et le rail l'appelle désormais « Ordre du jour ».
+
+### Livré
+
+| # | Ce qui a changé |
+|---|---|
+| 1 | **Navigation** : huit destinations → **quatre** (+ Calendrier). Aucune n'a disparu : les portes fusionnées gardent leur `data-jourj` dans `data-jourj-also`, et le test le vérifie. |
+| 2 | **Administration invisible à un couple** : la règle n'est plus « owner ou planner » — un couple *est* owner de son mariage — mais **`pilotsSeveralEvents()`** : le rôle `planner`, ou plus d'un événement réel dans ce navigateur. |
+| 3 | **Panneau du moment** : **sept** sections, **toutes fermées à l'arrivée**, chacune annonçant son état. Une septième est née : « Scénarios », pour que le plan B ait une porte évidente sur le moment. |
+| 4 | **Réordonnancement au clavier sauvé** : en retirant les champs du Composer j'allais emporter le seul chemin non-souris. Les deux contrôles vivent maintenant **dans le moment** (« Plus tôt / Plus tard »), annoncés en `aria-label`. |
+| 5 | **« ET SI… » dans la pellicule** : un retard réglable qui appelle le vrai `propagationImpact()` — moments suivants, personnes et prestataires nommés, conflits — et quatre issues. Vérifié : changer le curseur recalcule, et **la journée ne bouge pas tant qu'on n'applique pas**. |
+| 6 | **Simulation d'averse honnête** : un curseur soleil → pluie et une heure. Elle ne cite que les moments **déclarés en extérieur** (nouveau `outdoor`, coché à la main), écrit noir sur blanc qu'aucune météo réelle n'existe ici, et propose un plan B — jamais appliqué seul. |
+| 7 | **Un seul langage iconographique** : les emojis des surfaces produit ont disparu (vérifié : **0 emoji** dans le DOM) au profit du jeu `ui/Icons` qui existait déjà et ne servait qu'aux écrans retirés. Aucun second jeu créé. |
+| 8 | **Deux défauts d'heure corrigés** : entre 05:00 et 08:00, le repère « maintenant » disparaissait sans un mot — de la pellicule de démonstration *et* du mode Jour J. Les deux le disent maintenant. |
+| 9 | **Un bug réel trouvé par le test** : la barre de simulation contenait un `return null` **avant deux hooks**. La journée démarrant vide, le premier moment créé changeait le nombre de hooks et React démontait toute la pellicule — cinq moments saisis, un seul survivant. Corrigé. |
+
+### Tests existants adaptés — aucun supprimé
+
+Six assertions, chacune commentée sur place (**PRODUCT DECISION** / **LOCATOR ADAPTED**) : les
+onze→quatorze types déjà traités, la navigation regroupée (garantie renforcée : *toutes* les
+destinations existent encore, et la barre n'en affiche plus que cinq), l'administration réservée,
+les six→sept sections du panneau, le libellé « Ordre du jour », et l'entrée « Ouvrir les fiches ».
+`check-timeline.mjs` conserve sa section **[15/15]**, `check-render.mjs` gagne deux vérifications sur
+le réordonnancement clavier.
+
+### Non fait, et pourquoi
+
+- **Regrouper la navigation en menus déroulants** (§14 du brief) : quatre entrées tiennent sur une
+  ligne ; un menu qui cache quatre mots serait une complication, pas une simplification.
+- **Les réglages d'affichage de la Timeline** (niveau de détail, rappels, comportement des conflits) :
+  ils n'existent pas dans le moteur. Inventer des boutons sans effet serait pire qu'un panneau long.
+- **Le ciel qui change réellement au-dessus de la pellicule** : la simulation refroidit le bloc et le
+  dit ; peindre une averse sur les photographies éditoriales laisserait croire à une donnée météo.
+- **Toucher au moteur** : ni les 30 heures, ni Chronos, ni les scénarios, ni la persistance.

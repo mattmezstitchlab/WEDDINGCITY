@@ -555,7 +555,10 @@ const rows = await p.evaluate(() =>
     return { id: el.getAttribute('data-phase-id'), top: Math.round(r.top), left: Math.round(r.left), h: Math.round(r.height) };
   }));
 // Three moments, plus the daytime anchor when the test runs after midnight.
-check('le programme est listé dans le Canvas', rows.length >= 3, String(rows.length));
+// The surface kept its rows: it is the ORDER of the day, and it carries the
+// deliberate handle gesture. What it lost is the editing of the fields a moment
+// owns — see check-timeline [15/15].
+check('l’ordre du jour est listé dans le Canvas', rows.length >= 3, String(rows.length));
 const handle = await p.evaluate(() => {
   const h = document.querySelector('[data-canvas="moment-row"] [data-canvas="drag-handle"]');
   const r = h.getBoundingClientRect();

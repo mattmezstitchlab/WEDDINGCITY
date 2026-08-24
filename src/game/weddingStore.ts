@@ -2557,6 +2557,41 @@ class WeddingStore {
     return out;
   }
 
+  /** Declare that a moment happens outside. The product never guesses it. */
+  public setPhaseOutdoor(phaseId: string, outdoor: boolean): boolean {
+    const phase = this.phases.find((p) => p.id === phaseId);
+    if (!phase) return false;
+    this.beginMutation('Déclarer un moment en extérieur');
+    phase.outdoor = outdoor || undefined;
+    this.saveCurrentState();
+    this.notify();
+    return true;
+  }
+
+  /**
+   * WHAT A WEATHER CONDITION WOULD TOUCH — a simulation, and nothing else.
+   *
+   * There is no weather service connected to this product and none is
+   * simulated: the condition and the hour come from the user's own hand. All
+   * this reads is which moments they have DECLARED as happening outside, and
+   * which of them cover that hour. A moment nobody declared is reported as
+   * « non déclaré », never as « à l'abri ».
+   */
+  public weatherImpact(hour: number): {
+    exposed: { id: string; name: string; startHour: number; endHour: number }[];
+    undeclared: number;
+    sheltered: number;
+  } {
+    const covering = this.phases.filter((p) => hour >= p.startHour && hour < p.endHour);
+    return {
+      exposed: covering
+        .filter((p) => p.outdoor === true)
+        .map((p) => ({ id: p.id, name: p.name, startHour: p.startHour, endHour: p.endHour })),
+      undeclared: covering.filter((p) => p.outdoor === undefined).length,
+      sheltered: covering.filter((p) => p.outdoor === false).length,
+    };
+  }
+
   /**
    * WHAT MOVING THIS MOMENT REALLY DOES — named, before anything happens.
    *
@@ -3870,6 +3905,26 @@ class WeddingStore {
   public isOrchestrator(): boolean {
     const role = this.currentRole();
     return role === 'owner' || role === 'planner';
+  }
+
+  /**
+   * WHO SHOULD SEE THE ADMINISTRATION — and a married couple should not.
+   *
+   * AUDITED: isOrchestrator() answers « owner or planner », and a couple IS the
+   * owner of their own wedding — so the control desk was showing up inside
+   * their day, like a second application hidden in their marriage.
+   *
+   * The honest rule reads two facts that already exist:
+   *   • the role is `planner` — someone organising for others; or
+   *   • this browser holds MORE THAN ONE real event — which is the definition
+   *     of piloting several events. The demonstration does not count.
+   *
+   * Nothing is invented, and nothing is hidden from someone who needs it: a
+   * second event, or the planner role, brings it back.
+   */
+  public pilotsSeveralEvents(): boolean {
+    if (this.currentRole() === 'planner') return true;
+    return getStoredProjects().filter((p) => !p.isDemo).length > 1;
   }
 
 

@@ -218,10 +218,15 @@ try {
   // PRODUCT DECISION (convergence pass): the navigation is the definitive one —
   // the places of a wedding day, plus search, my weddings and create. Still one
   // bar, still no sidebar, and still nothing that leads to a 3D world.
+  // PRODUCT DECISION (convergence de la Timeline): eight destinations became
+  // four — « La journée », « Les gens », « L'organisation », « Souvenirs ».
+  // Nothing was removed: the merged doors keep their own hooks in `aliases`,
+  // so every destination that existed still exists and is still named.
   for (const tag of ['nav-today', 'nav-jourj', 'nav-people', 'nav-organisation',
     'nav-music', 'nav-documents', 'nav-memories', 'nav-search', 'nav-weddings', 'nav-create']) {
-    r.check(site.includes(`data-jourj="${tag}"`) || site.includes(`tag: '${tag}'`),
-      `the navigation carries ${tag}`);
+    r.check(site.includes(`data-jourj="${tag}"`) || site.includes(`tag: '${tag}'`)
+      || site.includes(`'${tag}'`),
+      `the navigation still carries ${tag}`);
   }
 
   const storeSrc = read('game', 'weddingStore.ts');
@@ -770,8 +775,13 @@ try {
   r.check(typeof store.currentRole() === 'string' && typeof store.isOrchestrator() === 'boolean',
     'the product can ask who is looking');
   const siteSrc = read('components', 'mirror', 'MirrorSite.tsx');
-  r.check(/store\.isOrchestrator\(\)/.test(siteSrc) && /nav-admin/.test(siteSrc),
-    'and the administration is offered only to those who orchestrate');
+  // PRODUCT DECISION (convergence de la Timeline): isOrchestrator() answers
+  // « owner or planner » — and a couple IS the owner of their own wedding, so
+  // the control desk was appearing inside their day. The gate is now
+  // pilotsSeveralEvents(): the planner role, or more than one real event in
+  // this browser. A couple with one wedding never sees it.
+  r.check(/store\.pilotsSeveralEvents\(\)/.test(siteSrc) && /nav-admin/.test(siteSrc),
+    'and the administration is offered only to those who really pilot several events');
 
   // -------------------------------------------------------------------------
   console.log('\n[14/15] CHRONOS — the calendar is a projection, not a second agenda');
@@ -842,8 +852,10 @@ try {
     'and both the moment and the event use it — not two mechanics');
   r.check(/className="wc-hub"/.test(eventPanel),
     'the event panel reuses the moment panel geometry — one shell');
-  r.check((hubUx.match(/<PanelSection/g) || []).length === 6,
-    'the moment folds into six sections', String((hubUx.match(/<PanelSection/g) || []).length));
+  // Seven since « Scénarios » joined: a plan B now has an obvious door on the
+  // moment it concerns, instead of only living in the propagation bar.
+  r.check((hubUx.match(/<PanelSection/g) || []).length === 7,
+    'the moment folds into seven sections', String((hubUx.match(/<PanelSection/g) || []).length));
   r.check(/summary=/.test(hubUx) && /summary=/.test(eventPanel),
     'a closed section always carries a summary of its own state');
 

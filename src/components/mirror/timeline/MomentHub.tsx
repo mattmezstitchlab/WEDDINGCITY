@@ -6,6 +6,7 @@ import { extractDocumentFacts, suggestMoments, describeFacts, type MomentCandida
 import { formatHour, formatHourWithDay, normalizeNightHour } from './TimelineStudio';
 import { TrackArt } from '../TrackArt';
 import { PanelSection } from './PanelSection';
+import { IconDocument } from '../../ui/Icons';
 
 // ---------------------------------------------------------------------------
 // THE MOMENT IS A HUB.
@@ -39,6 +40,12 @@ export function MomentHub({ phaseId, onClose }: { phaseId: string; onClose: () =
 
   if (!hub) return null;
   const { phase, persons, vendors, tracks, tasks, media, place } = hub;
+
+  // Where this moment sits in the order of the day — for the two controls that
+  // move it without a mouse.
+  const orderIndex = [...store.phases]
+    .sort((a, b) => a.startHour - b.startHour)
+    .findIndex((p) => p.id === phase.id);
 
   const ownImage = media.find((m) => m.kind === 'image');
   const image = momentImage(phase.name, ownImage?.source);
@@ -86,8 +93,11 @@ export function MomentHub({ phaseId, onClose }: { phaseId: string; onClose: () =
 
       <PanelSection
         title="Quand & où"
-        summary={`${formatHour(phase.startHour)} → ${formatHour(phase.endHour)}${place ? ` · ${place.name}` : ' · aucun lieu'}`}
-        defaultOpen
+        summary={[
+          `${formatHour(phase.startHour)} → ${formatHour(phase.endHour)}`,
+          place ? place.name : 'aucun lieu',
+          phase.outdoor ? 'en extérieur' : null,
+        ].filter(Boolean).join(' · ')}
         forceOpen={expandAll}
         testId="when"
       >
@@ -133,6 +143,56 @@ export function MomentHub({ phaseId, onClose }: { phaseId: string; onClose: () =
               {place.capacity ? ` · ${place.capacity} places` : ''}
             </div>
           )}
+        </Dimension>
+        {/* REORDERING MUST NOT BECOME MOUSE-ONLY.
+            The composition surface used to carry the up/down arrows — the only
+            way to reorder a day without a mouse. Removing that surface from the
+            product would have removed the accessible path with it, so the two
+            controls move HERE, onto the moment they concern. One door, and it
+            still answers to a keyboard. */}
+        <Dimension title="Place dans la journée">
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+            <button
+              onClick={() => store.movePhaseToIndex(phase.id, orderIndex - 1)}
+              disabled={orderIndex <= 0}
+              style={{ ...smallBtn, opacity: orderIndex <= 0 ? 0.4 : 1 }}
+              aria-label={`Avancer ${phase.name} dans la journée`}
+              data-jourj="hub-move-earlier"
+            >
+              ↑ Plus tôt
+            </button>
+            <button
+              onClick={() => store.movePhaseToIndex(phase.id, orderIndex + 1)}
+              disabled={orderIndex >= store.phases.length - 1}
+              style={{ ...smallBtn, opacity: orderIndex >= store.phases.length - 1 ? 0.4 : 1 }}
+              aria-label={`Retarder ${phase.name} dans la journée`}
+              data-jourj="hub-move-later"
+            >
+              ↓ Plus tard
+            </button>
+            <span style={muted}>
+              {orderIndex + 1}<sup>e</sup> moment sur {store.phases.length}. Chaque moment garde sa durée.
+            </span>
+          </div>
+        </Dimension>
+
+        {/* WEATHER IS NOT GUESSED. « Photos » can be a studio and « Cocktail »
+            can be a winter garden: only a human knows. Declared here, read by
+            the « Et si… » simulation — and by nothing else. */}
+        <Dimension title="Dehors ou à l’abri">
+          <label style={{ display: 'flex', gap: 10, alignItems: 'center', cursor: 'pointer', fontSize: 13 }}>
+            <input
+              type="checkbox"
+              checked={Boolean(phase.outdoor)}
+              onChange={(e) => store.setPhaseOutdoor(phase.id, e.target.checked)}
+              data-jourj="hub-outdoor"
+            />
+            <span>Ce moment se passe en extérieur</span>
+          </label>
+          <div style={{ ...muted, marginTop: 6 }}>
+            Sert à savoir ce qu’une averse toucherait. Tant que ce n’est pas coché,
+            le produit considère l’information comme non déclarée — pas comme « à l’abri ».
+          </div>
         </Dimension>
       </PanelSection>
 
@@ -329,6 +389,39 @@ export function MomentHub({ phaseId, onClose }: { phaseId: string; onClose: () =
         <DocumentsDimension phaseId={phase.id} />
 
         {/* ---- notes ---- */}
+      </PanelSection>
+
+      <PanelSection
+        title="Scénarios"
+        summary={store.scenarios.length
+          ? `${store.scenarios.length} plan${store.scenarios.length > 1 ? 's' : ''} B sur cette journée`
+          : 'aucun plan B'}
+        forceOpen={expandAll}
+        testId="scenarios"
+      >
+        <Dimension title="Plans B" hint="Une branche de la journée, comparée avant d’être appliquée.">
+          {store.scenarios.length === 0 ? (
+            <div style={muted}>Aucun scénario n’existe encore sur cette journée.</div>
+          ) : (
+            <ul style={list}>
+              {store.scenarios.map((sc) => (
+                <li key={sc.id} style={listItem} data-jourj="hub-scenario">
+                  <span>{sc.name}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+          <button
+            onClick={() => {
+              const scenario = store.createScenario(`Plan B — ${phase.name}`);
+              if (scenario) store.setActiveScenario(scenario.id);
+            }}
+            style={smallBtn}
+            data-jourj="hub-scenario-new"
+          >
+            Créer un plan B depuis ce moment
+          </button>
+        </Dimension>
       </PanelSection>
 
       <PanelSection
@@ -631,7 +724,8 @@ function DocumentsDimension({ phaseId }: { phaseId: string }) {
         {media.map((m) => (
           <li key={m.id} style={listItem}>
             <span>
-              {m.kind === 'image' ? '🖼' : '📄'} {m.title || m.fileName || 'Document'}
+              <IconDocument size={13} color="rgba(246,245,243,0.7)" style={{ verticalAlign: '-2px', marginRight: 6 }} />
+              {m.title || m.fileName || 'Document'}
               {m.byteSize ? <span style={muted}> · {Math.max(1, Math.round(m.byteSize / 1024))} ko</span> : null}
             </span>
             <button onClick={() => store.removeMedia(m.id)} style={linkBtn}>retirer</button>

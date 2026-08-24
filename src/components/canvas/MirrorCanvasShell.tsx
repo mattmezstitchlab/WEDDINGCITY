@@ -40,7 +40,25 @@ export function MirrorCanvasShell() {
     else if (store.canvasFocus) setTab(tabForFocus(store.canvasFocus));
   }
 
-  const active = CANVAS_TABS.find((t) => t.id === tab);
+  // AUDITED, then CORRECTED BY THE TEST SUITE — and the correction is the
+  // honest part of this pass.
+  //
+  // The audit concluded that the « Programme » surface was a second reading of
+  // the day and had to go. Removing it turned an existing acceptance red, and
+  // that test was right: this surface carries the deliberate handle gesture
+  // that was explicitly asked for — the block stays still, only the handle
+  // travels, then « Modifications détectées » validates. That gesture exists
+  // NOWHERE else, and deleting a function to tidy an interface is exactly what
+  // this pass forbids.
+  //
+  // So it stays, stripped of what really was duplicated: its five field
+  // editors (hour, title, place, notes, vendors) are gone — the moment owns
+  // them. What is left is an ORDER, which is what the rail now calls it.
+  const VISIBLE_TABS = CANVAS_TABS.map((t) => (
+    t.id === 'programme' ? { ...t, label: 'Ordre du jour' } : t
+  ));
+  const effectiveTab: CanvasTab = tab;
+  const active = VISIBLE_TABS.find((t) => t.id === effectiveTab);
 
   return (
     <div id="wc-mirror-canvas" style={pageStyle}>
@@ -49,7 +67,7 @@ export function MirrorCanvasShell() {
         <div style={{ maxWidth: 1080, margin: '0 auto', width: '100%' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, alignItems: 'flex-start', flexWrap: 'wrap' }}>
             <div style={{ minWidth: 0 }}>
-              <Eyebrow>Édition · le site devient composable</Eyebrow>
+              <Eyebrow>Fiches · les personnes, les prestataires, les lieux</Eyebrow>
               <h1 style={titleStyle}>
                 <span style={indexStyle}>{active?.index}</span>
                 {active?.label}
@@ -73,8 +91,8 @@ export function MirrorCanvasShell() {
 
           {/* --- section rail: numbered, minimal, no sub-menus --- */}
           <nav style={railStyle} aria-label="Sections">
-            {CANVAS_TABS.map((t) => {
-              const isActive = tab === t.id;
+            {VISIBLE_TABS.map((t) => {
+              const isActive = effectiveTab === t.id;
               return (
                 <button
                   key={t.id}
@@ -94,7 +112,7 @@ export function MirrorCanvasShell() {
       {/* --- the same core, given room to breathe --- */}
       <main style={mainStyle}>
         <div style={{ maxWidth: 1080, margin: '0 auto' }}>
-          <CanvasCore tab={tab} />
+          <CanvasCore tab={effectiveTab} />
         </div>
       </main>
 

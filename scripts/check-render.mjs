@@ -443,17 +443,36 @@ try {
     const canvas = await render(CANVAS_ENTRY, { width: 1440 });
     const doc = canvas.document;
 
-    r.check(/Programme/.test(doc.querySelector('h1')?.textContent || ''),
-      'opening a moment lands on the programme surface',
+    // PRODUCT DECISION (convergence de la Timeline): the « Programme » surface
+    // was a second, lighter reading of the day, with its own reordering arrows
+    // — the beginning of a Timeline 2. It is no longer offered here. What this
+    // surface alone can still do — a person's file, a vendor, a place — is
+    // untouched, and the day belongs to the film.
+    //
+    // The guarantees the three removed checks protected are preserved, and
+    // moved to where they now live:
+    //   • a moment opens → acceptance-timeline-convergence (clic → MomentHub);
+    //   • reordering without a mouse → MomentHub « Place dans la journée »,
+    //     asserted just below on the source;
+    //   • the surfaces are reachable without a menu → the rail, now five.
+    r.check(/Ordre du jour/.test(doc.querySelector('h1')?.textContent || ''),
+      'the composition surface is now an ORDER, not a second programme',
       doc.querySelector('h1')?.textContent);
     const focus = [...doc.querySelectorAll('div')].map((d) => d.textContent)
       .find((t) => t && t.startsWith('Focus'));
-    r.check(/Cérémonie/.test(focus || ''), 'and the focused moment is named', focus?.slice(0, 50));
-
+    r.check(/Cérémonie/.test(focus || ''), 'and the focused moment is still named', focus?.slice(0, 50));
     const handles = [...doc.querySelectorAll('[role="button"][aria-label^="Déplacer"]')];
-    r.check(handles.length >= 7, `every moment can be moved (${handles.length} handles)`);
+    r.check(handles.length >= 7, `every moment can still be moved (${handles.length} handles)`);
     r.check(handles.every((h) => /Flèches haut et bas/.test(h.getAttribute('aria-label'))),
       'and the keyboard alternative is announced, not mouse-only');
+
+    const { readFileSync: readHub } = await import('node:fs');
+    const hubSource = readHub(
+      path.join(SRC, 'components', 'mirror', 'timeline', 'MomentHub.tsx'), 'utf8');
+    r.check(/data-jourj="hub-move-earlier"/.test(hubSource) && /data-jourj="hub-move-later"/.test(hubSource),
+      'a moment can still be reordered — on the moment itself');
+    r.check(/aria-label={`Avancer/.test(hubSource) && /aria-label={`Retarder/.test(hubSource),
+      'and those controls are announced, so reordering never became mouse-only');
 
     const rail = [...doc.querySelectorAll('nav button')].map((b) => b.textContent);
     r.check(rail.length === 6, 'the six surfaces are reachable without a menu', String(rail.length));

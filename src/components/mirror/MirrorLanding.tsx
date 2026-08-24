@@ -6,6 +6,10 @@ import { GRAND_JOUR_HERO, DEMO_DAY, MOMENT_ASSETS } from '../../design/momentIma
 import { PRODUCT_NAME, PRODUCT_MARK, PRODUCT_TAGLINE } from '../../design/productIdentity';
 import { EVENT_TYPES, eventType, type EventTypeId } from '../../design/eventTypes';
 import {
+  IconCocktail, IconPhoto, IconBanquet, IconMusic, IconSliders, IconBrunch,
+  IconMairie, IconUser, IconDocument, IconPlanner,
+} from '../ui/Icons';
+import {
   EDITORIAL_PEOPLE, EDITORIAL_TRACKS, EDITORIAL_DISCLAIMER,
   SPECTACLE_VISUALS, SPECTACLE_CRAFTS,
 } from '../../design/editorialRegistry';
@@ -28,13 +32,17 @@ import './landing.css';
 //     storage. Where a demonstration could be mistaken for data, it says so.
 // ---------------------------------------------------------------------------
 
-const CAUSALITY = [
-  { icon: '🍸', label: 'Cocktail', from: '17:30', to: '18:00' },
-  { icon: '📸', label: 'Photos de groupe', from: '17:45', to: '18:15' },
-  { icon: '🍽️', label: 'Dîner', from: '19:30', to: '20:00' },
-  { icon: '🎵', label: 'Playlist du dîner', from: '19:30', to: '20:00' },
-  { icon: '🎚️', label: 'DJ — arrivée', from: '21:00', to: '21:30' },
-  { icon: '👨‍🍳', label: 'Traiteur — service', from: '19:00', to: '19:30' },
+// AUDITED: the product surfaces spoke in emojis while a thin, coherent icon
+// set already existed in ui/Icons and was used only by the retired World
+// screens. Two icon languages, and the product used the worse one. There is
+// one now — the existing one. No second set was created.
+const CAUSALITY: { Icon: React.FC<{ size?: number; color?: string }>; label: string; from: string; to: string }[] = [
+  { Icon: IconCocktail, label: 'Cocktail', from: '17:30', to: '18:00' },
+  { Icon: IconPhoto, label: 'Photos de groupe', from: '17:45', to: '18:15' },
+  { Icon: IconBanquet, label: 'Dîner', from: '19:30', to: '20:00' },
+  { Icon: IconMusic, label: 'Playlist du dîner', from: '19:30', to: '20:00' },
+  { Icon: IconSliders, label: 'DJ — arrivée', from: '21:00', to: '21:30' },
+  { Icon: IconBrunch, label: 'Traiteur — service', from: '19:00', to: '19:30' },
 ];
 
 /**
@@ -282,7 +290,7 @@ export function MirrorLanding() {
           <div className="wc-gj-causality-lines">
             {CAUSALITY.map((c) => (
               <span key={c.label} className={`wc-gj-causality-item${shifted ? ' is-shifted' : ''}`} data-landing="cascade-item">
-                <span aria-hidden>{c.icon}</span>
+                <c.Icon size={14} color="currentColor" />
                 <span>{c.label}</span>
                 <b>{shifted ? c.to : c.from}</b>
                 {shifted && <em>+30 min</em>}
@@ -364,7 +372,11 @@ export function MirrorLanding() {
               <span className="wc-gj-doc-hour">{row.hour}</span>
               <span className="wc-gj-doc-moment">{row.moment}</span>
               <span className="wc-gj-doc-list">
-                {row.docs.map((d) => <span key={d} className="wc-gj-doc-chip">📄 {d}</span>)}
+                {row.docs.map((d) => (
+                  <span key={d} className="wc-gj-doc-chip">
+                    <IconDocument size={12} color="currentColor" /> {d}
+                  </span>
+                ))}
               </span>
             </article>
           ))}
@@ -734,13 +746,13 @@ function SectionWithImage({ index, title, body, asset, reverse, action }: {
 }
 
 const MOMENT_DIMENSIONS = [
-  { icon: '📍', label: 'Lieu' },
-  { icon: '👥', label: 'Personnes' },
-  { icon: '📸', label: 'Prestataires' },
-  { icon: '🎵', label: 'Musique' },
-  { icon: '🍽️', label: 'Repas' },
-  { icon: '📄', label: 'Documents' },
-  { icon: '📝', label: 'Notes' },
+  { Icon: IconMairie, label: 'Lieu' },
+  { Icon: IconUser, label: 'Personnes' },
+  { Icon: IconPhoto, label: 'Prestataires' },
+  { Icon: IconMusic, label: 'Musique' },
+  { Icon: IconBanquet, label: 'Repas' },
+  { Icon: IconDocument, label: 'Documents' },
+  { Icon: IconPlanner, label: 'Notes' },
 ];
 
 /**
@@ -775,7 +787,7 @@ function DemoScene({ index, onClose, onCreate }: { index: number; onClose: () =>
         <div className="wc-gj-scene-dims">
           {MOMENT_DIMENSIONS.map((d) => (
             <span key={d.label} className="wc-gj-scene-dim">
-              <span aria-hidden>{d.icon}</span> {d.label}
+              <d.Icon size={13} color="currentColor" /> {d.label}
             </span>
           ))}
         </div>

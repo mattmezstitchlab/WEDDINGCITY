@@ -5,6 +5,7 @@ import { momentImage, MOMENT_TEMPLATES } from '../../../design/momentImagery';
 import { PRODUCT_NAME } from '../../../design/productIdentity';
 import { MomentHub } from './MomentHub';
 import { EventPanel } from './EventPanel';
+import { SimulationBar } from './SimulationBar';
 import { CERTAINTY } from '../../../design/certainty';
 import './timeline.css';
 
@@ -585,7 +586,25 @@ export function TimelineStudio() {
             );
           })}
 
-          {/* MAINTENANT — the real time, on the real scale */}
+          {/* MAINTENANT — the real time, on the real scale.
+              MEASURED at 06:10: the real hour fell before the first moment of
+              the day, so the marker simply vanished and the Jour J mode stopped
+              situating anyone. Outside the day shown, it is said, at the edge
+              it belongs to — the same rule as the demonstration film. */}
+          {nowMode && (clock < DAY_START || clock > DAY_END) && (
+            <div
+              style={{
+                position: 'absolute', top: 0, bottom: 0, width: 2,
+                left: clock < DAY_START ? 0 : Math.max(0, width - 2),
+                background: 'rgba(224,115,106,0.5)', zIndex: 24, pointerEvents: 'none',
+              }}
+              data-jourj="now-badge-outside"
+            >
+              <div style={nowBadge} data-jourj="now-badge">
+                {formatHour(clock)} · maintenant, hors de la journée
+              </div>
+            </div>
+          )}
           {nowMode && clock >= DAY_START && clock <= DAY_END && (
             <div style={{ position: 'absolute', left: xForHour(clock), top: 0, bottom: 0, width: 2, background: '#e0736a', zIndex: 24, pointerEvents: 'none' }}>
               <div style={nowBadge} data-jourj="now-badge">{formatHour(clock)} · maintenant</div>
@@ -726,6 +745,10 @@ export function TimelineStudio() {
           </div>
         );
       })()}
+
+      {/* « ET SI… » — inside the film, because a consequence is only readable
+          next to the thing it changes. */}
+      <SimulationBar onOpenMoment={(id) => setOpenPhaseId(id)} />
 
       {openPhaseId && (
         <MomentHub phaseId={openPhaseId} onClose={() => setOpenPhaseId(null)} />

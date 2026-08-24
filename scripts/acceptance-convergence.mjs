@@ -268,10 +268,23 @@ await noOverflow('Timeline générée');
 
 // --- navigation & search ----------------------------------------------------
 say('\n=== 5. NAVIGATION UNIQUE, RECHERCHE UNIVERSELLE ===');
-const nav = await p.evaluate(() => ['nav-today', 'nav-jourj', 'nav-people', 'nav-organisation',
-  'nav-music', 'nav-documents', 'nav-memories', 'nav-search']
-  .filter((t) => !!document.querySelector(`[data-jourj="${t}"]`)));
-check('la navigation définitive est en place', nav.length === 8, nav.join(', '));
+// LOCATOR ADAPTED (convergence de la Timeline): eight entries were grouped into
+// four destinations plus the calendar. No destination disappeared — the merged
+// ones keep their own hook in data-jourj-also — so the guarantee becomes: every
+// former door is still named somewhere in the bar.
+const nav = await p.evaluate(() => {
+  const bar = document.querySelector('nav[aria-label="Navigation"]');
+  const hooks = new Set();
+  for (const b of bar ? bar.querySelectorAll('button') : []) {
+    if (b.dataset.jourj) hooks.add(b.dataset.jourj);
+    for (const alias of (b.getAttribute('data-jourj-also') || '').split(' ').filter(Boolean)) hooks.add(alias);
+  }
+  return ['nav-today', 'nav-jourj', 'nav-people', 'nav-organisation',
+    'nav-music', 'nav-documents', 'nav-memories', 'nav-search'].filter((t) => hooks.has(t));
+});
+check('toutes les destinations existent encore, regroupées', nav.length === 8, nav.join(', '));
+check('et la barre n’affiche plus que cinq entrées',
+  await p.evaluate(() => document.querySelectorAll('.wc-product-nav-links button').length) <= 5);
 s = await state();
 check('le mot « Mirror » n’apparaît pas dans le produit', !/Mirror/i.test(s.text));
 

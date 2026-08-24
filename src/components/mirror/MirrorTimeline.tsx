@@ -158,11 +158,11 @@ export function MirrorTimeline({ moments }: { moments: ProgrammeMoment[] }) {
 
                 <button
                   className="wc-action"
-                  onClick={() => store.openCanvas({ kind: 'event', id: m.phaseId })}
+                  onClick={() => store.openMoment(m.phaseId)}
                   style={editStyle}
-                  aria-label={`Composer le moment ${m.time} ${m.title}`}
+                  aria-label={`Ouvrir le moment ${m.time} ${m.title}`}
                 >
-                  Composer ce moment
+                  Ouvrir ce moment
                 </button>
               </div>
             </article>

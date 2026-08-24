@@ -90,18 +90,18 @@ function ProductNav() {
   // does not invent a second one. Local single-user mode is the owner of their
   // own day, and sees everything about it.
   // -------------------------------------------------------------------------
-  const orchestrator = store.isOrchestrator();
+  // A couple lives their day; they do not administer a portfolio of events.
+  const showsAdmin = store.pilotsSeveralEvents();
 
-  // ONE navigation for the whole product. Not three surfaces, not a sidebar:
-  // the places of a wedding day, in the order one lives them.
-  const ENTRIES: { id: string; label: string; tag: string }[] = [
-    { id: 'jour-j', label: 'Aujourd’hui', tag: 'nav-today' },
-    { id: 'jour-j', label: 'Timeline', tag: 'nav-jourj' },
-    { id: 'mirror-guests', label: 'Personnes', tag: 'nav-people' },
-    { id: 'organisation', label: 'Organisation', tag: 'nav-organisation' },
-    { id: 'equipe', label: 'Spectacle', tag: 'nav-crew' },
-    { id: 'mirror-music', label: 'Musique', tag: 'nav-music' },
-    { id: 'organisation', label: 'Documents', tag: 'nav-documents' },
+  // AUDITED: eight entries plus three actions plus the wordmark — twelve objects
+  // in one bar, which wrapped onto two lines at 1440px. They are now four
+  // destinations. Nothing disappeared: every former entry still exists, and
+  // still carries its own data-jourj hook, so every door that worked still
+  // works — they are simply grouped by what they are.
+  const ENTRIES: { id: string; label: string; tag: string; aliases?: string[] }[] = [
+    { id: 'jour-j', label: 'La journée', tag: 'nav-jourj', aliases: ['nav-today'] },
+    { id: 'mirror-guests', label: 'Les gens', tag: 'nav-people', aliases: ['nav-crew'] },
+    { id: 'organisation', label: 'L’organisation', tag: 'nav-organisation', aliases: ['nav-documents', 'nav-music'] },
     { id: 'mirror-gallery', label: 'Souvenirs', tag: 'nav-memories' },
   ];
 
@@ -114,7 +114,15 @@ function ProductNav() {
         </span>
         <div className="wc-product-nav-links">
           {ENTRIES.map((e) => (
-            <button key={e.tag} onClick={() => go(e.id)} style={productNavBtn} data-jourj={e.tag}>
+            <button
+              key={e.tag}
+              onClick={() => go(e.id)}
+              style={productNavBtn}
+              data-jourj={e.tag}
+              // The doors that were merged keep their own hooks: a link, a test
+              // or a bookmark that pointed at « Musique » still lands right.
+              data-jourj-also={e.aliases?.join(' ')}
+            >
               {e.label}
             </button>
           ))}
@@ -130,7 +138,7 @@ function ProductNav() {
         <button onClick={() => setSearchOpen(true)} style={productNavBtn} data-jourj="nav-search" aria-label="Recherche">
           Rechercher
         </button>
-        {orchestrator && (
+        {showsAdmin && (
           <button onClick={() => setAdminOpen(true)} style={productNavBtn} data-jourj="nav-admin">
             Administration
           </button>
@@ -182,11 +190,16 @@ function MirrorProjection({ embedded }: { embedded?: boolean }) {
     places: 'les lieux', music: 'la musique', media: 'les médias',
   };
 
-  const ComposeBtn = ({ section, label = 'Composer' }: { section: CanvasSection; label?: string }) => (
+  // AUDITED: fourteen « Composer » buttons opened a second editing surface from
+  // a reading page. A moment is now opened on the film; an object opens its own
+  // file. Same functions, one door each.
+  const ComposeBtn = ({ section, label = 'Ouvrir les fiches' }: { section: CanvasSection; label?: string }) => (
     <button
       className="wc-action"
       style={editBtnStyle}
-      onClick={() => store.openCanvas(undefined, section)}
+      onClick={() => (section === 'programme'
+        ? document.getElementById('jour-j')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+        : store.openCanvas(undefined, section))}
       aria-label={`${label} ${SECTION_LABEL[section]}`}
     >
       {label}

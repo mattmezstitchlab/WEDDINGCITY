@@ -349,10 +349,39 @@ check('et la journée principale n’a pas été modifiée par le plan B',
 
 // --- 7. ADMINISTRATION -------------------------------------------------------
 say('\n=== 7. ADMINISTRATION : PLUSIEURS ÉVÉNEMENTS, UNE SURFACE ===');
+// The control desk is now reserved for people who really pilot several events —
+// a couple with one wedding never sees it (asserted in
+// acceptance-timeline-convergence). This section is about the other case, so it
+// creates the second event it talks about.
+await p.evaluate(() => document.getElementById('wc-mirror')?.scrollTo({ top: 0 }));
+await wait(400);
+await click('jourj', 'nav-weddings');
+await wait(1600);
+await setField('landing', 'type', 'concert');
+await wait(250);
+await setField('landing', 'brief', 'Concert le 20 novembre 2027 à la Cave aux Poètes, balance à 17h, plateau à 21h.');
+await click('landing', 'hero-create');
+await wait(2600);
+await p.evaluate(() => {
+  const el = document.querySelector('[data-intake="intake-couple"]');
+  el.focus();
+  Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(el, 'MATT MEZ QUARTET');
+  el.dispatchEvent(new Event('input', { bubbles: true }));
+  el.blur();
+});
+await wait(500);
+await click('intake', 'generate');
+await wait(3000);
 await p.evaluate(() => document.getElementById('wc-mirror')?.scrollTo({ top: 0 }));
 await wait(500);
+// PRODUCT DECISION (convergence de la Timeline): a couple is the OWNER of their
+// own wedding, so gating the control desk on « owner or planner » showed it
+// inside their day — a second application hidden in their marriage. It now
+// requires really piloting several events. This run has created a second real
+// event above, so the entry must be there; the couple-only case is asserted in
+// acceptance-timeline-convergence.
 const hasAdminEntry = await click('jourj', 'nav-admin');
-check('l’entrée « Administration » existe pour celui qui pilote', hasAdminEntry);
+check('l’entrée « Administration » apparaît quand on pilote plusieurs événements', hasAdminEntry);
 await wait(1200);
 const admin = await p.evaluate(() => ({
   console: !!document.querySelector('[data-admin="console"]'),
@@ -430,6 +459,18 @@ await shot('08-aucune-porte');
 
 // --- 9. RELOAD + ISOLATION ----------------------------------------------------
 say('\n=== 9. RECHARGEMENT ET ISOLATION ===');
+// Section 7 created a second event to exercise the administration; come back to
+// the wedding this run has been building, exactly as a user would.
+await p.evaluate(() => document.getElementById('wc-mirror')?.scrollTo({ top: 0 }));
+await wait(400);
+await click('jourj', 'nav-weddings');
+await wait(1600);
+await p.evaluate(() => {
+  const item = [...document.querySelectorAll('.wc-gj-list-item')]
+    .find((b) => /NINA/i.test(b.textContent || ''));
+  item?.click();
+});
+await wait(2600);
 await p.reload({ waitUntil: 'domcontentloaded' });
 await wait(3200);
 const st3 = await state();

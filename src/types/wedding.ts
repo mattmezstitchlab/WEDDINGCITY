@@ -487,6 +487,13 @@ export interface TimelinePhase {
   budget?: { amount?: number; deposit?: number; paid?: boolean };
 
   /**
+   * Does this moment happen OUTSIDE? Declared by a human, never deduced from a
+   * name: « Photos » can be a studio and « Cocktail » can be a winter garden.
+   * Absent means « not declared », which is not the same as « indoors ».
+   */
+  outdoor?: boolean;
+
+  /**
    * HOW SURE ARE WE OF THIS HOUR?
    *
    * Absent means « confirmed »: someone typed it. The intake writes the level

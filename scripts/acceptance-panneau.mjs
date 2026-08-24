@@ -145,12 +145,16 @@ const folded = await p.evaluate(() => {
   };
 });
 say('  ' + JSON.stringify(folded));
-check('le panneau est fait de six sections', folded.count === 6, String(folded.count));
-check('elles couvrent quand/où, qui, ce qu’on y vit, logistique, documents, notes',
-  ['when', 'who', 'life', 'logistics', 'documents', 'notes'].every((id) => folded.ids.includes(id)),
+// PRODUCT DECISION (convergence de la Timeline): a seventh section, « Scénarios »,
+// gives the plan B an obvious door on the moment it concerns.
+check('le panneau est fait de sept sections', folded.count === 7, String(folded.count));
+check('elles couvrent quand/où, qui, ce qu’on y vit, logistique, documents, scénarios, notes',
+  ['when', 'who', 'life', 'logistics', 'documents', 'scenarios', 'notes'].every((id) => folded.ids.includes(id)),
   folded.ids.join(','));
-check('une seule est ouverte à l’arrivée : quand & où',
-  folded.open.length === 1 && folded.open[0] === 'when', folded.open.join(','));
+// PRODUCT DECISION: every section is now closed on arrival, as the brief asks.
+// The panel opens as a control card; nothing is mounted until it is asked for.
+check('toutes les sections sont fermées à l’arrivée',
+  folded.open.length === 0, folded.open.join(','));
 check('le mur de formulaires a disparu (les champs repliés ne sont pas montés)',
   folded.fieldsVisible === 0, String(folded.fieldsVisible));
 check('chaque section fermée annonce son état',
@@ -187,6 +191,9 @@ check('un champ replié puis ouvert écrit toujours au même endroit',
 
 // --- 3. the title of a moment is edited ON the moment -----------------------
 say('\n=== 3. LE NOM DU MOMENT SE CORRIGE SUR LE MOMENT ===');
+// The name lives in « Quand & où », which is now folded like the rest.
+await click('jourj', 'hub-section-when');
+await wait(400);
 const hasTitle = await p.evaluate(() => !!document.querySelector('[data-jourj="hub-title"]'));
 check('le champ du nom existe dans le moment', hasTitle);
 await commit('jourj', 'hub-title', 'COCKTAIL AU JARDIN');
@@ -249,11 +256,11 @@ await wait(500);
 
 // --- 5. no duplicate editing in the composition surface ---------------------
 say('\n=== 5. PLUS DE DOUBLE PORTE POUR LA MÊME DONNÉE ===');
-const canvasDup = await p.evaluate(() => {
-  const src = document.body.innerHTML;
-  return { hasCanvas: /Composer/.test(src) };
-});
-check('la surface de composition existe toujours', canvasDup.hasCanvas);
+// LOCATOR ADAPTED (convergence de la Timeline): the button is no longer called
+// « Composer » — a designer's word — but « Ouvrir les fiches », which says what
+// it opens. Same surface, same functions.
+const canvasDup = await p.evaluate(() => ({ hasCanvas: /fiches/i.test(document.body.innerText) }));
+check('la surface des fiches existe toujours', canvasDup.hasCanvas);
 const canvasSrc = await fetch('http://localhost:5173/src/components/canvas/CanvasCore.tsx').then((r) => r.text());
 check('elle n’écrit plus l’heure d’un moment', !/store\.setPhaseTime\(/.test(canvasSrc));
 check('ni son titre', !/store\.setPhaseTitle\(/.test(canvasSrc));
