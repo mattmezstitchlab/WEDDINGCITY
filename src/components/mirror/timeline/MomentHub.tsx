@@ -62,6 +62,13 @@ export function MomentHub({ phaseId, onClose }: { phaseId: string; onClose: () =
         </div>
       </div>
 
+      {/* ---- WHAT THIS MOMENT IS MISSING, AND WHAT TO DO ABOUT IT ----
+             The state comes from phaseFindings(); the actions are shortcuts to
+             functions that already exist elsewhere in the product. Nothing is
+             re-implemented here — the point is that nobody should have to leave
+             the moment to find them. */}
+      <MomentState phaseId={phase.id} onClose={onClose} />
+
       {/* ---- when ---- */}
       <Dimension title="Heure" hint="Déplacer ici, ou glisser le bloc sur la pellicule.">
         <div style={row}>
@@ -595,6 +602,180 @@ function DocumentsDimension({ phaseId }: { phaseId: string }) {
   );
 }
 
+/**
+ * THE STATE OF A SCENE — and the shortest path out of each gap.
+ *
+ * Reads store.phaseFindings(): one derived truth, shown here in full and
+ * summarised on the card. A « ⚠ contrat absent » line carries the button that
+ * produces the contract, because the product already knows the event, the date,
+ * the place, the hours and the person: asking the user to type them again would
+ * be asking them to do the product's job.
+ */
+function MomentState({ phaseId, onClose }: { phaseId: string; onClose: () => void }) {
+  const store = weddingStore;
+  const [generated, setGenerated] = useState<{ title: string } | null>(null);
+  const findings = store.phaseFindings(phaseId);
+  const gaps = findings.filter((f) => f.level !== 'ok');
+  const oks = findings.filter((f) => f.level === 'ok');
+
+  const generate = (docKind: string, personId?: string, vendorId?: string) => {
+    const person = personId ? store.persons.find((p) => p.id === personId) : null;
+    const vendor = vendorId ? store.vendors.find((v) => v.id === vendorId) : null;
+    const recipientName = person?.displayName ?? vendor?.companyName ?? '';
+    if (!recipientName) return;
+    const asset = store.generateAdminDocument({
+      docKind,
+      authorKind: 'Organisation de l’événement',
+      recipientKind: person ? 'Artiste / prestataire' : 'Prestataire',
+      recipientName,
+      personId: personId,
+      phaseId,
+    });
+    if (asset) setGenerated({ title: asset.title || docKind });
+  };
+
+  return (
+    <Dimension title="État de ce moment">
+      <ul style={list} data-jourj="hub-state">
+        {gaps.map((f, i) => (
+          <li key={`gap-${i}`} style={{ ...stateRow, borderLeftColor: f.level === 'conflict' ? '#e0736a' : '#e0a06a' }} data-jourj="hub-state-line" data-level={f.level}>
+            <div>
+              <strong>⚠ {f.title}</strong>
+              <div style={{ ...muted, marginTop: 3 }}>{f.detail}</div>
+            </div>
+            {f.docKind && (
+              <button
+                onClick={() => generate(f.docKind!, f.personId, f.vendorId)}
+                style={smallBtn}
+                data-jourj="hub-generate-missing"
+              >
+                Générer {f.docKind.toLowerCase()}
+              </button>
+            )}
+          </li>
+        ))}
+        {oks.map((f, i) => (
+          <li key={`ok-${i}`} style={{ ...stateRow, borderLeftColor: 'rgba(169,198,162,0.7)' }} data-jourj="hub-state-line" data-level="ok">
+            <div>
+              <strong>✓ {f.title}</strong>
+              <div style={{ ...muted, marginTop: 3 }}>{f.detail}</div>
+            </div>
+          </li>
+        ))}
+      </ul>
+
+      {generated && (
+        <div style={analysisBox} data-jourj="hub-generated">
+          <div style={{ fontWeight: 600 }}>{generated.title}</div>
+          <div style={{ ...muted, marginTop: 6 }}>
+            Document produit à partir de ce que le projet sait réellement, et rangé
+            dans ses documents. Tout ce que le projet ignore y est écrit
+            « À CONFIRMER » : rien n’a été deviné à votre place.
+          </div>
+        </div>
+      )}
+
+      {/* THE ACTIONS OF A MOMENT. Each one leads to a function that already
+          exists; none of them is a new engine. */}
+      <div style={actionRail} data-jourj="hub-actions">
+        <GenerateHere phaseId={phaseId} onGenerated={(t) => setGenerated({ title: t })} />
+        <button
+          onClick={() => {
+            const title = window.prompt('Quelle tâche pour ce moment ?');
+            if (title?.trim()) store.createTaskForPhase(phaseId, title.trim());
+          }}
+          style={smallBtn}
+          data-jourj="hub-action-task"
+        >
+          Créer une tâche
+        </button>
+        <button
+          onClick={() => {
+            const phase = store.phases.find((p) => p.id === phaseId);
+            const scenario = store.createScenario(`Plan B — ${phase?.name ?? 'ce moment'}`);
+            if (scenario) store.setActiveScenario(scenario.id);
+            onClose();
+            document.getElementById('organisation')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          }}
+          style={smallBtn}
+          data-jourj="hub-action-planb"
+        >
+          Créer un plan B
+        </button>
+      </div>
+    </Dimension>
+  );
+}
+
+/**
+ * « QUE VOULEZ-VOUS GÉNÉRER ? », asked where the context already answers most
+ * of it. The recipient is chosen among the people and vendors of THIS moment —
+ * never typed from scratch, never invented.
+ */
+function GenerateHere({ phaseId, onGenerated }: { phaseId: string; onGenerated: (title: string) => void }) {
+  const store = weddingStore;
+  const [open, setOpen] = useState(false);
+  const [docKind, setDocKind] = useState('Contrat');
+  const [target, setTarget] = useState('');
+  const hub = store.getPhaseHub(phaseId);
+  if (!hub) return null;
+
+  const targets = [
+    ...hub.persons.filter(Boolean).map((p) => ({ id: `person:${p!.id}`, label: p!.displayName })),
+    ...hub.vendors.filter(Boolean).map((v) => ({ id: `vendor:${v!.id}`, label: v!.companyName })),
+  ];
+
+  if (!open) {
+    return (
+      <button onClick={() => setOpen(true)} style={smallBtn} data-jourj="hub-action-generate">
+        Générer un document
+      </button>
+    );
+  }
+
+  return (
+    <div style={generateBox} data-jourj="hub-generate-box">
+      <select value={docKind} onChange={(e) => setDocKind(e.target.value)} style={select} data-jourj="hub-generate-kind">
+        {['Contrat', 'Devis', 'Facture', 'Fiche technique', 'Feuille de route', 'Convention'].map((k) => (
+          <option key={k} value={k}>{k}</option>
+        ))}
+      </select>
+      <select value={target} onChange={(e) => setTarget(e.target.value)} style={select} data-jourj="hub-generate-target">
+        <option value="">Pour qui ?</option>
+        {targets.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
+      </select>
+      <button
+        onClick={() => {
+          const [kind, id] = target.split(':');
+          if (!id) return;
+          const person = kind === 'person' ? store.persons.find((p) => p.id === id) : null;
+          const vendor = kind === 'vendor' ? store.vendors.find((v) => v.id === id) : null;
+          const asset = store.generateAdminDocument({
+            docKind,
+            authorKind: 'Organisation de l’événement',
+            recipientKind: person ? 'Artiste / prestataire' : 'Prestataire',
+            recipientName: person?.displayName ?? vendor?.companyName ?? '',
+            personId: person?.id,
+            phaseId,
+          });
+          if (asset) { onGenerated(asset.title || docKind); setOpen(false); }
+        }}
+        style={smallBtn}
+        data-jourj="hub-generate-run"
+      >
+        Générer
+      </button>
+      <button onClick={() => setOpen(false)} style={linkBtn}>annuler</button>
+      {targets.length === 0 && (
+        <div style={{ ...muted, width: '100%' }}>
+          Personne n’est rattaché à ce moment : un document sans destinataire réel
+          ne sera pas produit.
+        </div>
+      )}
+    </div>
+  );
+}
+
 // --- small building blocks ---------------------------------------------------
 
 function Dimension({ title, hint, children }: { title: string; hint?: string; children: React.ReactNode }) {
@@ -857,4 +1038,24 @@ const analysisBox: React.CSSProperties = {
   marginTop: 12, padding: 14, borderRadius: 4,
   border: '1px solid rgba(246,245,243,0.18)', background: '#101114',
   fontSize: typography.editorial.caption, color: '#f6f5f3',
+};
+
+const stateRow: React.CSSProperties = {
+  display: 'flex', gap: 12, alignItems: 'flex-start', justifyContent: 'space-between',
+  borderLeft: '2px solid', paddingLeft: 12, flexWrap: 'wrap',
+};
+
+const actionRail: React.CSSProperties = {
+  display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 16, alignItems: 'center',
+};
+
+const generateBox: React.CSSProperties = {
+  display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center',
+};
+
+const select: React.CSSProperties = {
+  appearance: 'none', cursor: 'pointer',
+  background: 'rgba(246,245,243,0.06)', color: '#f6f5f3',
+  border: '1px solid rgba(246,245,243,0.28)', borderRadius: 999,
+  padding: '8px 14px', fontSize: 12, fontFamily: typography.family.sans,
 };

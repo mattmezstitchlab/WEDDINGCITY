@@ -363,9 +363,17 @@ try {
   r.check(plan.weddingDate === '2027-07-18', 'the date written in a sentence is read', String(plan.weddingDate));
   r.check(plan.locationName === 'Château de Vaux', 'so is the venue, exactly once', String(plan.locationName));
   r.check(plan.guestCountTarget === 120, 'so is the number of guests', String(plan.guestCountTarget));
-  r.check(plan.moments.length === 3 && plan.moments.every((m) => m.confidence === 'estimated'),
-    'each hour becomes a moment, with its estimated end declared as estimated',
+  // PRODUCT DECISION (convergence finale): the intake now speaks the five
+  // levels of design/certainty instead of two. An end chained onto the next
+  // written start is DÉDUIT ('inferred'); an end nobody wrote and nothing
+  // settles is ESTIMÉ ('estimated'). The guarantee is the same one, stated
+  // more precisely: an hour that was not written is NEVER 'confirmed'.
+  r.check(plan.moments.length === 3 && plan.moments.every((m) => m.confidence !== 'confirmed'),
+    'each hour becomes a moment, and an end nobody wrote is never confirmed',
     plan.moments.map((m) => `${m.label}:${m.confidence}`).join(' '));
+  r.check(plan.moments.every((m) => ['inferred', 'estimated'].includes(m.confidence)),
+    'it says WHICH of the two it is — deduced from the next start, or estimated',
+    plan.moments.map((m) => m.confidence).join(' '));
   r.check(plan.people.map((p) => p.name).join('|') === 'Dupont Marie|Martin Paul',
     'a guest list is read, and its header row is not a person', plan.people.map((p) => p.name).join('|'));
   r.check(plan.vendors.map((v) => v.name).join('|') === 'Studio Aubert|Table & Feu',
@@ -466,14 +474,30 @@ try {
     'scenarios are persisted with the project, and only with it');
 
   // -------------------------------------------------------------------------
-  console.log('\n[10/10] V3 — one vocabulary per kind of day, fewer and bigger sequences');
+  console.log('\n[10/13] V3 — one vocabulary per kind of day, fewer and bigger sequences');
   // -------------------------------------------------------------------------
   const types = read('design', 'eventTypes.ts');
   for (const id of ['mariage', 'anniversaire', 'fete', 'seminaire', 'convention', 'soiree', 'autre']) {
     r.check(types.includes(`id: '${id}'`), `the event type ${id} exists`);
   }
-  r.check(!/id: 'corporate'/.test(types) && !/id: 'bapteme'/.test(types),
-    'and the previous list is gone, not kept in parallel');
+  // PRODUCT DECISION (convergence finale): « corporate » is back, this time as
+  // a first-class kind of day with its own vocabulary — and 'fete', 'soiree'
+  // and 'convention' are kept ONLY so days created before this pass keep
+  // theirs. The guarantee behind the original check was « no second parallel
+  // list »: it is now enforced structurally instead of by absence — the
+  // retired ids live in LEGACY_EVENT_TYPES, are marked legacy, and the hero
+  // offers EVENT_TYPES only.
+  r.check(/id: 'corporate'/.test(types), 'a corporate day is a kind of its own');
+  r.check(!/id: 'bapteme'/.test(types), 'and no phantom type was reintroduced');
+  r.check(/const LEGACY_EVENT_TYPES/.test(types) && /legacy: true/.test(types),
+    'retired types are declared retired, not duplicated into the offered list');
+  r.check((types.match(/export const EVENT_TYPES/g) || []).length === 1,
+    'there is exactly one offered list of event types');
+  for (const id of ['corporate', 'festival', 'concert', 'spectacle', 'gala', 'associatif', 'culturel']) {
+    r.check(types.includes(`id: '${id}'`), `the event type ${id} exists`);
+  }
+  r.check((types.match(/skeleton:/g) || []).length >= 12,
+    'each kind of day carries the first day it can propose');
 
   const intake = await harness.load('../game/projectIntake', 'intakeV3');
   const pro = intake.analyseIntake({
@@ -504,7 +528,11 @@ try {
   r.check(/data-landing="rail"/.test(page) && /Plan B/.test(page),
     'the scenario section compares two rails');
   r.check(/data-landing="doc-row"/.test(page), 'and documents hang on hours');
-  r.check((page.match(/<section/g) || []).length <= 10,
+  // PRODUCT DECISION (convergence finale): two sequences were added — IMPORTER
+  // LE CHAOS and L'ADMINISTRATION INVISIBLE — both demanded by the brief and
+  // both demonstrating a real function. The ceiling moves from 10 to 12; the
+  // guarantee (big sequences, never a catalogue of cards) is unchanged.
+  r.check((page.match(/<section/g) || []).length <= 12,
     'the page stays a sequence of big sections, not a catalogue',
     String((page.match(/<section/g) || []).length));
 
@@ -513,7 +541,7 @@ try {
     'the demonstration people have a first name and a thread');
 
   // -------------------------------------------------------------------------
-  console.log('\n[11/11] SPECTACLE — a performer is a Person with a craft');
+  console.log('\n[11/13] SPECTACLE — a performer is a Person with a craft');
   // -------------------------------------------------------------------------
   const identityTypes = read('types', 'identity.ts');
   r.check(/export interface PersonCraft/.test(identityTypes) && /craft\?: PersonCraft/.test(identityTypes),
@@ -590,7 +618,7 @@ try {
   r.check(/SPECTACLE_CRAFTS/.test(landingCrew), 'with the crafts named from the registry');
 
   // -------------------------------------------------------------------------
-  console.log('\n[12/12] ORCHESTRATION — several events, one identity, no second base');
+  console.log('\n[12/13] ORCHESTRATION — several events, one identity, no second base');
   // -------------------------------------------------------------------------
   const weddingTypes = read('types', 'wedding.ts');
   r.check(/assignedPersonId\?: string/.test(weddingTypes) && /status\?: 'todo'/.test(weddingTypes),
@@ -655,6 +683,89 @@ try {
   r.check(/n’est pas\s+disponible ici/.test(crewSrc) || /aucun accès réseau/.test(crewSrc),
     'looking a company up on the web is declared unavailable, not simulated');
   r.check(!/fetch\(|https?:\/\//.test(crewSrc), 'and the surface calls nothing outside');
+
+  // -------------------------------------------------------------------------
+  console.log('\n[13/13] CONVERGENCE FINALE — five certainties, a first day, one desk');
+  // -------------------------------------------------------------------------
+  const cert = read('design', 'certainty.ts');
+  for (const level of ['confirmed', 'inferred', 'estimated', 'to_confirm', 'missing']) {
+    r.check(cert.includes(`${level}:`), `the level ${level} exists, once`);
+  }
+  r.check((read('types', 'wedding.ts').match(/export type Certainty/g) || []).length === 1,
+    'and there is exactly one definition of certainty in the whole product');
+  r.check(/confidence\?: Certainty/.test(read('types', 'wedding.ts')),
+    'a moment carries how sure we are of its hour');
+
+  // A day with no hour at all becomes a PROPOSED day, entirely estimated.
+  const intakeMod = await harness.load('../game/projectIntake', 'intake-finale');
+  const bare = intakeMod.analyseIntake({
+    description: 'Nous nous marions le 18 juillet 2027 au Château de Vaux.',
+  });
+  r.check(bare.proposedDay === true, 'with no hour written, a first day is proposed');
+  r.check(bare.moments.length === 10 && bare.moments.every((m) => m.confidence === 'estimated'),
+    'and every one of its hours is ESTIMÉ, never confirmed',
+    `${bare.moments.length} · ${[...new Set(bare.moments.map((m) => m.confidence))].join(',')}`);
+  r.check(bare.certainty.principals === 'missing' && bare.coupleNames === null,
+    'the couple stays MANQUANT — nothing is invented to fill it');
+  r.check(bare.questions.some((q) => /ESTIMÉE|point de départ/.test(q)),
+    'and the proposal says out loud that it is only a starting point');
+  const noSkeleton = intakeMod.analyseIntake({ description: 'Un truc en 2027.', eventTypeId: 'autre' });
+  r.check(noSkeleton.proposedDay === false && noSkeleton.moments.length === 0,
+    'a day whose nature is unknown gets no proposed shape at all');
+
+  // The state of a scene is DERIVED, and it can be closed by generating.
+  const anyPhase = store.phases[0];
+  const sceneState = store.phaseFindings(anyPhase.id);
+  r.check(Array.isArray(sceneState) && sceneState.length > 0, 'a moment can say what it is missing');
+  r.check(sceneState.every((f) => ['ok', 'gap', 'conflict'].includes(f.level)),
+    'in the same grammar as the rest of the product');
+  r.check(store.phaseFindings('phase_inconnue').length === 0, 'and an unknown moment says nothing');
+  r.check(Array.isArray(store.missingDocumentsForPhase(anyPhase.id)),
+    'the missing documents of a moment are readable');
+
+  // Propagation names who moves BEFORE anything moves.
+  const impact = store.propagationImpact(anyPhase.id, 0.5);
+  r.check(impact !== null && Array.isArray(impact.people) && Array.isArray(impact.conflicts),
+    'moving a moment can be read before it happens');
+  r.check(store.propagationImpact('phase_inconnue', 0.5) === null, 'and an unknown moment cannot');
+  const stillThere = store.phases.find((p) => p.id === anyPhase.id);
+  r.check(stillThere.startHour === anyPhase.startHour,
+    'reading the impact changes nothing — it is a pure projection');
+
+  // Administration reads events; it never holds them.
+  r.check(Array.isArray(store.adminEvents()) && store.adminEvents().length >= 1,
+    'the administration lists the events really stored');
+  r.check(Array.isArray(store.adminAlerts()), 'and what awaits a decision in them');
+  r.check(store.searchAcrossEvents('a').length === 0, 'a one-letter search returns nothing');
+  r.check(store.personDossier('inconnu') === null, 'an unknown person has no card');
+  const adminSrc = read('components', 'mirror', 'admin', 'AdminConsole.tsx');
+  r.check(!/localStorage|savePersistedState/.test(adminSrc),
+    'the administration writes nothing of its own — no second base');
+  r.check(!/fetch\(|https?:\/\//.test(adminSrc), 'and calls nothing outside');
+  r.check(/pas\s+simulées/.test(adminSrc.replace(/\s+/g, ' ')) || /n’est pas\s+disponible/.test(adminSrc.replace(/\s+/g, ' ')),
+    'it says plainly what this environment cannot do');
+  r.check(/matchedByName/.test(adminSrc) && /à confirmer/i.test(adminSrc),
+    'and never presents a name match as an identity');
+
+  // One door: the World surfaces are unreachable from the product.
+  const appFinale = read('App.tsx');
+  r.check(/const inWorld = weddingStore\.projection === 'world'/.test(appFinale),
+    'the keyboard shortcuts know where they are allowed to fire');
+  r.check(/projection === 'world' && !weddingStore\.showIdentityModal && <EntityInspector/.test(appFinale),
+    'the World inspector exists only inside the World');
+  r.check(/projection === 'world' && !weddingStore\.showIdentityModal && weddingStore\.viewMode === 'timeline' && <LivingTimelineView/.test(appFinale),
+    'and so does the World’s own timeline — the product has exactly one');
+  for (const flag of ['connectorsModalOpen', 'worldLabModalOpen', 'systemNerveModalOpen', 'djBoothModalOpen']) {
+    r.check(new RegExp(`projection === 'world' && weddingStore\\.${flag}`).test(appFinale),
+      `${flag} cannot open over the product`);
+  }
+
+  // Role decides how much complexity is shown — using the model that exists.
+  r.check(typeof store.currentRole() === 'string' && typeof store.isOrchestrator() === 'boolean',
+    'the product can ask who is looking');
+  const siteSrc = read('components', 'mirror', 'MirrorSite.tsx');
+  r.check(/store\.isOrchestrator\(\)/.test(siteSrc) && /nav-admin/.test(siteSrc),
+    'and the administration is offered only to those who orchestrate');
 
   un();
 } finally {

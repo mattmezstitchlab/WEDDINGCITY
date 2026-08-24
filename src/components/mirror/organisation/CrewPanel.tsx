@@ -166,14 +166,22 @@ export function CrewPanel() {
               onCommit={(v) => store.setPersonCraft(openSheet.person.id, { setupMinutes: Number(v) || undefined })} />
             <Craft label="Démontage (min)" value={openSheet.person.craft?.teardownMinutes ? String(openSheet.person.craft.teardownMinutes) : ''} tag="teardown"
               onCommit={(v) => store.setPersonCraft(openSheet.person.id, { teardownMinutes: Number(v) || undefined })} />
-            <Craft label="Cachet / tarif" value={openSheet.person.craft?.fee ?? ''} tag="fee"
-              placeholder="tel que négocié"
-              onCommit={(v) => store.setPersonCraft(openSheet.person.id, { fee: v })} />
+            {/* WHAT IS NOT EVERYONE'S BUSINESS. A fee is a negotiation between
+                the person who books and the person who plays; a guest or a
+                viewer of the day has no reason to read it. The question is
+                asked of the permission model that already exists, not of a new
+                one. */}
+            {store.isOrchestrator() && (
+              <Craft label="Cachet / tarif" value={openSheet.person.craft?.fee ?? ''} tag="fee"
+                placeholder="tel que négocié"
+                onCommit={(v) => store.setPersonCraft(openSheet.person.id, { fee: v })} />
+            )}
             <Craft label="Zone" value={openSheet.person.craft?.zone ?? ''} tag="zone"
               onCommit={(v) => store.setPersonCraft(openSheet.person.id, { zone: v })} />
           </div>
 
-          {/* ---- getting there and back ---- */}
+          {/* ---- getting there and back — administration, not the day ---- */}
+          {store.isOrchestrator() && (
           <div style={{ marginTop: 18 }}>
             <div style={eyebrow}>Déplacement et hébergement</div>
             <div style={grid}>
@@ -194,6 +202,7 @@ export function CrewPanel() {
               Champs libres : rien n’est réservé, aucun numéro de vol n’est deviné.
             </p>
           </div>
+          )}
 
           {/* ---- missions delegated about this person ---- */}
           <Missions personId={openSheet.person.id} personName={openSheet.person.displayName} />

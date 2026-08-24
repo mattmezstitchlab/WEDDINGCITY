@@ -4,6 +4,7 @@ import { typography } from '../../../design/tokens';
 import { momentImage, MOMENT_TEMPLATES } from '../../../design/momentImagery';
 import { PRODUCT_NAME } from '../../../design/productIdentity';
 import { MomentHub } from './MomentHub';
+import { CERTAINTY } from '../../../design/certainty';
 import './timeline.css';
 
 // ---------------------------------------------------------------------------
@@ -475,6 +476,16 @@ export function TimelineStudio() {
             const image = momentImage(phase.name, own?.source);
             const hub = store.getPhaseHub(phase.id);
             const dense = cardWidth < 150;
+            // What this scene is still missing, read from the same engine the
+            // whole product uses. Gaps and conflicts come first: a card should
+            // announce a problem before it announces a success.
+            const allFindings = store.phaseFindings(phase.id);
+            const findings = [
+              ...allFindings.filter((f) => f.level === 'conflict'),
+              ...allFindings.filter((f) => f.level === 'gap'),
+              ...allFindings.filter((f) => f.level === 'ok'),
+            ];
+            const extraFindings = Math.max(0, findings.length - 3);
             return (
               <article
                 key={phase.id}
@@ -491,7 +502,19 @@ export function TimelineStudio() {
                 <img src={image.src} alt={image.alt} width={image.width} height={image.height} loading="lazy" decoding="async" />
                 <div style={momentScrim} />
                 <div style={momentBody}>
-                  <div style={momentHour}>{formatHour(phase.startHour)}</div>
+                  <div style={momentHour}>
+                    {formatHour(phase.startHour)}
+                    {phase.confidence && phase.confidence !== 'confirmed' && (
+                      <span
+                        style={{ ...estimateTag, color: CERTAINTY[phase.confidence].color, borderColor: CERTAINTY[phase.confidence].color }}
+                        title={phase.confidenceNote || CERTAINTY[phase.confidence].meaning}
+                        data-jourj="moment-certainty"
+                        data-level={phase.confidence}
+                      >
+                        {CERTAINTY[phase.confidence].label}
+                      </span>
+                    )}
+                  </div>
                   {!dense && (
                     <>
                       <div style={momentName}>{phase.name}</div>
@@ -501,6 +524,30 @@ export function TimelineStudio() {
                         {hub && hub.vendors.length > 0 && ` · ${hub.vendors.length} prest.`}
                         {hub && hub.media.length > 0 && ` · ${hub.media.length} doc.`}
                       </div>
+
+                      {/* THE STATE OF THE SCENE, on the scene itself.
+                          Derived from phaseFindings() — the same reading the
+                          hub opens on. Three lines at most: the card announces,
+                          the hub explains. */}
+                      {cardWidth >= 240 && findings.length > 0 && (
+                        <ul style={stateList} data-jourj="moment-state">
+                          {findings.slice(0, 3).map((f, i) => (
+                            <li
+                              key={i}
+                              style={{ ...stateLine, color: f.level === 'ok' ? 'rgba(246,245,243,0.72)' : f.level === 'conflict' ? '#e0736a' : '#e0a06a' }}
+                              data-jourj="moment-state-line"
+                              data-level={f.level}
+                            >
+                              {f.level === 'ok' ? '✓' : '⚠'} {f.title}
+                            </li>
+                          ))}
+                          {extraFindings > 0 && (
+                            <li style={{ ...stateLine, color: 'rgba(246,245,243,0.5)' }}>
+                              + {extraFindings} autre{extraFindings > 1 ? 's' : ''}
+                            </li>
+                          )}
+                        </ul>
+                      )}
                     </>
                   )}
                 </div>
@@ -576,30 +623,87 @@ export function TimelineStudio() {
         </div>
       )}
 
-      {/* ---- the chain of the day, proposed after a move ---- */}
-      {ripple && (
-        <div style={rippleBar} role="status" data-jourj="ripple">
-          <span>
-            Ce moment a bougé de {Math.round(ripple.delta * 60)} minutes.
-            {' '}Décaler aussi {ripple.count === 1 ? 'le moment suivant' : `les ${ripple.count} moments suivants`} ?
-          </span>
-          <span style={{ display: 'flex', gap: 8 }}>
-            <button
-              onClick={() => {
-                store.shiftPhasesAfter(ripple.phaseId, ripple.delta);
-                setRipple(null);
-              }}
-              style={primaryBtn}
-              data-jourj="ripple-apply"
-            >
-              Décaler la suite
-            </button>
-            <button onClick={() => setRipple(null)} style={ghostBtn} data-jourj="ripple-dismiss">
-              Ce moment seulement
-            </button>
-          </span>
-        </div>
-      )}
+      {/* ---- CAUSALITÉ — what moving this moment really does, by name ----
+             The engine is the same one that has always propagated a shift
+             (shiftPhasesAfter). What changes here is that the consequence is
+             READ BEFORE it happens: who slides, what breaks, and the four ways
+             out. Nothing is applied until one of them is clicked. */}
+      {ripple && (() => {
+        const impact = store.propagationImpact(ripple.phaseId, ripple.delta);
+        const minutes = Math.round(ripple.delta * 60);
+        const sign = minutes > 0 ? '+' : '';
+        return (
+          <div style={rippleBar} role="status" data-jourj="ripple">
+            <div style={{ display: 'grid', gap: 10, flex: '1 1 420px' }}>
+              <span>
+                <strong>{impact?.moment.name ?? 'Ce moment'} {sign}{minutes}</strong>
+                {' — '}
+                {ripple.count === 1 ? 'le moment suivant' : `les ${ripple.count} moments suivants`}
+                {' '}peuvent suivre.
+              </span>
+
+              {impact && (impact.people.length > 0 || impact.vendors.length > 0) && (
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }} data-jourj="ripple-people">
+                  {impact.people.map((p) => (
+                    <span key={p.id} style={impactChip} data-jourj="ripple-person">
+                      {p.name}{p.role ? ` · ${p.role}` : ''} {sign}{minutes}
+                    </span>
+                  ))}
+                  {impact.vendors.map((v) => (
+                    <span key={v.id} style={impactChip} data-jourj="ripple-vendor">
+                      {v.name} {sign}{minutes}
+                    </span>
+                  ))}
+                </div>
+              )}
+
+              {impact && impact.conflicts.length > 0 && (
+                <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'grid', gap: 6 }} data-jourj="ripple-conflicts">
+                  {impact.conflicts.map((c, i) => (
+                    <li key={i} style={conflictLine} data-jourj="ripple-conflict">
+                      <strong>⚠ {c.title}</strong> — {c.detail}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+
+            <span style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              <button
+                onClick={() => {
+                  store.shiftPhasesAfter(ripple.phaseId, ripple.delta);
+                  setRipple(null);
+                }}
+                style={primaryBtn}
+                data-jourj="ripple-apply"
+              >
+                Appliquer
+              </button>
+              <button
+                onClick={() => {
+                  // A PLAN B is not another engine: it is the scenario engine
+                  // already in the product, seeded with the move being read.
+                  const name = `Plan B — ${impact?.moment.name ?? 'décalage'} ${sign}${minutes} min`;
+                  const scenario = store.createScenario(name);
+                  if (scenario) {
+                    store.scenarioShiftPhase(scenario.id, ripple.phaseId, ripple.delta, true);
+                    store.setActiveScenario(scenario.id);
+                  }
+                  setRipple(null);
+                  document.getElementById('organisation')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }}
+                style={ghostBtn}
+                data-jourj="ripple-planb"
+              >
+                Créer un plan B
+              </button>
+              <button onClick={() => setRipple(null)} style={ghostBtn} data-jourj="ripple-dismiss">
+                Ce moment seulement
+              </button>
+            </span>
+          </div>
+        );
+      })()}
 
       {openPhaseId && (
         <MomentHub phaseId={openPhaseId} onClose={() => setOpenPhaseId(null)} />
@@ -828,6 +932,30 @@ const nowClock: React.CSSProperties = {
 
 const nowCurrent: React.CSSProperties = {
   fontSize: 'clamp(18px, 2.6vw, 30px)', fontWeight: 600, letterSpacing: '-0.02em', color: '#f6f5f3',
+};
+
+const estimateTag: React.CSSProperties = {
+  marginLeft: 8, border: '1px solid', borderRadius: 999,
+  padding: '1px 7px', fontSize: 9, letterSpacing: '0.14em', fontWeight: 700,
+  verticalAlign: 'middle',
+};
+
+const stateList: React.CSSProperties = {
+  listStyle: 'none', margin: '10px 0 0', padding: 0, display: 'grid', gap: 3,
+};
+
+const stateLine: React.CSSProperties = {
+  fontSize: 11, lineHeight: 1.4, whiteSpace: 'nowrap',
+  overflow: 'hidden', textOverflow: 'ellipsis',
+};
+
+const impactChip: React.CSSProperties = {
+  border: '1px solid rgba(246,245,243,0.28)', borderRadius: 999,
+  padding: '4px 10px', fontSize: 11, whiteSpace: 'nowrap',
+};
+
+const conflictLine: React.CSSProperties = {
+  borderLeft: '2px solid #e0736a', paddingLeft: 10, fontSize: 11, lineHeight: 1.5,
 };
 
 const rippleBar: React.CSSProperties = {

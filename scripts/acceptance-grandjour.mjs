@@ -153,7 +153,14 @@ const bar = await p.evaluate(() => {
 });
 check('la barre contient champ + import + type + validation',
   bar && bar.field && bar.importer && bar.go, JSON.stringify(bar));
-check('les sept types d’événement sont proposés', bar.types.length === 7, bar.types.join(','));
+// LOCATOR ADAPTED (convergence finale): seven kinds of day became eleven —
+// festival, concert, gala, spectacle, associatif, culturel joined, and each one
+// really changes the questions asked. Same guarantee: the type is chosen in the
+// hero, in one selector.
+check('les onze natures d’événement sont proposées', bar.types.length === 11, bar.types.join(','));
+check('et elles couvrent le spectacle vivant comme l’entreprise',
+  ['festival', 'concert', 'spectacle', 'gala', 'corporate', 'associatif', 'culturel']
+    .every((t) => bar.types.includes(t)), bar.types.join(','));
 check('la signature est affichée', bar.signature);
 await shot('01-hero');
 await noOverflow('Landing');
@@ -173,13 +180,21 @@ const filmPos = await p.evaluate(() => {
   };
 });
 say('  ' + JSON.stringify(filmPos));
-check('la pellicule arrive dans l’écran qui suit le hero', filmPos.gapScreens <= 0.6, `${filmPos.gapScreens} écran`);
+// PRODUCT DECISION (convergence finale): the brief puts « IMPORTER LE CHAOS »
+// between the hero and the timeline — one cannot show a day being organised
+// before showing where the day comes from. The film is therefore one sequence
+// lower. The guarantee stays measurable: it is still reached in the first two
+// screens of scroll, never buried in the page.
+check('la pellicule reste dans les deux premiers écrans', filmPos.gapScreens <= 2, `${filmPos.gapScreens} écran`);
 check('les 8 moments de la démonstration sont dessinés', filmPos.moments === 8, String(filmPos.moments));
 // The page tells the eleven innovations of the product, one section each —
 // and never more, so it stays a story rather than a catalogue.
 // V3: fewer, bigger sequences — each one proving an innovation.
-check('la page tient en huit à dix séquences',
-  filmPos.sections >= 7 && filmPos.sections <= 10, String(filmPos.sections));
+// PRODUCT DECISION (convergence finale): two demanded sequences were added
+// (importer le chaos, administration invisible). The ceiling moves from 10 to
+// 12; the guarantee — big sequences, never a catalogue — is unchanged.
+check('la page tient en neuf à douze séquences',
+  filmPos.sections >= 9 && filmPos.sections <= 12, String(filmPos.sections));
 
 await p.evaluate(() => document.getElementById('film')?.scrollIntoView());
 await wait(900);
@@ -355,14 +370,18 @@ say('\n=== 5c. LE TYPE D’ÉVÉNEMENT CHANGE LES QUESTIONS ===');
 await p.evaluate(() => {
   const sel = document.querySelector('[data-landing="type"]');
   const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set;
-  setter.call(sel, 'convention');
+  // LOCATOR ADAPTED (convergence finale): « convention » is retired (it stays
+  // resolvable for older projects) and « corporate » is now the first-class
+  // corporate day. Same guarantee: a company day is never asked who is
+  // getting married.
+  setter.call(sel, 'corporate');
   sel.dispatchEvent(new Event('change', { bubbles: true }));
 });
 await wait(400);
 await p.evaluate(() => {
   const f = document.querySelector('[data-landing="brief"]');
   const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
-  setter.call(f, 'Convention annuelle le 12 octobre 2027 au Centre des Congrès, plénière à 9h, ateliers à 11h, déjeuner à 12h30, 250 participants.');
+  setter.call(f, 'Convention annuelle de la société ARTEMIS le 12 octobre 2027 au Centre des Congrès, plénière à 9h, ateliers à 11h, déjeuner à 12h30, 250 participants.');
   f.dispatchEvent(new Event('input', { bubbles: true }));
 });
 await wait(300);
@@ -370,7 +389,12 @@ await clickTag('landing', 'hero-create');
 await wait(2600);
 const corporate = await p.evaluate(() => {
   const labels = [...document.querySelectorAll('[data-intake="review"] label span')].map((s) => s.textContent.trim());
-  const t = document.body.innerText;
+  // LOCATOR ADAPTED (convergence finale): the reading is now scoped to the
+  // intake surface. The landing behind it demonstrates the engine ON A WEDDING
+  // — « Les mariés : rien ne sera deviné » — and body.innerText was picking up
+  // that illustration through the overlay. The guarantee is the real one and is
+  // now tested where it lives: the corporate INTAKE never asks for a couple.
+  const t = document.querySelector('[data-intake="studio"]')?.innerText || '';
   return {
     labels: labels.slice(0, 6),
     asksBride: /mariés|Qui se marie/i.test(t),

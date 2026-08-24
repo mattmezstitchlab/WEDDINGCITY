@@ -22,14 +22,24 @@
 
 import { extractDocumentFacts, type DocumentFacts } from './documentIntelligence';
 import { eventType, type EventTypeId } from '../design/eventTypes';
+import type { Certainty } from '../types/wedding';
 
-export type IntakeConfidence = 'read' | 'estimated';
+/**
+ * FIVE LEVELS, ONE VOCABULARY.
+ *
+ * The intake used to know two words, « lu » and « estimé ». It now speaks the
+ * same five levels as the timeline and the generated documents (see
+ * design/certainty), so a hour keeps its exact degree of certainty from the
+ * sentence that produced it all the way to the card and to the contract.
+ */
+export type IntakeConfidence = Certainty;
+
 
 export interface IntakeMoment {
   label: string;
   startHour: number;
   endHour: number;
-  /** 'read' when both hours were written; 'estimated' when the end was not. */
+  /** How sure we are of these hours. See design/certainty. */
   confidence: IntakeConfidence;
   /** The exact fragment this came from, shown to the user. */
   evidence: string;
@@ -74,6 +84,21 @@ export interface IntakePlan {
   amounts: number[];
   /** What the reading could not settle. Shown as questions, never guessed. */
   questions: string[];
+  /**
+   * How sure we are of each headline field. MISSING means the reading found
+   * nothing — and that nothing was put in its place.
+   */
+  certainty: {
+    principals: IntakeConfidence;
+    date: IntakeConfidence;
+    place: IntakeConfidence;
+    headcount: IntakeConfidence;
+  };
+  /**
+   * True when NO hour could be read and the moments below are the proposed
+   * first day of this kind of event. Every one of them is ESTIMÉ.
+   */
+  proposedDay: boolean;
 }
 
 export interface IntakeSource {
@@ -111,6 +136,14 @@ export const MOMENT_WORDS: { re: RegExp; label: string }[] = [
 
 const VENDOR_WORDS = /(traiteur|photographe|vid[ée]aste|dj|fleuriste|wedding planner|officiant|musicien|orchestre|coiffeur|maquilleuse|location|transport|photobooth)/i;
 const PLACE_WORDS = /(ch[âa]teau|domaine|manoir|salle|orangerie|jardin|mairie|[ée]glise|ferme|grange|h[ôo]tel|bastide|mas|villa)/i;
+
+/**
+ * Types whose « principal » is a structure, not a person. They are asked for a
+ * company or an association, never for two first names.
+ */
+const ORGANISATION_TYPES = new Set<string>([
+  'corporate', 'seminaire', 'convention', 'festival', 'gala', 'associatif', 'culturel', 'spectacle',
+]);
 
 const MONTHS: Record<string, number> = {
   janvier: 1, février: 2, fevrier: 2, mars: 3, avril: 4, mai: 5, juin: 6,
@@ -159,7 +192,7 @@ export function analyseIntake(input: {
   if (type.id === 'mariage') {
     const couple = /\b([A-ZÉÈÀÂÎÔÛ][\p{Ll}'-]{2,})\s*(?:&|et)\s*([A-ZÉÈÀÂÎÔÛ][\p{Ll}'-]{2,})\b/u.exec(description);
     if (couple) coupleNames = `${couple[1]} & ${couple[2]}`;
-  } else if (type.id === 'convention' || type.id === 'seminaire') {
+  } else if (ORGANISATION_TYPES.has(type.id)) {
     const company = /\b(?:pour|chez|avec|société|entreprise)\s+([A-ZÉÈÀÂÎÔÛ][\p{L}&'-]+(?:\s+[A-ZÉÈÀÂÎÔÛ][\p{L}&'-]+){0,2})/u.exec(description);
     if (company) coupleNames = company[1].trim();
   } else {
@@ -180,7 +213,7 @@ export function analyseIntake(input: {
   } else if (dNum) {
     weddingDate = `${dNum[3]}-${String(Number(dNum[2])).padStart(2, '0')}-${String(Number(dNum[1])).padStart(2, '0')}`;
   } else {
-    questions.push('Quelle est la date du mariage ? Elle n’apparaît nulle part dans ce que vous avez donné.');
+    questions.push(`Quelle est la date de cet événement (${type.label}) ? Elle n’apparaît nulle part dans ce que vous avez donné.`);
   }
   if (!coupleNames && type.principalsQuestion) {
     questions.push(type.principalsQuestion);
@@ -210,21 +243,24 @@ export function analyseIntake(input: {
       label: found.label,
       startHour: start,
       endHour: explicitEnd ?? start + 1.5,
-      confidence: explicitEnd ? 'read' : 'estimated',
+      // Both hours written → CONFIRMÉ. Only the start written → the end is not
+      // a fact yet; it becomes DÉDUIT below if the next moment settles it.
+      confidence: explicitEnd ? 'confirmed' : 'estimated',
       evidence: f.slice(0, 120),
       keep: true,
     });
   }
   moments.sort((a, b) => a.startHour - b.startHour);
-  // Chain estimated ends onto the next start when they would overlap: still an
-  // estimate, and marked as one.
+  // Chain estimated ends onto the next start. That end is no longer a guess:
+  // it is DEDUCED from an hour that was really written.
   for (let i = 0; i < moments.length - 1; i++) {
     if (moments[i].confidence === 'estimated' && moments[i].endHour > moments[i + 1].startHour) {
       moments[i].endHour = moments[i + 1].startHour;
+      moments[i].confidence = 'inferred';
     }
   }
-  if (moments.some((m) => m.confidence === 'estimated')) {
-    questions.push('Certaines heures de fin ont été estimées : vérifiez-les avant de générer la journée.');
+  if (moments.some((m) => m.confidence !== 'confirmed')) {
+    questions.push('Certaines heures de fin ont été déduites ou estimées : vérifiez-les avant de générer la journée.');
   }
 
   // --- people, vendors, places, tracks, amounts -----------------------------
@@ -320,9 +356,35 @@ export function analyseIntake(input: {
   // --- the venue ------------------------------------------------------------
   const locationName = places[0]?.name ?? null;
   if (!locationName) questions.push('Où se déroule la journée ? Aucun lieu n’a été reconnu.');
-  if (moments.length === 0) {
+
+  // --- A FIRST DAY, WHEN NOTHING COULD BE READ ------------------------------
+  // An empty timeline tells the user nothing and gives them nowhere to start.
+  // So the product proposes the ordinary shape of THIS kind of day — and says,
+  // on every single moment, that these hours are ESTIMÉ and its own.
+  //
+  // The line that must never be crossed: this is a starting point, not a fact.
+  // « Autre » has no skeleton, because a day whose nature is unknown has no
+  // ordinary shape to propose.
+  let proposedDay = false;
+  if (moments.length === 0 && type.skeleton.length > 0) {
+    proposedDay = true;
+    for (const step of type.skeleton) {
+      moments.push({
+        label: step.label,
+        startHour: step.startHour,
+        endHour: step.endHour,
+        confidence: 'estimated',
+        evidence: `Proposition du produit pour un événement « ${type.label} » — aucune heure n’a été lue dans ce que vous avez donné.`,
+        keep: true,
+      });
+    }
+    questions.push(
+      `Aucun horaire n’a été reconnu : voici la trame habituelle d’un événement « ${type.label} », proposée comme point de départ. Chaque heure est ESTIMÉE et se modifie.`,
+    );
+  } else if (moments.length === 0) {
     questions.push('Aucun horaire n’a été reconnu : décrivez au moins un moment (« cérémonie à 15h »), ou ajoutez-les ensuite sur la pellicule.');
   }
+
   if (documents.some((d) => d.facts.unreadable)) {
     questions.push('Certains fichiers ne sont pas lisibles comme du texte ici : ils sont conservés tels quels et rattachés à la main.');
   }
@@ -331,6 +393,14 @@ export function analyseIntake(input: {
     eventTypeId: type.id,
     coupleNames, weddingDate, locationName, guestCountTarget,
     moments, people, vendors, places, tracks, documents, amounts, questions,
+    certainty: {
+      principals: coupleNames ? 'confirmed' : 'missing',
+      date: weddingDate ? 'confirmed' : 'missing',
+      // A venue is recognised by a keyword, not declared: it deserves a check.
+      place: locationName ? 'to_confirm' : 'missing',
+      headcount: guestCountTarget ? 'confirmed' : 'missing',
+    },
+    proposedDay,
   };
 }
 

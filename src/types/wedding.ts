@@ -178,6 +178,11 @@ export interface WeddingProject {
   updatedAt: string;
   inviteCode: string;
   themeColor?: string;
+  /**
+   * Which kind of day this is. Decides the vocabulary of the whole product
+   * after creation, not only during the intake.
+   */
+  eventTypeId?: string;
 }
 
 export interface WebVendorResult {
@@ -480,7 +485,29 @@ export interface TimelinePhase {
   logistics?: string;
   /** What this moment costs, as entered. Absent until someone types it. */
   budget?: { amount?: number; deposit?: number; paid?: boolean };
+
+  /**
+   * HOW SURE ARE WE OF THIS HOUR?
+   *
+   * Absent means « confirmed »: someone typed it. The intake writes the level
+   * it really reached, and the timeline shows it, so a proposed hour never
+   * passes for a decided one.
+   */
+  confidence?: Certainty;
+  /** The fragment or the rule that produced the hour. Shown, never guessed. */
+  confidenceNote?: string;
 }
+
+/**
+ * FIVE LEVELS OF CERTAINTY — the product never states more than it knows.
+ *
+ *  confirmed  — written by a human, or read literally in a document
+ *  inferred   — deduced from another certain fact (an end from the next start)
+ *  estimated  — a starting point proposed by the product, always modifiable
+ *  to_confirm — read somewhere, but contradicted or ambiguous
+ *  missing    — nothing was found, and nothing was invented
+ */
+export type Certainty = 'confirmed' | 'inferred' | 'estimated' | 'to_confirm' | 'missing';
 
 /**
  * A SCENARIO — a temporary branch of the day.

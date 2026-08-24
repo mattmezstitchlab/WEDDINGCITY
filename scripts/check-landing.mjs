@@ -90,8 +90,20 @@ try {
       'the way in is one field, in the hero');
     r.check(doc.querySelectorAll('[data-landing="hero-create"]').length === 1,
       'with its submit button inside it');
-    r.check(doc.querySelectorAll('[data-landing="type"] option').length === 7,
-      'and the kind of event is chosen right there');
+    // PRODUCT DECISION (convergence finale): the hero offers ELEVEN kinds of
+    // day, not seven — a festival, a concert, a gala, a show, an associative
+    // and a cultural event were added, and each one really changes the
+    // vocabulary and the questions of the engine (see design/eventTypes).
+    // The guarantee is unchanged and checked more strictly than before: the
+    // choice is made in the hero, in ONE select, and it is a real menu.
+    const typeOptions = doc.querySelectorAll('[data-landing="type"] option');
+    r.check(typeOptions.length === 11,
+      'and the kind of event is chosen right there', String(typeOptions.length));
+    r.check(doc.querySelectorAll('[data-landing="type"]').length === 1,
+      'there is exactly one type selector on the page');
+    r.check(['Mariage', 'Festival', 'Concert', 'Gala', 'Spectacle']
+      .every((label) => [...typeOptions].some((o) => o.textContent.trim() === label)),
+      'and it really carries the kinds of day the engine knows');
     r.check(/const start = \(\) =>/.test(landingSrc) && /: create\(\)/.test(landingSrc),
       'and every way in ends on the same single handler');
     r.check(/store\.startWeddingCreation\(\)/.test(landingSrc),

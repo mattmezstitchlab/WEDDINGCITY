@@ -3,6 +3,7 @@ import { weddingStore } from '../../../game/weddingStore';
 import { typography } from '../../../design/tokens';
 import { analyseIntake, summariseIntake, type IntakePlan, type IntakeSource } from '../../../game/projectIntake';
 import { eventType, type EventTypeId } from '../../../design/eventTypes';
+import { CERTAINTY, type Certainty } from '../../../design/certainty';
 
 // ---------------------------------------------------------------------------
 // INTAKE — « Importez votre chaos. Nous construisons votre journée. »
@@ -70,7 +71,12 @@ export function IntakeStudio({ description, files, projectType, onClose }: {
   const editMoment = (index: number, patch: { label?: string; startHour?: number; endHour?: number }) => {
     if (!plan) return;
     const moments = [...plan.moments];
-    moments[index] = { ...moments[index], ...patch, confidence: patch.endHour !== undefined ? 'read' : moments[index].confidence };
+    // Touching an hour by hand makes it a decision: it becomes CONFIRMÉ.
+    moments[index] = {
+      ...moments[index], ...patch,
+      confidence: patch.endHour !== undefined || patch.startHour !== undefined
+        ? 'confirmed' : moments[index].confidence,
+    };
     setPlan({ ...plan, moments });
   };
 
@@ -91,6 +97,7 @@ export function IntakeStudio({ description, files, projectType, onClose }: {
       locationName: plan.locationName || '',
       userRole: 'wedding_planner',
       userName: (plan.coupleNames || '').split('&')[0].trim(),
+      eventTypeId: plan.eventTypeId,
     });
     store.applyIntakePlan(plan);
     setStage('done');
@@ -108,6 +115,7 @@ export function IntakeStudio({ description, files, projectType, onClose }: {
 
         {stage === 'reading' && (
           <div style={{ padding: '48px 0' }} data-intake="reading">
+            <div style={eyebrow}>Analyse de votre événement</div>
             <div style={title}>{step}…</div>
             <p style={{ ...muted, marginTop: 8 }}>{schema.intakeLine}</p>
             <p style={muted}>
@@ -120,8 +128,76 @@ export function IntakeStudio({ description, files, projectType, onClose }: {
 
         {stage === 'review' && plan && (
           <div data-intake="review">
-            <div style={eyebrow}>Lecture du projet</div>
-            <div style={title}>Votre journée prend forme</div>
+            <div style={eyebrow}>Analyse de votre événement</div>
+            <div style={title}>Voici ce que nous avons compris</div>
+            <p style={{ ...muted, marginTop: 14, maxWidth: 620 }}>
+              Rien n’est encore créé. Corrigez ce qui est faux, retirez ce qui n’a
+              rien à faire là, puis validez.
+            </p>
+
+            {/* CE QUE LE MOTEUR A COMPRIS — one line per thing, each with the
+                degree of certainty it really reached. Nothing is stated more
+                firmly than it was read. */}
+            <dl style={recapGrid} data-intake="recap">
+              <Recap label="Type" value={schema.label} level="confirmed" />
+              <Recap label="Date" value={plan.weddingDate} level={plan.certainty.date} />
+              <Recap label="Lieu" value={plan.locationName} level={plan.certainty.place} />
+              <Recap
+                label={schema.principalsLabel ?? 'Intitulé'}
+                value={plan.coupleNames}
+                level={plan.certainty.principals}
+              />
+              <Recap
+                label={schema.headcountLabel === 'participants' ? 'Participants' : 'Personnes'}
+                value={plan.guestCountTarget ? `${plan.guestCountTarget} ${schema.headcountLabel}` : null}
+                level={plan.certainty.headcount}
+              />
+              <Recap
+                label="Moments"
+                value={plan.moments.length ? `${plan.moments.length} identifiés` : null}
+                level={plan.proposedDay ? 'estimated' : plan.moments.length ? 'confirmed' : 'missing'}
+              />
+              <Recap
+                label="Prestataires"
+                value={plan.vendors.length ? plan.vendors.map((v) => v.name).join(', ') : null}
+                level={plan.vendors.length ? 'confirmed' : 'missing'}
+              />
+              <Recap
+                label="Artistes"
+                value={null}
+                level="to_confirm"
+                note="Le métier d’une personne ne se devine pas : déclarez-le sur sa fiche, dans « Spectacle »."
+              />
+              <Recap
+                label="Musique"
+                value={plan.tracks.length ? `${plan.tracks.length} morceau(x)` : null}
+                level={plan.tracks.length ? 'confirmed' : 'missing'}
+              />
+              <Recap
+                label="Documents"
+                value={plan.documents.length ? `${plan.documents.length} analysé(s)` : null}
+                level={plan.documents.length ? 'confirmed' : 'missing'}
+              />
+              <Recap
+                label="Contraintes"
+                value={plan.questions.length ? `${plan.questions.length} à confirmer` : 'aucune'}
+                level={plan.questions.length ? 'to_confirm' : 'confirmed'}
+              />
+            </dl>
+
+            {plan.proposedDay && (
+              <div style={proposalBox} data-intake="proposed-day">
+                <div style={{ fontWeight: 600, fontSize: typography.editorial.body }}>
+                  Voici la première structure proposée.
+                </div>
+                <p style={{ ...muted, marginTop: 8 }}>
+                  Aucune heure n’a été lue dans ce que vous avez donné. Ces {plan.moments.length} moments
+                  sont la trame habituelle d’un événement « {schema.label} » : ils sont tous marqués
+                  ESTIMÉ, ils ne sont la vérité de personne, et chacun se déplace. Ils existent pour
+                  que votre journée ne commence pas devant une page blanche.
+                </p>
+              </div>
+            )}
 
             <div style={countsRow}>
               {summariseIntake(plan).map((c) => (
@@ -191,8 +267,17 @@ export function IntakeStudio({ description, files, projectType, onClose }: {
                       style={{ ...input, flex: '1 1 180px' }}
                       data-intake="moment-label"
                     />
-                    <span style={m.confidence === 'estimated' ? warnTag : okTag} data-intake="moment-confidence">
-                      {m.confidence === 'estimated' ? '⚠ horaire de fin estimé' : '✓ lu'}
+                    <span
+                      style={{
+                        ...chip, cursor: 'default',
+                        borderColor: CERTAINTY[m.confidence].color,
+                        color: CERTAINTY[m.confidence].color,
+                      }}
+                      title={CERTAINTY[m.confidence].meaning}
+                      data-intake="moment-confidence"
+                      data-level={m.confidence}
+                    >
+                      {CERTAINTY[m.confidence].mark} {CERTAINTY[m.confidence].label}
                     </span>
                     <button onClick={() => toggle('moments', i)} style={ghost} data-intake="moment-toggle">
                       {m.keep ? 'Retirer' : 'Remettre'}
@@ -301,6 +386,29 @@ export function IntakeStudio({ description, files, projectType, onClose }: {
   );
 }
 
+/**
+ * One understood fact, with the exact degree of certainty behind it.
+ * A missing value is written « MANQUANT » — never filled with a plausible one.
+ */
+function Recap({ label, value, level, note }: {
+  label: string; value: string | null; level: Certainty; note?: string;
+}) {
+  const settled = Boolean(value);
+  const shown: Certainty = settled ? level : (level === 'missing' ? 'missing' : level);
+  return (
+    <div style={recapCell} data-intake="recap-line" data-label={label} data-level={shown}>
+      <dt style={eyebrow}>{label}</dt>
+      <dd style={{ margin: '6px 0 0', fontSize: typography.editorial.body }}>
+        {value ?? <span style={{ color: 'rgba(246,245,243,0.45)' }}>—</span>}
+      </dd>
+      <div style={{ marginTop: 6, fontSize: 10, letterSpacing: '0.16em', color: CERTAINTY[shown].color }}>
+        {CERTAINTY[shown].label}
+      </div>
+      {note && <p style={{ ...muted, marginTop: 6, fontSize: 11 }}>{note}</p>}
+    </div>
+  );
+}
+
 function Group({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div style={{ marginTop: 26 }}>
@@ -364,6 +472,20 @@ const countChip: React.CSSProperties = {
 
 const identityRow: React.CSSProperties = { display: 'flex', gap: 12, flexWrap: 'wrap', marginTop: 24 };
 
+const recapGrid: React.CSSProperties = {
+  display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))',
+  gap: 1, margin: '28px 0 0', padding: 0,
+  background: 'rgba(246,245,243,0.14)', border: '1px solid rgba(246,245,243,0.14)',
+};
+
+const recapCell: React.CSSProperties = { background: '#08090b', padding: '16px 18px' };
+
+const proposalBox: React.CSSProperties = {
+  marginTop: 24, padding: '18px 20px',
+  border: '1px solid rgba(224,160,106,0.5)', borderLeft: '3px solid #e0a06a',
+  background: 'rgba(224,160,106,0.06)',
+};
+
 const input: React.CSSProperties = {
   background: '#101114', color: '#f6f5f3', border: '1px solid rgba(246,245,243,0.18)',
   borderRadius: 4, padding: '10px 12px', fontSize: typography.editorial.caption,
@@ -383,8 +505,6 @@ const chip: React.CSSProperties = {
   padding: '8px 14px', fontSize: 12, fontFamily: typography.family.sans,
 };
 
-const okTag: React.CSSProperties = { ...chip, cursor: 'default', borderColor: 'rgba(127,176,138,0.6)' };
-const warnTag: React.CSSProperties = { ...chip, cursor: 'default', borderColor: 'rgba(224,160,106,0.7)' };
 
 const primary: React.CSSProperties = {
   appearance: 'none', border: 'none', cursor: 'pointer', background: '#f6f5f3', color: '#08090b',

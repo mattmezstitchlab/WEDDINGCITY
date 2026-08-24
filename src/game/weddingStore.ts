@@ -21,7 +21,10 @@ import {
   PlacedObject,
   DmcIdentity,
   AdDisplaySlot,
+  Certainty,
 } from '../types/wedding';
+import { CERTAINTY } from '../design/certainty';
+import { eventType } from '../design/eventTypes';
 import { generateWorldFromDescription } from './worldEngine';
 import type { IntakePlan } from './projectIntake';
 import { DEFAULT_DMC_IDENTITY } from './dmcPalette';
@@ -2365,6 +2368,271 @@ class WeddingStore {
   }
 
   /**
+   * WHAT THIS MOMENT IS MISSING — the state of one scene, read out loud.
+   *
+   * Same grammar as projectFindings() and crewFindings(): a level, a title, a
+   * detail. It is DERIVED, never stored, so it can never drift from the data.
+   * It is deliberately the third caller of one idea, not a third engine.
+   *
+   * It says only what the project really knows. A moment with nobody on it is
+   * not « incomplete » — some moments have nobody. It is reported as a gap only
+   * when something else in the project implies a hole.
+   */
+  public phaseFindings(phaseId: string): {
+    level: 'ok' | 'gap' | 'conflict';
+    title: string;
+    detail: string;
+    /** When the gap can be closed by generating a document, who it concerns. */
+    personId?: string;
+    vendorId?: string;
+    docKind?: string;
+  }[] {
+    const hub = this.getPhaseHub(phaseId);
+    if (!hub) return [];
+    const { phase, persons, vendors, tracks, tasks, media, place } = hub;
+    const out: ReturnType<WeddingStore['phaseFindings']> = [];
+    const clock = (h: number) => `${String(Math.floor(h) % 24).padStart(2, '0')}:${String(Math.round((h % 1) * 60)).padStart(2, '0')}`;
+
+    // --- the hour itself ------------------------------------------------
+    if (phase.confidence && phase.confidence !== 'confirmed') {
+      out.push({
+        level: 'gap',
+        title: `Horaire ${CERTAINTY[phase.confidence].label.toLowerCase()}`,
+        detail: phase.confidenceNote || CERTAINTY[phase.confidence].meaning,
+      });
+    } else {
+      out.push({ level: 'ok', title: 'Horaire', detail: `${clock(phase.startHour)} → ${clock(phase.endHour)}` });
+    }
+
+    // --- the place --------------------------------------------------------
+    if (place) out.push({ level: 'ok', title: 'Lieu', detail: place.name });
+    else out.push({ level: 'gap', title: 'Lieu', detail: 'Aucun lieu rattaché à ce moment.' });
+
+    // --- who is there -----------------------------------------------------
+    if (persons.length > 0) {
+      out.push({
+        level: 'ok',
+        title: 'Personnes',
+        detail: persons.map((p) => (p!.craft?.role ? `${p!.displayName} (${p!.craft!.role})` : p!.displayName)).join(', '),
+      });
+    }
+    for (const vendor of vendors) {
+      if (!vendor) continue;
+      out.push({
+        level: vendor.status === 'contracted' ? 'ok' : 'gap',
+        title: vendor.companyName,
+        detail: vendor.status === 'contracted'
+          ? 'Prestataire engagé.'
+          : `Prestataire au statut « ${vendor.status} » — rien n’est signé dans le projet.`,
+        vendorId: vendor.id,
+      });
+    }
+
+    // --- what a craft needs, and nobody has answered ----------------------
+    for (const person of persons) {
+      if (!person?.craft) continue;
+      const needs = person.craft.requirements ?? [];
+      if (needs.length > 0 && (person.craft.notes ?? '').trim() === '') {
+        out.push({
+          level: 'gap',
+          title: `${person.displayName} — besoins techniques`,
+          detail: `${needs.length} besoin${needs.length > 1 ? 's' : ''} déclaré${needs.length > 1 ? 's' : ''} : ${needs.join(', ')}.`,
+          personId: person.id,
+        });
+      }
+    }
+
+    // --- documents --------------------------------------------------------
+    for (const missing of this.missingDocumentsForPhase(phaseId)) {
+      out.push({
+        level: 'gap',
+        title: missing.title,
+        detail: missing.detail,
+        personId: missing.personId,
+        vendorId: missing.vendorId,
+        docKind: missing.docKind,
+      });
+    }
+    if (media.length > 0) {
+      out.push({ level: 'ok', title: 'Documents', detail: `${media.length} document${media.length > 1 ? 's' : ''} rattaché${media.length > 1 ? 's' : ''}.` });
+    }
+
+    // --- two people in two places at once, at this hour -------------------
+    for (const person of persons) {
+      if (!person) continue;
+      const elsewhere = this.phases.filter(
+        (p) => p.id !== phase.id
+          && (p.personIds ?? []).includes(person.id)
+          && p.startHour < phase.endHour && p.endHour > phase.startHour,
+      );
+      for (const other of elsewhere) {
+        out.push({
+          level: 'conflict',
+          title: `${person.displayName} est attendu deux fois`,
+          detail: `« ${phase.name} » ${clock(phase.startHour)}–${clock(phase.endHour)} et « ${other.name} » ${clock(other.startHour)}–${clock(other.endHour)}.`,
+          personId: person.id,
+        });
+      }
+    }
+
+    if (tracks.length > 0) out.push({ level: 'ok', title: 'Musique', detail: `${tracks.length} morceau${tracks.length > 1 ? 'x' : ''}.` });
+    const open = tasks.filter((t) => !t.isDone);
+    if (open.length > 0) {
+      out.push({ level: 'gap', title: 'Tâches en cours', detail: open.map((t) => t.title).join(', ') });
+    }
+
+    return out;
+  }
+
+  /**
+   * WHICH DOCUMENT IS MISSING HERE — and only where the answer is certain.
+   *
+   * A proposal is made only when the project holds enough to produce a real
+   * document: a named person with a craft, or a vendor engaged on this moment.
+   * Nothing is fabricated — the generated document itself writes « À CONFIRMER »
+   * wherever the project does not know (see generateAdminDocument).
+   */
+  public missingDocumentsForPhase(phaseId: string): {
+    title: string; detail: string; docKind: string; personId?: string; vendorId?: string;
+  }[] {
+    const hub = this.getPhaseHub(phaseId);
+    if (!hub) return [];
+    const out: { title: string; detail: string; docKind: string; personId?: string; vendorId?: string }[] = [];
+
+    const titlesFor = (kind: MediaOwnerKind, id: string) =>
+      this.media.filter((m) => m.ownerKind === kind && m.ownerId === id)
+        .map((m) => `${m.title ?? ''} ${m.fileName ?? ''}`.toLowerCase());
+
+    for (const person of hub.persons) {
+      if (!person?.craft?.role) continue;
+      const docs = titlesFor('person', person.id);
+      if (!docs.some((t) => /contrat|cession|engagement/.test(t))) {
+        out.push({
+          title: `${person.displayName} — contrat absent`,
+          detail: `${person.craft.role} sur « ${hub.phase.name} », aucun contrat rattaché à cette personne.`,
+          docKind: 'Contrat',
+          personId: person.id,
+        });
+      }
+      if ((person.craft.requirements ?? []).length > 0
+        && !docs.some((t) => /fiche technique|technique/.test(t))) {
+        out.push({
+          title: `${person.displayName} — fiche technique absente`,
+          detail: `${(person.craft.requirements ?? []).length} besoin(s) déclaré(s), aucune fiche technique rattachée.`,
+          docKind: 'Fiche technique',
+          personId: person.id,
+        });
+      }
+      if (!docs.some((t) => /feuille de route|route/.test(t)) && this.getCallSheet(person.id)?.rows.length) {
+        out.push({
+          title: `${person.displayName} — feuille de route absente`,
+          detail: 'Son déroulé existe déjà dans la pellicule : le document peut être produit tel quel.',
+          docKind: 'Feuille de route',
+          personId: person.id,
+        });
+      }
+    }
+
+    for (const vendor of hub.vendors) {
+      if (!vendor) continue;
+      const docs = titlesFor('vendor', vendor.id);
+      if (vendor.status === 'contracted' && !docs.some((t) => /contrat/.test(t))) {
+        out.push({
+          title: `${vendor.companyName} — contrat absent`,
+          detail: 'Le prestataire est marqué engagé, aucun contrat n’est rattaché.',
+          docKind: 'Contrat',
+          vendorId: vendor.id,
+        });
+      }
+      if (vendor.status === 'quoted' && !docs.some((t) => /devis/.test(t))) {
+        out.push({
+          title: `${vendor.companyName} — devis absent`,
+          detail: 'Le prestataire est au stade du devis, aucun devis n’est rattaché.',
+          docKind: 'Devis',
+          vendorId: vendor.id,
+        });
+      }
+    }
+
+    return out;
+  }
+
+  /**
+   * WHAT MOVING THIS MOMENT REALLY DOES — named, before anything happens.
+   *
+   * Pure projection over the SAME propagation rule as shiftPhasesAfter(): the
+   * moments after it slide by the same delta. It changes nothing; it lists who
+   * and what would move, and which collisions the move would create.
+   */
+  public propagationImpact(phaseId: string, deltaHours: number): {
+    moment: { id: string; name: string; from: number; to: number };
+    people: { id: string; name: string; role: string | null; from: number; to: number }[];
+    vendors: { id: string; name: string }[];
+    followers: { id: string; name: string; from: number; to: number }[];
+    conflicts: { title: string; detail: string; personId?: string }[];
+  } | null {
+    const phase = this.phases.find((p) => p.id === phaseId);
+    if (!phase) return null;
+    const clock = (h: number) => `${String(Math.floor(h) % 24).padStart(2, '0')}:${String(Math.round((h % 1) * 60)).padStart(2, '0')}`;
+
+    const followers = this.phasesAfter(phaseId).map((p) => ({
+      id: p.id, name: p.name, from: p.startHour, to: p.startHour + deltaHours,
+    }));
+    const movedIds = new Set([phaseId, ...followers.map((f) => f.id)]);
+
+    // Everyone attached to a moment that moves, moves with it.
+    const people: { id: string; name: string; role: string | null; from: number; to: number }[] = [];
+    for (const person of this.persons) {
+      const theirs = this.phases
+        .filter((p) => movedIds.has(p.id) && (p.personIds ?? []).includes(person.id))
+        .sort((a, b) => a.startHour - b.startHour);
+      if (theirs.length === 0) continue;
+      people.push({
+        id: person.id,
+        name: person.displayName,
+        role: person.craft?.role ?? null,
+        from: theirs[0].startHour,
+        to: theirs[0].startHour + deltaHours,
+      });
+    }
+
+    const vendors = this.vendors
+      .filter((v) => this.phases.some((p) => movedIds.has(p.id) && (p.vendorIds ?? []).includes(v.id)))
+      .map((v) => ({ id: v.id, name: v.companyName }));
+
+    // What the move would break: a person needed by a moment that does NOT move.
+    const conflicts: { title: string; detail: string; personId?: string }[] = [];
+    for (const person of this.persons) {
+      const moved = this.phases.filter((p) => movedIds.has(p.id) && (p.personIds ?? []).includes(person.id));
+      const still = this.phases.filter((p) => !movedIds.has(p.id) && (p.personIds ?? []).includes(person.id));
+      for (const m of moved) {
+        for (const s of still) {
+          const newStart = m.startHour + deltaHours;
+          const newEnd = m.endHour + deltaHours;
+          if (newStart < s.endHour && newEnd > s.startHour) {
+            conflicts.push({
+              title: `${person.displayName} serait attendu deux fois`,
+              detail: `« ${m.name} » passerait à ${clock(newStart)}–${clock(newEnd)}, alors que « ${s.name} » reste à ${clock(s.startHour)}–${clock(s.endHour)}.`,
+              personId: person.id,
+            });
+          }
+        }
+      }
+    }
+    // A moment pushed past the end of the day is a fact worth saying.
+    for (const f of followers) {
+      if (f.to >= 30) {
+        conflicts.push({ title: `« ${f.name} » sortirait de la journée`, detail: `Nouvel horaire : ${clock(f.to)}.` });
+      }
+    }
+
+    return {
+      moment: { id: phase.id, name: phase.name, from: phase.startHour, to: phase.startHour + deltaHours },
+      people, vendors, followers, conflicts,
+    };
+  }
+
+  /**
    * Turn a validated intake plan into the project itself.
    *
    * The plan comes from projectIntake (pure reading) AND from the corrections
@@ -2400,6 +2668,10 @@ class WeddingStore {
         bgAtmosphere: atmosphereForHour(moment.startHour),
         keyAgentIds: [], keyDocIds: [], keyTaskIds: [],
         ambientTrack: 'prep',
+        // The degree of certainty travels WITH the hour. A proposed day stays
+        // visibly proposed on the film until a human settles it.
+        confidence: moment.confidence,
+        confidenceNote: moment.evidence,
       };
       this.phases.push(phase);
       out.phases++;
@@ -2418,6 +2690,12 @@ class WeddingStore {
 
     if (plan.guestCountTarget && this.currentProject) {
       this.currentProject = { ...this.currentProject, guestCountTarget: plan.guestCountTarget };
+      saveWeddingProject(this.currentProject);
+    }
+    // The kind of day is remembered: after creation, the whole product keeps
+    // speaking the vocabulary the user chose in the hero.
+    if (this.currentProject && this.currentProject.eventTypeId !== plan.eventTypeId) {
+      this.currentProject = { ...this.currentProject, eventTypeId: plan.eventTypeId };
       saveWeddingProject(this.currentProject);
     }
 
@@ -3000,11 +3278,291 @@ class WeddingStore {
   }
 
   /**
-   * UNIVERSAL SEARCH — one query, every kind of thing in the project.
+   * ADMINISTRATION — several events, read from one place, without a second base.
    *
-   * Reads only what exists: no ranking model, no fuzzy magic, no web. Each
-   * result says where it lives, so a person is a door into their context.
+   * Everything below is READ-ONLY over the projects already stored in this
+   * browser. No new storage key, no copy, no synchronisation: the truth of an
+   * event stays in that event. The current project is read LIVE (so unsaved
+   * work is visible); the others are read from their own snapshot, exactly the
+   * way crossEventConflicts() already does.
    */
+  private projectSnapshot(projectId: string): {
+    phases: TimelinePhase[]; persons: Person[]; vendors: Vendor[]; media: MediaAsset[]; tasks: TaskEntity[];
+  } | null {
+    if (projectId === this.currentProject.id) {
+      return {
+        phases: this.phases, persons: this.persons, vendors: this.vendors,
+        media: this.media, tasks: this.tasks,
+      };
+    }
+    const snapshot = loadPersistedState(projectId) as unknown as {
+      phases?: TimelinePhase[]; persons?: Person[]; vendors?: Vendor[]; media?: MediaAsset[]; tasks?: TaskEntity[];
+    } | null;
+    if (!snapshot) return null;
+    return {
+      phases: snapshot.phases ?? [], persons: snapshot.persons ?? [], vendors: snapshot.vendors ?? [],
+      media: snapshot.media ?? [], tasks: snapshot.tasks ?? [],
+    };
+  }
+
+  /** One line per event: what it holds, and what it is still waiting for. */
+  public adminEvents(): {
+    project: WeddingProject;
+    isCurrent: boolean;
+    typeLabel: string;
+    moments: number;
+    people: number;
+    crew: number;
+    documents: number;
+    openTasks: number;
+    estimatedHours: number;
+  }[] {
+    return getStoredProjects().map((project) => {
+      const snap = this.projectSnapshot(project.id);
+      const persons = snap?.persons ?? [];
+      return {
+        project,
+        isCurrent: project.id === this.currentProject.id,
+        typeLabel: eventType(project.eventTypeId).label,
+        moments: snap?.phases.length ?? 0,
+        people: persons.length,
+        crew: persons.filter((p) => p.craft?.role).length,
+        documents: snap?.media.filter((m) => m.kind === 'document').length ?? 0,
+        openTasks: snap?.tasks.filter((t) => !t.isDone).length ?? 0,
+        estimatedHours: snap?.phases.filter((p) => p.confidence && p.confidence !== 'confirmed').length ?? 0,
+      };
+    }).sort((a, b) => (a.project.weddingDate || '9999').localeCompare(b.project.weddingDate || '9999'));
+  }
+
+  /**
+   * WHAT NEEDS A HUMAN, across every event. Not statistics: a to-do list that
+   * only ever states facts already present in the data.
+   */
+  public adminAlerts(): {
+    kind: 'conflict' | 'document' | 'task' | 'confirm';
+    projectId: string; projectName: string; title: string; detail: string;
+  }[] {
+    const out: ReturnType<WeddingStore['adminAlerts']> = [];
+    const clock = (h: number) => `${String(Math.floor(h) % 24).padStart(2, '0')}:${String(Math.round((h % 1) * 60)).padStart(2, '0')}`;
+
+    for (const project of getStoredProjects()) {
+      const snap = this.projectSnapshot(project.id);
+      if (!snap) continue;
+      const name = project.coupleNames || project.title;
+
+      // Someone expected in two places at once, inside the same event.
+      for (const person of snap.persons) {
+        const theirs = snap.phases
+          .filter((p) => (p.personIds ?? []).includes(person.id))
+          .sort((a, b) => a.startHour - b.startHour);
+        for (let i = 0; i < theirs.length - 1; i++) {
+          if (theirs[i].endHour > theirs[i + 1].startHour) {
+            out.push({
+              kind: 'conflict', projectId: project.id, projectName: name,
+              title: `${person.displayName} est attendu deux fois`,
+              detail: `« ${theirs[i].name} » jusqu’à ${clock(theirs[i].endHour)} et « ${theirs[i + 1].name} » dès ${clock(theirs[i + 1].startHour)}.`,
+            });
+          }
+        }
+      }
+
+      // A craft engaged with no contract anywhere in the event.
+      for (const person of snap.persons) {
+        if (!person.craft?.role) continue;
+        const onStage = snap.phases.some((p) => (p.personIds ?? []).includes(person.id));
+        if (!onStage) continue;
+        const docs = snap.media
+          .filter((m) => m.ownerKind === 'person' && m.ownerId === person.id)
+          .map((m) => `${m.title ?? ''} ${m.fileName ?? ''}`.toLowerCase());
+        if (!docs.some((t) => /contrat|cession|engagement/.test(t))) {
+          out.push({
+            kind: 'document', projectId: project.id, projectName: name,
+            title: `${person.displayName} — contrat absent`,
+            detail: `${person.craft.role}, engagé sur cet événement.`,
+          });
+        }
+      }
+
+      // Hours the product proposed and nobody has confirmed.
+      const estimated = snap.phases.filter((p) => p.confidence && p.confidence !== 'confirmed');
+      if (estimated.length > 0) {
+        out.push({
+          kind: 'confirm', projectId: project.id, projectName: name,
+          title: `${estimated.length} horaire${estimated.length > 1 ? 's' : ''} à confirmer`,
+          detail: estimated.map((p) => `${p.name} ${clock(p.startHour)}`).join(', '),
+        });
+      }
+
+      const open = snap.tasks.filter((t) => !t.isDone);
+      if (open.length > 0) {
+        out.push({
+          kind: 'task', projectId: project.id, projectName: name,
+          title: `${open.length} tâche${open.length > 1 ? 's' : ''} en attente`,
+          detail: open.slice(0, 4).map((t) => t.title).join(', '),
+        });
+      }
+    }
+    return out;
+  }
+
+  /**
+   * ONE SEARCH, EVERY EVENT. The same reading as searchEverything(), applied to
+   * each stored project. A result always says which event it belongs to.
+   */
+  public searchAcrossEvents(query: string): {
+    projectId: string; projectName: string;
+    kind: 'person' | 'moment' | 'vendor' | 'document' | 'task' | 'event';
+    id: string; label: string; context: string;
+  }[] {
+    const q = query.trim().toLowerCase();
+    if (q.length < 2) return [];
+    const hit = (s?: string) => Boolean(s && s.toLowerCase().includes(q));
+    const out: ReturnType<WeddingStore['searchAcrossEvents']> = [];
+    const clock = (h: number) => `${String(Math.floor(h) % 24).padStart(2, '0')}:${String(Math.round((h % 1) * 60)).padStart(2, '0')}`;
+
+    for (const project of getStoredProjects()) {
+      const name = project.coupleNames || project.title;
+      const snap = this.projectSnapshot(project.id);
+      if (!snap) continue;
+
+      if (hit(name) || hit(project.title) || hit(project.locationName) || hit(project.weddingDate)) {
+        out.push({
+          projectId: project.id, projectName: name, kind: 'event', id: project.id, label: name,
+          context: [eventType(project.eventTypeId).label, project.weddingDate || 'date à confirmer', project.locationName].filter(Boolean).join(' · '),
+        });
+      }
+      for (const person of snap.persons) {
+        if (!hit(person.displayName) && !hit(person.craft?.role) && !hit(person.craft?.speciality)
+          && !hit(person.email) && !hit(person.phone)) continue;
+        const moments = snap.phases.filter((p) => (p.personIds ?? []).includes(person.id));
+        out.push({
+          projectId: project.id, projectName: name, kind: 'person', id: person.id,
+          label: person.craft?.role ? `${person.displayName} · ${person.craft.role}` : person.displayName,
+          context: moments.length ? moments.map((m) => `${m.name} ${clock(m.startHour)}`).join(', ') : 'aucun moment',
+        });
+      }
+      for (const vendor of snap.vendors) {
+        if (!hit(vendor.companyName)) continue;
+        out.push({
+          projectId: project.id, projectName: name, kind: 'vendor', id: vendor.id,
+          label: vendor.companyName, context: vendor.status,
+        });
+      }
+      for (const phase of snap.phases) {
+        if (!hit(phase.name)) continue;
+        out.push({
+          projectId: project.id, projectName: name, kind: 'moment', id: phase.id,
+          label: phase.name, context: `${clock(phase.startHour)} → ${clock(phase.endHour)}`,
+        });
+      }
+      for (const media of snap.media) {
+        if (!hit(media.title) && !hit(media.fileName)) continue;
+        out.push({
+          projectId: project.id, projectName: name, kind: 'document', id: media.id,
+          label: media.title || media.fileName || 'Document', context: media.ownerKind,
+        });
+      }
+      for (const task of snap.tasks) {
+        if (!hit(task.title)) continue;
+        out.push({
+          projectId: project.id, projectName: name, kind: 'task', id: task.id,
+          label: task.title, context: task.isDone ? 'faite' : 'en attente',
+        });
+      }
+    }
+    return out.slice(0, 60);
+  }
+
+  /**
+   * ONE PERSON, EVERY EVENT — the card the administration is built around.
+   *
+   * The same human is not duplicated: their record lives in each event where
+   * they work, and this projection puts those records side by side. Across
+   * events, the only thing linking them is the NAME — so the card says so, in
+   * those words, and never presents the link as certain.
+   */
+  public personDossier(personId: string): {
+    person: Person;
+    role: string | null;
+    events: {
+      projectId: string; projectName: string; date: string; isCurrent: boolean;
+      matchedByName: boolean;
+      moments: { name: string; startHour: number; endHour: number }[];
+    }[];
+    documents: { id: string; title: string; projectName: string }[];
+    missions: TaskEntity[];
+    nextDate: string | null;
+  } | null {
+    const person = this.persons.find((p) => p.id === personId);
+    if (!person) return null;
+    const events: {
+      projectId: string; projectName: string; date: string; isCurrent: boolean;
+      matchedByName: boolean;
+      moments: { name: string; startHour: number; endHour: number }[];
+    }[] = [];
+    const documents: { id: string; title: string; projectName: string }[] = [];
+
+    for (const project of getStoredProjects()) {
+      const snap = this.projectSnapshot(project.id);
+      if (!snap) continue;
+      const isCurrent = project.id === this.currentProject.id;
+      const twin = isCurrent
+        ? person
+        : snap.persons.find((p) => p.displayName?.toLowerCase() === person.displayName.toLowerCase());
+      if (!twin) continue;
+      const moments = snap.phases
+        .filter((p) => (p.personIds ?? []).includes(twin.id))
+        .sort((a, b) => a.startHour - b.startHour)
+        .map((p) => ({ name: p.name, startHour: p.startHour, endHour: p.endHour }));
+      events.push({
+        projectId: project.id,
+        projectName: project.coupleNames || project.title,
+        date: project.weddingDate || '',
+        isCurrent,
+        matchedByName: !isCurrent,
+        moments,
+      });
+      for (const media of snap.media.filter((m) => m.ownerKind === 'person' && m.ownerId === twin.id)) {
+        documents.push({
+          id: media.id,
+          title: media.title || media.fileName || 'Document',
+          projectName: project.coupleNames || project.title,
+        });
+      }
+    }
+
+    const today = new Date().toISOString().slice(0, 10);
+    const nextDate = events.map((e) => e.date).filter((d) => d && d >= today).sort()[0] ?? null;
+
+    return {
+      person,
+      role: person.craft?.role ?? null,
+      events: events.sort((a, b) => (a.date || '9999').localeCompare(b.date || '9999')),
+      documents,
+      missions: this.getMissionsFor(personId),
+      nextDate,
+    };
+  }
+
+  /**
+   * WHO IS LOOKING — the single place the interface asks « how much of this
+   * belongs to this person? ».
+   *
+   * There is no second permission system: it reads the membership that already
+   * exists (see ProjectMembership). Local single-user mode has no membership at
+   * all, and is therefore the owner of their own day.
+   */
+  public currentRole(): MembershipRole {
+    return this.getCurrentMembership()?.role ?? 'owner';
+  }
+
+  /** True for the people who administer events rather than live them. */
+  public isOrchestrator(): boolean {
+    const role = this.currentRole();
+    return role === 'owner' || role === 'planner';
+  }
+
+
   public searchEverything(query: string): {
     kind: 'person' | 'moment' | 'place' | 'vendor' | 'track' | 'document' | 'task' | 'table';
     id: string; label: string; context: string;
@@ -4694,14 +5252,21 @@ class WeddingStore {
     userName: string;
     budgetTarget?: number;
     guestCountTarget?: number;
+    /** The kind of day chosen in the hero. Decides the whole vocabulary. */
+    eventTypeId?: string;
   }) {
     weddingAudio.playWeddingChimes();
     const newId = `proj_${Date.now()}`;
     const code = `WC-${new Date(params.weddingDate).getFullYear() || new Date().getFullYear()}-${params.coupleNames.split('&')[0].trim().toUpperCase()}`;
 
+    const schema = eventType(params.eventTypeId);
     const newProject: WeddingProject = {
       id: newId,
-      title: `Mariage de ${params.coupleNames}`,
+      // A festival is not « le mariage de » someone. The title uses the words
+      // of the kind of day that was actually chosen.
+      title: schema.id === 'mariage'
+        ? `Mariage de ${params.coupleNames}`
+        : `${schema.label} — ${params.coupleNames}`,
       worldType: 'wedding',
       coupleNames: params.coupleNames,
       // Nothing is invented here. The creation surface explicitly lets the
@@ -4718,6 +5283,7 @@ class WeddingStore {
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
       inviteCode: code,
+      eventTypeId: schema.id,
     };
 
     saveWeddingProject(newProject);

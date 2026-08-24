@@ -1,7 +1,13 @@
 # AUDIT — CONVERGENCE FINALE DU PRODUIT
 
 Dépôt : `mattmezstitchlab/WEDDINGCITY` · branche `arena/01a02c94-weddingcity` · HEAD audité `8226a24`.
-`tsc --noEmit` : **OK** (vérifié). Aucune ligne de code n'a été modifiée pendant cet audit.
+`tsc --noEmit` : **OK** (vérifié). Aucune ligne de code n'avait été modifiée pendant l'audit.
+
+> **MISE À JOUR — passe d'implémentation « convergence finale ».**
+> L'audit ci-dessous reste le constat de départ, inchangé. Ce qui a été fait ensuite, ce qui ne l'a
+> pas été et pourquoi, est consigné à la fin du document, section **« 5. ÉTAT APRÈS
+> IMPLÉMENTATION »**. Les innovations proposées après cette passe vivent dans
+> `docs/INNOVATIONS-V4.md` et **ne sont pas implémentées**.
 
 Méthode : lecture exhaustive du code réellement monté (`src/App.tsx` → composants), du store
 (`src/game/weddingStore.ts`, 5 585 lignes) et des types. Chaque verdict porte sur un fichier et une
@@ -349,3 +355,79 @@ Chacune n'utilise que des données déjà présentes dans le store.
   séquences existantes, deux à créer — un arbitrage est nécessaire.
 
 **Aucune modification de code n'a été faite. Rien ne sera implémenté sans décision explicite.**
+
+
+---
+
+## 5. ÉTAT APRÈS IMPLÉMENTATION
+
+Vérifié dans Chromium réel (149.0.7827.0) à **1440 / 768 / 390 px** :
+`scripts/acceptance-convergence-finale.mjs` — **0 échec aux trois largeurs**.
+`pnpm run verify` — **1 164 vérifications, 0 échec**. Build : `✓ built in ~8s`.
+Régressions vérifiées : `acceptance-jourj`, `acceptance-grandjour`, `acceptance-convergence`,
+`acceptance-v2`, `acceptance-spectacle` — **0 échec**.
+
+### 5.1 Fait
+
+| Point du brief | Ce qui a été fait |
+|---|---|
+| §1 une seule porte | Les raccourcis clavier ne s'arment plus que si `projection === 'world'` ; `LivingTimelineView`, `EntityInspector` et **treize** modales de l'ère World sont conditionnés de même. Rien n'a été supprimé : les modules et leurs tests sont intacts, ils sont devenus inatteignables depuis le produit. |
+| §2 le hero | Le sélecteur de type a un contour et un chevron : c'est visiblement un menu. **Onze** natures d'événement, chacune avec son vocabulaire, ses questions et ses moments. Les trois anciens ids (`fete`, `soiree`, `convention`) sont marqués `legacy` et restent résolus pour les projets déjà créés. |
+| §3 cinq certitudes | `Certainty` (`confirmed · inferred · estimated · to_confirm · missing`) défini **une seule fois** (`src/types/wedding.ts`), habillé une seule fois (`src/design/certainty.ts`), porté par l'intake, par `TimelinePhase`, par la carte et par les documents générés. |
+| §4 analyse visuelle | « Analyse de votre événement » → « Voici ce que nous avons compris » : onze lignes (Type, Date, Lieu, Principaux, Personnes, Moments, Prestataires, Artistes, Musique, Documents, Contraintes), chacune avec son niveau. Rien n'est créé avant validation. |
+| §5 première journée | Quand aucune heure n'est lue, la trame habituelle du type choisi est proposée — dix moments pour un mariage — **tous marqués ESTIMÉ**, avec la phrase qui dit que c'est un point de départ. « Autre » ne propose rien : un jour de nature inconnue n'a pas de forme ordinaire. |
+| §7 carte de moment | Chaque scène affiche son état (✓ / ⚠), dérivé de `phaseFindings()` — troisième appelant d'une même idée, pas un troisième moteur. |
+| §8 documents contextuels | Depuis un moment : « Générer un document » (genre + destinataire pris parmi les personnes et prestataires **de ce moment**), « Créer une tâche », « Créer un plan B ». |
+| §9 document manquant | `missingDocumentsForPhase()` ne propose que là où le contexte suffit réellement : un métier déclaré sans contrat, des besoins techniques sans fiche, un prestataire engagé sans contrat, un devis absent au stade « quoted ». Le bouton produit le document sur place. |
+| §10-12 administration | Une surface unique (`AdminConsole`) : une ligne de recherche, sept filtres, ce qui attend une décision, les événements, les personnes, la carte d'une personne avec tous ses événements. **Elle n'écrit rien** — vérifié par test : aucun `localStorage`, aucun `fetch`. |
+| §14 causalité | Déplacer un moment nomme désormais qui bouge (« MATT MEZ +5 »), liste les conflits que le déplacement créerait, et offre trois issues : **Appliquer · Créer un plan B · Ce moment seulement**. |
+| §15 scénarios | Le plan B créé depuis la pellicule est une branche du **moteur existant** : aucune seconde mécanique. |
+| §19 rôle | `store.currentRole()` / `isOrchestrator()` lisent le modèle de permissions qui existait déjà. L'entrée « Administration », le cachet et le bloc déplacement/hébergement ne s'affichent qu'à qui orchestre. |
+| §20 landing | Numérotation linéaire 02→13, sans doublon. Deux séquences créées : **02 IMPORTER LE CHAOS** (les cinq niveaux, montrés) et **11 L'ADMINISTRATION INVISIBLE** (ce que voient les mariés / ce que voit celui qui pilote). |
+
+**Un défaut préexistant a été corrigé au passage** (constaté avant modification, sur `8226a24`) : à
+390 px et en fin de journée, l'étiquette « maintenant » de la pellicule de démonstration dépassait de
+42 px, si bien que « Toute la journée » ne faisait plus tenir la journée. L'étiquette bascule
+maintenant de l'autre côté de son repère.
+
+### 5.2 Tests existants adaptés — jamais supprimés
+
+Cinq assertions ont été réécrites, chacune commentée **LOCATOR ADAPTED** ou **PRODUCT DECISION** à
+l'endroit exact, avec la garantie préservée ou renforcée :
+
+- `check-landing` : 7 → 11 options, **plus** deux vérifications neuves (un seul sélecteur ; il porte
+  bien les natures que le moteur connaît).
+- `check-timeline` : « une fin non écrite est estimée » → « n'est **jamais** confirmée », **plus**
+  une assertion qui exige de dire laquelle des deux (déduite ou estimée).
+- `check-timeline` : « `corporate` ne doit pas exister » → `corporate` existe, et l'absence de double
+  liste est désormais garantie **structurellement** (`LEGACY_EVENT_TYPES`, `legacy: true`, une seule
+  `EVENT_TYPES`).
+- `check-timeline` / `acceptance-grandjour` : plafond de séquences 10 → 12 (deux séquences exigées
+  par le brief).
+- `acceptance-grandjour` : « une convention ne demande jamais les mariés » est maintenant lu **dans
+  la surface d'intake** et non dans `body.innerText` — la landing derrière l'overlay démontre le
+  moteur *sur un mariage* et polluait la mesure.
+
+Une section **[13/13]** a été ajoutée à `check-timeline.mjs` : 40 vérifications neuves sur les cinq
+certitudes, la journée proposée, `phaseFindings`, `propagationImpact` (pureté vérifiée : lire
+l'impact ne déplace rien), l'administration (n'écrit rien, n'appelle rien, ne présente jamais un
+homonyme comme une identité) et le verrouillage des surfaces World.
+
+### 5.3 Non fait, et pourquoi
+
+- **§3 import de PDF / DOCX / XLSX** : toujours conservés sans être lus. Cela demanderait une
+  bibliothèque nouvelle ; c'est une décision produit, pas un oubli. L'interface le dit déjà
+  (« non lisible comme du texte ici — conservé tel quel »).
+- **§14 recherche Web d'entité** et **§15 envoi réel** : refusés, et l'Administration l'écrit noir
+  sur blanc. Aucune simulation.
+- **§16 arborescence documentaire** : non construite. Les relations existent (`ownerKind` /
+  `ownerId`) et la carte personne les expose déjà ; une vue en dossiers reste proposée
+  (INNOVATIONS-V4) plutôt que livrée à moitié.
+- **§13 « QUI SUIS-JE / QUE GÉNÉRER / POUR QUI »** : **non dupliqué**. Il existe une seule fois,
+  dans « Organisation → Artistes & techniciens ». La génération depuis un moment en est une entrée
+  contextuelle, pas une seconde implémentation.
+- **§19 vue « artiste »** : les champs sensibles sont masqués selon le rôle, mais aucune interface
+  dédiée à l'artiste n'a été construite (proposée en V4-19).
+- **Rapprochement inter-événements** : toujours **par nom seul**, et toujours affiché « à confirmer ».
+- Reliquats connus inchangés : télémétrie `designarena.ai` dans `index.html`, `vercel.json`
+  n'exécute pas `pnpm verify`, `tick()` ~60 Hz, `DocumentEntity` dormant.

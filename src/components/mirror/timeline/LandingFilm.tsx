@@ -69,7 +69,10 @@ export function LandingFilm({ onOpenMoment, shifted }: {
     const strip = stripRef.current;
     const current = pxRef.current;
     const next = absolute ? factorOrValue : current * factorOrValue;
-    const floor = Math.min(MIN_PX, strip ? (strip.clientWidth - MIN_CARD_PX) / (DAY_END - DAY_START) : MIN_PX);
+    const floor = Math.min(
+      MIN_PX,
+      strip ? (Math.min(strip.clientWidth, window.innerWidth) - MIN_CARD_PX) / (DAY_END - DAY_START) : MIN_PX,
+    );
     const clamped = Math.max(floor, Math.min(MAX_PX, next));
     pxRef.current = clamped;
     if (!strip) { setPxPerHour(clamped); return; }
@@ -112,7 +115,14 @@ export function LandingFilm({ onOpenMoment, shifted }: {
         <button
           onClick={() => {
             const strip = stripRef.current;
-            const full = strip ? (strip.clientWidth - MIN_CARD_PX) / (DAY_END - DAY_START) : MIN_PX;
+            // MEASURED at 390px: the strip reported a clientWidth of 431 at the
+            // instant of the click — wider than the phone itself — so « toute la
+            // journée » computed a scale for a width the screen does not have,
+            // and the day still overflowed by 41px. The scale is now computed
+            // against the narrower of the two: whatever the strip claims, the
+            // day must fit the screen.
+            const room = strip ? Math.min(strip.clientWidth, window.innerWidth) : 0;
+            const full = strip ? (room - MIN_CARD_PX) / (DAY_END - DAY_START) : MIN_PX;
             zoom(full, undefined, true);
             requestAnimationFrame(() => { if (stripRef.current) stripRef.current.scrollLeft = 0; });
           }}
@@ -229,7 +239,12 @@ export function LandingFilm({ onOpenMoment, shifted }: {
           {/* NOW — the real time of day, if it falls inside the day shown. */}
           {clock >= DAY_START && clock <= DAY_END && (
             <div style={{ position: 'absolute', left: x(clock), top: 0, bottom: 0, width: 2, background: '#e0736a', zIndex: 6, pointerEvents: 'none' }} data-landing="now">
-              <div style={nowBadge}>{fmt(clock)} · maintenant</div>
+              {/* MEASURED at 390px, late in the evening: the badge is nowrap and
+                  was pinned to the RIGHT of the marker, so when « maintenant »
+                  falls near the end of the day it stuck 42px past the film and
+                  « toute la journée » no longer fitted the screen. Near the end,
+                  the badge now hangs on the other side of its own marker. */}
+              <div style={x(clock) > width - 150 ? nowBadgeLeft : nowBadge}>{fmt(clock)} · maintenant</div>
             </div>
           )}
 
@@ -285,6 +300,12 @@ const shiftedTag: React.CSSProperties = {
 const durationLabel: React.CSSProperties = {
   marginTop: 4, fontSize: 11, letterSpacing: '0.08em',
   color: 'rgba(246,245,243,0.72)', fontFamily: typography.family.mono,
+};
+
+const nowBadgeLeft: React.CSSProperties = {
+  position: 'absolute', top: 12, right: 8, whiteSpace: 'nowrap',
+  background: '#e0736a', color: '#08090b', borderRadius: 999,
+  padding: '4px 10px', fontFamily: typography.family.mono, fontSize: 11, fontWeight: 700,
 };
 
 const nowBadge: React.CSSProperties = {

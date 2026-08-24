@@ -13,6 +13,7 @@ import { TimelineStudio } from './timeline/TimelineStudio';
 import { PRODUCT_NAME, PRODUCT_MARK } from '../../design/productIdentity';
 import { OrganisationSection } from './organisation/OrganisationSection';
 import { GlobalSearch } from './GlobalSearch';
+import { AdminConsole } from './admin/AdminConsole';
 import './mirror.css';
 
 // ---------------------------------------------------------------------------
@@ -71,10 +72,23 @@ export function MirrorSite() {
 function ProductNav() {
   const store = weddingStore;
   const [searchOpen, setSearchOpen] = useState(false);
+  const [adminOpen, setAdminOpen] = useState(false);
   const go = (id: string) => {
     const el = document.getElementById(id);
     el?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
+
+  // -------------------------------------------------------------------------
+  // WHAT YOU SEE DEPENDS ON WHAT YOU DO HERE.
+  //
+  // One engine, one navigation — but a couple living their own day has no use
+  // for delegation, travel or cross-event administration, and showing it to
+  // them is showing them someone else's job. The product asks the permission
+  // model that already exists (ProjectMembership → store.currentRole()); it
+  // does not invent a second one. Local single-user mode is the owner of their
+  // own day, and sees everything about it.
+  // -------------------------------------------------------------------------
+  const orchestrator = store.isOrchestrator();
 
   // ONE navigation for the whole product. Not three surfaces, not a sidebar:
   // the places of a wedding day, in the order one lives them.
@@ -107,10 +121,16 @@ function ProductNav() {
         <button onClick={() => setSearchOpen(true)} style={productNavBtn} data-jourj="nav-search" aria-label="Recherche">
           Rechercher
         </button>
+        {orchestrator && (
+          <button onClick={() => setAdminOpen(true)} style={productNavBtn} data-jourj="nav-admin">
+            Administration
+          </button>
+        )}
         <button onClick={() => store.returnToLanding()} style={productNavBtn} data-jourj="nav-weddings">Mes mariages</button>
         <button onClick={() => store.startWeddingCreation()} style={productNavCta} data-jourj="nav-create">Créer</button>
       </nav>
       {searchOpen && <GlobalSearch onClose={() => setSearchOpen(false)} />}
+      {adminOpen && <AdminConsole onClose={() => setAdminOpen(false)} />}
     </>
   );
 }

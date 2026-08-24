@@ -147,7 +147,10 @@ check('aucun bouton ne mène à une surface 3D', worldLinks === 0, String(worldL
 check('le hero est un outil : champ + import + types',
   await p.evaluate(() => !!document.querySelector('[data-landing="brief"]')
     && !!document.querySelector('[data-landing="files"]')
-    && document.querySelectorAll('[data-landing="type"] option').length === 7));
+    // LOCATOR ADAPTED (convergence finale): seven kinds of day became eleven,
+    // each one really changing the engine's vocabulary. Same guarantee: one
+    // field, one import, one type selector — and it must be a real menu.
+    && document.querySelectorAll('[data-landing="type"] option').length === 11));
 await shot('01-hero-outil');
 await noOverflow('Page publique');
 
@@ -183,8 +186,13 @@ const review = await p.evaluate(() => {
   };
 });
 say('  ' + JSON.stringify(review, null, 1).slice(0, 1400));
-check('« Votre journée prend forme » est affiché',
-  await p.evaluate(() => /Votre journée prend forme/.test(document.body.innerText)));
+// LOCATOR ADAPTED (convergence finale): the review screen now announces itself
+// as « Analyse de votre événement » and says « Voici ce que nous avons
+// compris ». Same guarantee: before anything is created, the product shows
+// what it understood.
+check('l’analyse montre ce qui a été compris avant toute création',
+  await p.evaluate(() => /Voici ce que nous avons compris/i.test(document.body.innerText)
+    && /analyse de votre événement/i.test(document.body.innerText)));
 check('la date écrite dans la phrase est lue', review.date === '2027-07-18', String(review.date));
 check('les prénoms absents ne sont PAS devinés', !review.couple, String(review.couple));
 check('et la question est posée', review.questions.some((q) => /Qui se marie/.test(q)));
@@ -192,8 +200,11 @@ check('sans les prénoms, la génération est bloquée',
   await p.evaluate(() => document.querySelector('[data-intake="generate"]')?.disabled === true));
 check('le lieu écrit dans la phrase est lu', /Vaux/i.test(review.place || ''), String(review.place));
 check('les trois horaires sont devenus des moments', review.moments.length === 3, String(review.moments.length));
-check('une heure de fin non écrite est marquée comme estimée',
-  review.moments.some((m) => /estimé/.test(m)));
+// LOCATOR ADAPTED (convergence finale): « estimé » became one of five explicit
+// levels, written in capitals on the moment. Same guarantee, stated more
+// precisely: an end nobody wrote is never presented as confirmed.
+check('une heure de fin non écrite est marquée DÉDUITE ou ESTIMÉE',
+  review.moments.some((m) => /ESTIMÉ|DÉDUIT/.test(m)), review.moments.join(' | '));
 check('les invités du CSV sont lus', review.people.length === 4, review.people.join(' / '));
 check('les prestataires du contrat sont lus', review.vendors.length === 3, review.vendors.join(' / '));
 check('la playlist est lue', review.tracks.length === 3, review.tracks.join(' / '));

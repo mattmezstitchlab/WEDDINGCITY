@@ -55,24 +55,52 @@ export default function App() {
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Global single-letter shortcuts (E/I/N/C/L/M/T) must not fire while the
-      // user is typing a guest name, a budget amount or an invite code.
+      // Global single-letter shortcuts must not fire while the user is typing
+      // a guest name, a budget amount or an invite code.
       if (isTypingTarget(e.target)) return;
+
+      // ---------------------------------------------------------------------
+      // CONVERGENCE — THE PRODUCT HAS ONE DOOR, AND THESE ARE NOT IT.
+      //
+      // Every shortcut below used to fire from anywhere, including from the
+      // product itself: I opened the old chaos import (an engine that INVENTS a
+      // date and a deposit), C the Google/Spotify connector hub, L the World
+      // Lab, N the nerve centre, G a prototype, T a SECOND timeline. A user
+      // brushing a key landed in a surface that is not the product.
+      //
+      // They now exist only where they belong: inside the 3D World, which is
+      // itself no longer offered as a destination. Nothing was deleted — the
+      // modules and their tests are untouched — they are simply unreachable
+      // from the product.
+      // ---------------------------------------------------------------------
+      const inWorld = weddingStore.projection === 'world';
+
       if (weddingStore.showIdentityModal && (e.code === 'Space' || e.code === 'Enter' || e.code === 'KeyW' || e.code === 'ArrowUp')) {
         weddingStore.showIdentityModal = false;
         weddingStore.isPlaying = true;
         weddingStore.notify();
         return;
       }
+      if (e.code === 'Escape') {
+        if (weddingStore.interiorMode) weddingStore.exitVenue();
+        return;
+      }
+      if (!inWorld) {
+        // The product surface keeps exactly one keyboard affordance: opening
+        // the composition panel on the day currently open.
+        if (e.code === 'KeyK' && !weddingStore.showIdentityModal) {
+          if (!weddingStore.projectChosen) weddingStore.startWeddingCreation();
+          else if (weddingStore.canvasOpen) weddingStore.closeCanvas();
+          else weddingStore.openCanvas();
+        }
+        return;
+      }
+
       if (e.code === 'KeyE') {
         if (weddingStore.interiorMode) {
           weddingStore.exitVenue();
         } else {
           weddingStore.enterVenue('place_reception');
-        }
-      } else if (e.code === 'Escape') {
-        if (weddingStore.interiorMode) {
-          weddingStore.exitVenue();
         }
       } else if (e.code === 'Space' && !weddingStore.showIdentityModal) {
         weddingStore.toggleOrchestration();
@@ -89,20 +117,17 @@ export default function App() {
         weddingStore.notify();
       } else if (e.code === 'KeyM' && e.shiftKey) {
         // MEASURED: this branch used to sit AFTER the bare KeyM one, so the
-        // documented ⇧M shortcut could never fire — M always opened the DJ
-        // booth instead. Found by actually driving the app in a browser.
-        weddingStore.setProjection(weddingStore.projection === 'mirror' ? 'world' : 'mirror');
+        // documented shortcut could never fire — M always opened the DJ booth
+        // instead. Found by actually driving the app in a browser. It only
+        // returns TO the product now; it never leads out of it.
+        weddingStore.setProjection('mirror');
       } else if (e.code === 'KeyM' && !weddingStore.showIdentityModal) {
         weddingStore.setDjBoothOpen(!weddingStore.djBoothModalOpen);
       } else if (e.code === 'KeyK' && !weddingStore.showIdentityModal) {
-        // Nothing to compose before a wedding is open: the landing asks for
-        // one instead of quietly opening the demo.
         if (!weddingStore.projectChosen) weddingStore.startWeddingCreation();
         else if (weddingStore.canvasOpen) weddingStore.closeCanvas();
         else weddingStore.openCanvas();
       } else if (e.code === 'KeyG' && !weddingStore.showIdentityModal) {
-        // Phase B prototype surface. Deliberately a shortcut rather than a new
-        // navigation entry: the permanent chrome is out of scope for now.
         weddingStore.constellationOpen = !weddingStore.constellationOpen;
         weddingStore.notify();
       } else if (e.code === 'KeyT' && !weddingStore.showIdentityModal) {
@@ -207,14 +232,18 @@ export default function App() {
       {/* 5. Construction Toolbar (When in # CONSTRUIRE mode) */}
       {weddingStore.projection === 'world' && !weddingStore.showIdentityModal && weddingStore.constructionMode && <ConstructionToolbar />}
 
-      {/* 6. Side Entity / Object Inspector Card */}
-      {!weddingStore.showIdentityModal && <EntityInspector />}
+      {/* 6. Side Entity / Object Inspector Card — a World tool. In the
+             product, a person or a moment is opened from the timeline itself. */}
+      {weddingStore.projection === 'world' && !weddingStore.showIdentityModal && <EntityInspector />}
 
-      {/* 7. Living Timeline Mode Projection */}
-      {!weddingStore.showIdentityModal && weddingStore.viewMode === 'timeline' && <LivingTimelineView />}
+      {/* 7. Living Timeline Mode Projection — the World's own reading of the
+             hours. CONVERGENCE: there is exactly ONE timeline in the product,
+             and it is TimelineStudio. This one can no longer be reached from
+             it. */}
+      {weddingStore.projection === 'world' && !weddingStore.showIdentityModal && weddingStore.viewMode === 'timeline' && <LivingTimelineView />}
 
       {/* 8. Permanent Spatial AI Agent Copilot Drawer */}
-      {weddingStore.spatialAgentDrawerOpen && (
+      {weddingStore.projection === 'world' && weddingStore.spatialAgentDrawerOpen && (
         <Suspense fallback={null}>
         <SpatialAiAgentDrawer
           isOpen={weddingStore.spatialAgentDrawerOpen}
@@ -231,7 +260,7 @@ export default function App() {
       )}
 
       {/* 9. System Nerve Center (Autodiagnostic & Santé Technique) */}
-      {weddingStore.constellationOpen && (
+      {weddingStore.projection === 'world' && weddingStore.constellationOpen && (
         <Suspense fallback={null}>
           <GuestConstellation
             isOpen={weddingStore.constellationOpen}
@@ -243,7 +272,7 @@ export default function App() {
         </Suspense>
       )}
 
-      {weddingStore.systemNerveModalOpen && (
+      {weddingStore.projection === 'world' && weddingStore.systemNerveModalOpen && (
         <Suspense fallback={null}>
         <SystemNerveCenterModal
           isOpen={weddingStore.systemNerveModalOpen}
@@ -256,7 +285,7 @@ export default function App() {
       )}
 
       {/* 10. Connectors Hub Modal */}
-      {weddingStore.connectorsModalOpen && (
+      {weddingStore.projection === 'world' && weddingStore.connectorsModalOpen && (
         <Suspense fallback={null}>
         <ConnectorsHubModal
           isOpen={weddingStore.connectorsModalOpen}
@@ -269,7 +298,7 @@ export default function App() {
       )}
 
       {/* 11. Advertising Grid 3D Slot Modal */}
-      {weddingStore.adSlotModalOpen && (
+      {weddingStore.projection === 'world' && weddingStore.adSlotModalOpen && (
         <Suspense fallback={null}>
         <AdSlotModal
           isOpen={weddingStore.adSlotModalOpen}
@@ -283,7 +312,7 @@ export default function App() {
       )}
 
       {/* 12. Modals Ecosystem */}
-      {weddingStore.worldLabModalOpen && (
+      {weddingStore.projection === 'world' && weddingStore.worldLabModalOpen && (
         <Suspense fallback={null}>
         <WorldLabModal
           isOpen={weddingStore.worldLabModalOpen}
@@ -295,7 +324,7 @@ export default function App() {
         </Suspense>
       )}
 
-      {weddingStore.worldResearchModalOpen && (
+      {weddingStore.projection === 'world' && weddingStore.worldResearchModalOpen && (
         <Suspense fallback={null}>
         <WorldResearchModal
           isOpen={weddingStore.worldResearchModalOpen}
@@ -312,7 +341,7 @@ export default function App() {
         </Suspense>
       )}
 
-      {weddingStore.claimVendorModalOpen && (
+      {weddingStore.projection === 'world' && weddingStore.claimVendorModalOpen && (
         <Suspense fallback={null}>
         <ClaimVendorModal
           isOpen={weddingStore.claimVendorModalOpen}
@@ -326,7 +355,7 @@ export default function App() {
         </Suspense>
       )}
 
-      {isImportOpen && (
+      {weddingStore.projection === 'world' && isImportOpen && (
         <Suspense fallback={null}>
         <ImportChaosModal
           isOpen={isImportOpen}
@@ -335,7 +364,7 @@ export default function App() {
         </Suspense>
       )}
 
-      {isConflictsOpen && (
+      {weddingStore.projection === 'world' && isConflictsOpen && (
         <Suspense fallback={null}>
         <ConflictCenterModal
           isOpen={isConflictsOpen}
@@ -344,7 +373,7 @@ export default function App() {
         </Suspense>
       )}
 
-      {weddingStore.djBoothModalOpen && (
+      {weddingStore.projection === 'world' && weddingStore.djBoothModalOpen && (
         <Suspense fallback={null}>
         <DjZoneModal
           isOpen={weddingStore.djBoothModalOpen}
@@ -353,7 +382,7 @@ export default function App() {
         </Suspense>
       )}
 
-      {weddingStore.brandMenuOpen && (
+      {weddingStore.projection === 'world' && weddingStore.brandMenuOpen && (
         <Suspense fallback={null}>
         <BrandMenuModal
           isOpen={weddingStore.brandMenuOpen}
@@ -365,7 +394,7 @@ export default function App() {
         </Suspense>
       )}
 
-      {weddingStore.createWeddingModalOpen && (
+      {weddingStore.projection === 'world' && weddingStore.createWeddingModalOpen && (
         <Suspense fallback={null}>
         <CreateWeddingModal
           isOpen={weddingStore.createWeddingModalOpen}
@@ -377,7 +406,7 @@ export default function App() {
         </Suspense>
       )}
 
-      {weddingStore.importLocationModalOpen && (
+      {weddingStore.projection === 'world' && weddingStore.importLocationModalOpen && (
         <Suspense fallback={null}>
         <ImportLocationModal
           isOpen={weddingStore.importLocationModalOpen}
@@ -389,7 +418,7 @@ export default function App() {
         </Suspense>
       )}
 
-      {weddingStore.landingPageModalOpen && (
+      {weddingStore.projection === 'world' && weddingStore.landingPageModalOpen && (
         <Suspense fallback={null}>
         <LandingPageModal
           isOpen={weddingStore.landingPageModalOpen}
