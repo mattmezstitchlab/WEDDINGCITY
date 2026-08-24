@@ -474,7 +474,7 @@ try {
     'scenarios are persisted with the project, and only with it');
 
   // -------------------------------------------------------------------------
-  console.log('\n[10/13] V3 — one vocabulary per kind of day, fewer and bigger sequences');
+  console.log('\n[10/14] V3 — one vocabulary per kind of day, fewer and bigger sequences');
   // -------------------------------------------------------------------------
   const types = read('design', 'eventTypes.ts');
   for (const id of ['mariage', 'anniversaire', 'fete', 'seminaire', 'convention', 'soiree', 'autre']) {
@@ -541,7 +541,7 @@ try {
     'the demonstration people have a first name and a thread');
 
   // -------------------------------------------------------------------------
-  console.log('\n[11/13] SPECTACLE — a performer is a Person with a craft');
+  console.log('\n[11/14] SPECTACLE — a performer is a Person with a craft');
   // -------------------------------------------------------------------------
   const identityTypes = read('types', 'identity.ts');
   r.check(/export interface PersonCraft/.test(identityTypes) && /craft\?: PersonCraft/.test(identityTypes),
@@ -618,7 +618,7 @@ try {
   r.check(/SPECTACLE_CRAFTS/.test(landingCrew), 'with the crafts named from the registry');
 
   // -------------------------------------------------------------------------
-  console.log('\n[12/13] ORCHESTRATION — several events, one identity, no second base');
+  console.log('\n[12/14] ORCHESTRATION — several events, one identity, no second base');
   // -------------------------------------------------------------------------
   const weddingTypes = read('types', 'wedding.ts');
   r.check(/assignedPersonId\?: string/.test(weddingTypes) && /status\?: 'todo'/.test(weddingTypes),
@@ -685,7 +685,7 @@ try {
   r.check(!/fetch\(|https?:\/\//.test(crewSrc), 'and the surface calls nothing outside');
 
   // -------------------------------------------------------------------------
-  console.log('\n[13/13] CONVERGENCE FINALE — five certainties, a first day, one desk');
+  console.log('\n[13/14] CONVERGENCE FINALE — five certainties, a first day, one desk');
   // -------------------------------------------------------------------------
   const cert = read('design', 'certainty.ts');
   for (const level of ['confirmed', 'inferred', 'estimated', 'to_confirm', 'missing']) {
@@ -772,6 +772,61 @@ try {
   const siteSrc = read('components', 'mirror', 'MirrorSite.tsx');
   r.check(/store\.isOrchestrator\(\)/.test(siteSrc) && /nav-admin/.test(siteSrc),
     'and the administration is offered only to those who orchestrate');
+
+  // -------------------------------------------------------------------------
+  console.log('\n[14/14] CHRONOS — the calendar is a projection, not a second agenda');
+  // -------------------------------------------------------------------------
+  const cal = store;
+
+  // Date arithmetic on strings: no time zone can shift a string.
+  r.check(cal.shiftDay('2027-07-17', 1) === '2027-07-18', 'a day plus one is the next day');
+  r.check(cal.shiftDay('2027-12-31', 1) === '2028-01-01', 'and it crosses a year without a library');
+  r.check(cal.shiftDay('2028-02-28', 1) === '2028-02-29', 'a leap year is a leap year');
+  r.check(cal.shiftDay('pas-une-date', 1) === 'pas-une-date', 'a malformed date is returned untouched');
+  r.check(cal.weekdayOf('2027-07-17') === 6, 'the 17th of July 2027 is a Saturday — the week starts on Monday');
+
+  const week = cal.calendarRange('week', '2027-07-17');
+  r.check(week.from === '2027-07-12' && week.to === '2027-07-18', 'a week runs Monday to Sunday', `${week.from}→${week.to}`);
+  const month = cal.calendarRange('month', '2027-07-17');
+  r.check(month.from === '2027-07-01' && month.to === '2027-07-31', 'a month knows its own length');
+  r.check(cal.calendarRange('month', '2027-02-10').to === '2027-02-28', 'including February');
+  r.check(cal.calendarRange('year', '2027-07-17').label === '2027', 'a year is named by its number');
+  r.check(cal.calendarRange('day', '2027-07-17').label.includes('samedi'), 'a day is named in words');
+
+  const days = cal.calendarDays('2027-07-01', '2027-07-31');
+  r.check(days.length === 31, 'a month projects thirty-one days', String(days.length));
+  r.check(days.every((d) => Array.isArray(d.entries)), 'each one says what it carries, even when empty');
+  r.check(cal.calendarDays('n’importe quoi', '2027-07-31').length === 0, 'a malformed range projects nothing');
+
+  // The calendar READS the events; it never holds them.
+  const calSrc = read('components', 'mirror', 'calendar', 'CalendarStudio.tsx');
+  r.check(!/localStorage|savePersistedState|saveWeddingProject/.test(calSrc),
+    'the calendar writes nothing of its own — no second store');
+  r.check(!/fetch\(|https?:\/\//.test(calSrc), 'and calls nothing outside');
+  r.check(!/startHour:\s|endHour:\s/.test(calSrc.replace(/\/\*[\s\S]*?\*\//g, '')),
+    'it never writes an hour — hours belong to the timeline');
+  r.check(/data-jourj="strip"/.test(read('components', 'mirror', 'timeline', 'TimelineStudio.tsx'))
+    && !/data-jourj="strip"/.test(calSrc),
+    'and it draws no second film');
+
+  // The 30-hour ceiling was NOT touched by this pass.
+  r.check(/startHour >= 0 && startHour \+ duration <= 30/.test(read('game', 'weddingStore.ts')),
+    'the 30-hour rule is untouched: a trip is three days, not a 72-hour ribbon');
+
+  // A person's agenda is derived, and honest about name matching.
+  r.check(Array.isArray(cal.personCalendar('inconnu', '2027-01-01', '2027-12-31'))
+    && cal.personCalendar('inconnu', '2027-01-01', '2027-12-31').length === 0,
+    'an unknown person has no agenda');
+  r.check(/matchedByName/.test(calSrc) && /à confirmer/i.test(calSrc),
+    'and a cross-event match is never presented as an identity');
+
+  // The new kinds of day exist, and « tournée » deliberately does not.
+  const typesSrc = read('design', 'eventTypes.ts');
+  for (const id of ['journee', 'mission', 'voyage']) {
+    r.check(typesSrc.includes(`id: '${id}'`), `the kind of day « ${id} » exists`);
+  }
+  r.check(!/id: 'tournee'/.test(typesSrc),
+    'a tour is several events read together, not a fifteenth type');
 
   un();
 } finally {

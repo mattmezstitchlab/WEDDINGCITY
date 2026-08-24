@@ -131,13 +131,19 @@ check('une seule barre : champ, importer, type, flèche',
   hero.bar && hero.brief && hero.importer && hero.go);
 check('le sélecteur de type EST visiblement un menu déroulant (chevron + contour)',
   hero.hasChevron && hero.hasBorder, `chevron:${hero.hasChevron} contour:${hero.hasBorder}`);
-check('onze natures d’événement sont proposées', hero.options.length === 11, String(hero.options.length));
+// PRODUCT DECISION (chronos): eleven kinds of day became fourteen — Journée,
+// Mission and Voyage, because the calendar makes those scales real. Same
+// guarantee: one selector in the hero, and every option really changes the
+// engine's vocabulary.
+check('quatorze natures d’événement sont proposées', hero.options.length === 14, String(hero.options.length));
 for (const t of ['Mariage', 'Événement corporate', 'Festival', 'Concert', 'Gala', 'Spectacle',
-  'Événement associatif', 'Événement culturel', 'Séminaire', 'Anniversaire / célébration', 'Autre']) {
+  'Événement associatif', 'Événement culturel', 'Séminaire', 'Anniversaire / célébration',
+  'Journée', 'Mission', 'Voyage', 'Autre']) {
   if (!hero.options.includes(t)) check(`type « ${t} » proposé`, false, hero.options.join(' | '));
 }
-check('les onze types attendus y sont tous',
-  ['Mariage', 'Festival', 'Concert', 'Gala', 'Spectacle'].every((t) => hero.options.includes(t)));
+check('les types attendus y sont tous, du mariage au voyage',
+  ['Mariage', 'Festival', 'Concert', 'Gala', 'Spectacle', 'Journée', 'Mission', 'Voyage']
+    .every((t) => hero.options.includes(t)));
 await shot('01-hero');
 await noOverflow('Landing');
 

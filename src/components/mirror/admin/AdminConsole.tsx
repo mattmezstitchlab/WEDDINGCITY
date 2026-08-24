@@ -50,8 +50,26 @@ export function AdminConsole({ onClose }: { onClose: () => void }) {
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<Filter>('tout');
   const [openPersonId, setOpenPersonId] = useState<string | null>(null);
+  // CHRONOS: the same calendar projection, used here as a filter. No second
+  // date arithmetic, no second source — store.calendarRange() decides what
+  // « cette semaine » means, once, for the whole product.
+  const [when, setWhen] = useState<'tout' | 'today' | 'week' | 'month' | 'next'>('tout');
 
-  const events = useMemo(() => store.adminEvents(), [store.version]);
+  const allEvents = useMemo(() => store.adminEvents(), [store.version]);
+  const today = store.today();
+  const nextDate = useMemo(
+    () => allEvents.map((e) => e.project.weddingDate).filter((d) => d && d >= today).sort()[0] ?? null,
+    [allEvents, today],
+  );
+  const events = useMemo(() => {
+    if (when === 'tout') return allEvents;
+    if (when === 'next') return allEvents.filter((e) => e.project.weddingDate === nextDate);
+    const range = store.calendarRange(when === 'today' ? 'day' : when, today);
+    return allEvents.filter((e) => {
+      const d = e.project.weddingDate;
+      return Boolean(d) && d >= range.from && d <= range.to;
+    });
+  }, [allEvents, when, today, nextDate, store.version]);
   const alerts = useMemo(() => store.adminAlerts(), [store.version]);
   const results = useMemo(() => store.searchAcrossEvents(query), [query, store.version]);
   const shown = filter === 'tout' ? results : results.filter((r) => KIND_OF_FILTER[filter].includes(r.kind));
@@ -161,6 +179,28 @@ export function AdminConsole({ onClose }: { onClose: () => void }) {
         {/* ---------------------------------------------------------- EVENTS */}
         <section style={block} data-admin="events">
           <div style={eyebrow}>Événements</div>
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 10 }}>
+            {([
+              ['tout', 'Tout'], ['today', 'Aujourd’hui'], ['week', 'Cette semaine'],
+              ['month', 'Ce mois'], ['next', 'Prochain événement'],
+            ] as const).map(([id, label]) => (
+              <button
+                key={id}
+                onClick={() => setWhen(id)}
+                style={{ ...chip, opacity: when === id ? 1 : 0.5, borderColor: when === id ? '#f6f5f3' : 'rgba(246,245,243,0.24)' }}
+                data-admin="when"
+                data-when={id}
+                aria-pressed={when === id}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          {events.length === 0 && (
+            <p style={{ ...muted, marginTop: 12 }} data-admin="events-empty">
+              Aucun événement sur cette période.
+            </p>
+          )}
           <ul style={list}>
             {events.map((e) => (
               <li key={e.project.id} style={line} data-admin="event" data-current={e.isCurrent ? 'yes' : 'no'}>

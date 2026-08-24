@@ -236,7 +236,28 @@ export function LandingFilm({ onOpenMoment, shifted }: {
             );
           })}
 
-          {/* NOW — the real time of day, if it falls inside the day shown. */}
+          {/* NOW — the real time of day.
+              MEASURED between 05:00 and 08:00: the demonstration day runs from
+              08:00 to 05:00 the next morning, so at 05:10 the real hour fell
+              just outside it and the marker simply VANISHED — the film stopped
+              situating the visitor in time, without a word. A missing marker is
+              not an answer: outside the day shown, the film now says so, at the
+              edge it belongs to. */}
+          {(clock < DAY_START || clock > DAY_END) && (
+            <div
+              style={{
+                position: 'absolute', top: 0, bottom: 0, width: 2,
+                left: clock < DAY_START ? 0 : Math.max(0, width - 2),
+                background: 'rgba(224,115,106,0.5)', zIndex: 6, pointerEvents: 'none',
+              }}
+              data-landing="now"
+              data-outside="yes"
+            >
+              <div style={clock < DAY_START ? nowBadge : nowBadgeLeft}>
+                {fmt(clock)} · hors de la journée montrée
+              </div>
+            </div>
+          )}
           {clock >= DAY_START && clock <= DAY_END && (
             <div style={{ position: 'absolute', left: x(clock), top: 0, bottom: 0, width: 2, background: '#e0736a', zIndex: 6, pointerEvents: 'none' }} data-landing="now">
               {/* MEASURED at 390px, late in the evening: the badge is nowrap and

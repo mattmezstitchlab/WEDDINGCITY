@@ -3305,6 +3305,235 @@ class WeddingStore {
     };
   }
 
+  // -------------------------------------------------------------------------
+  // CHRONOS — THE CALENDAR IS A PROJECTION, NOT A SECOND AGENDA.
+  // -------------------------------------------------------------------------
+  // There is one temporal reality in this product and it is already written:
+  // a PROJECT carries the day (`weddingDate`, 'YYYY-MM-DD'), a MOMENT carries
+  // the hours inside it (`startHour`/`endHour`). Nobody had ever read the two
+  // together — that is all a calendar is.
+  //
+  // Everything below is a pure projection: it stores nothing, writes nothing,
+  // creates no key, copies no hour. Change a moment and the calendar changes,
+  // because it never held a copy of it. The 30-hour ceiling of the timeline is
+  // untouched: a three-day trip is three days, each with its own readable
+  // timeline — not one 72-hour ribbon nobody can read.
+  //
+  // Dates are handled as plain 'YYYY-MM-DD' strings, exactly as they are
+  // stored. No Date arithmetic across time zones, no library, no drift.
+  // -------------------------------------------------------------------------
+
+  /** Days are strings here, on purpose: no time zone can shift a string. */
+  private static dayToParts(iso: string): { y: number; m: number; d: number } | null {
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec((iso || '').trim());
+    if (!m) return null;
+    return { y: Number(m[1]), m: Number(m[2]), d: Number(m[3]) };
+  }
+
+  private static partsToDay(y: number, m: number, d: number): string {
+    return `${String(y).padStart(4, '0')}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+  }
+
+  /** Add days to a 'YYYY-MM-DD', through UTC so no local zone can shift it. */
+  public shiftDay(iso: string, days: number): string {
+    const p = WeddingStore.dayToParts(iso);
+    if (!p) return iso;
+    const t = Date.UTC(p.y, p.m - 1, p.d) + days * 86400000;
+    const d = new Date(t);
+    return WeddingStore.partsToDay(d.getUTCFullYear(), d.getUTCMonth() + 1, d.getUTCDate());
+  }
+
+  /** 1 = Monday … 7 = Sunday. The week starts on Monday, as it does in France. */
+  public weekdayOf(iso: string): number {
+    const p = WeddingStore.dayToParts(iso);
+    if (!p) return 1;
+    const wd = new Date(Date.UTC(p.y, p.m - 1, p.d)).getUTCDay();
+    return wd === 0 ? 7 : wd;
+  }
+
+  public today(): string {
+    const now = new Date();
+    return WeddingStore.partsToDay(now.getFullYear(), now.getMonth() + 1, now.getDate());
+  }
+
+  /**
+   * The window of time a scale covers around an anchor day. One function for
+   * the four scales, so « zoom on time » is a single idea, not four.
+   */
+  public calendarRange(scale: 'day' | 'week' | 'month' | 'year', anchorISO: string): {
+    from: string; to: string; label: string;
+  } {
+    const p = WeddingStore.dayToParts(anchorISO) ?? WeddingStore.dayToParts(this.today())!;
+    const anchor = WeddingStore.partsToDay(p.y, p.m, p.d);
+    const MONTHS = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin',
+      'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
+
+    if (scale === 'day') {
+      return { from: anchor, to: anchor, label: this.longDayLabel(anchor) };
+    }
+    if (scale === 'week') {
+      const from = this.shiftDay(anchor, -(this.weekdayOf(anchor) - 1));
+      const to = this.shiftDay(from, 6);
+      const a = WeddingStore.dayToParts(from)!;
+      const b = WeddingStore.dayToParts(to)!;
+      const label = a.m === b.m
+        ? `${a.d} – ${b.d} ${MONTHS[b.m - 1]} ${b.y}`
+        : `${a.d} ${MONTHS[a.m - 1]} – ${b.d} ${MONTHS[b.m - 1]} ${b.y}`;
+      return { from, to, label };
+    }
+    if (scale === 'month') {
+      const from = WeddingStore.partsToDay(p.y, p.m, 1);
+      const days = new Date(Date.UTC(p.y, p.m, 0)).getUTCDate();
+      return { from, to: WeddingStore.partsToDay(p.y, p.m, days), label: `${MONTHS[p.m - 1]} ${p.y}` };
+    }
+    return {
+      from: WeddingStore.partsToDay(p.y, 1, 1),
+      to: WeddingStore.partsToDay(p.y, 12, 31),
+      label: String(p.y),
+    };
+  }
+
+  public longDayLabel(iso: string): string {
+    const p = WeddingStore.dayToParts(iso);
+    if (!p) return iso;
+    const DAYS = ['lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi', 'dimanche'];
+    const MONTHS = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin',
+      'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
+    return `${DAYS[this.weekdayOf(iso) - 1]} ${p.d} ${MONTHS[p.m - 1]} ${p.y}`;
+  }
+
+  /**
+   * WHAT EACH DAY HOLDS, read from the events already stored.
+   *
+   * A day carries an event when the event's date is that day — and also when
+   * the PREVIOUS day's timeline runs past midnight, because a party ending at
+   * 02:00 really does happen on the next morning. That second case is DERIVED
+   * from `endHour > 24`; nothing is stored twice.
+   */
+  public calendarDays(fromISO: string, toISO: string): {
+    date: string;
+    weekday: number;
+    isToday: boolean;
+    entries: {
+      projectId: string;
+      projectName: string;
+      typeLabel: string;
+      isCurrent: boolean;
+      isDemo: boolean;
+      /** 'day' = the event's own date · 'overnight' = it started the day before. */
+      part: 'day' | 'overnight';
+      moments: number;
+      firstHour: number | null;
+      lastHour: number | null;
+      headline: string | null;
+      people: number;
+      unconfirmedHours: number;
+      place: string;
+    }[];
+  }[] {
+    const out: ReturnType<WeddingStore['calendarDays']> = [];
+    const today = this.today();
+    if (!WeddingStore.dayToParts(fromISO) || !WeddingStore.dayToParts(toISO)) return out;
+
+    // Read each project ONCE, not once per day.
+    const events = getStoredProjects()
+      .filter((project) => Boolean(project.weddingDate))
+      .map((project) => {
+        const snap = this.projectSnapshot(project.id);
+        const phases = (snap?.phases ?? []).slice().sort((a, b) => a.startHour - b.startHour);
+        const persons = new Set<string>();
+        for (const phase of phases) for (const id of phase.personIds ?? []) persons.add(id);
+        const lastHour = phases.length ? Math.max(...phases.map((p) => p.endHour)) : null;
+        return {
+          project,
+          phases,
+          people: persons.size,
+          firstHour: phases.length ? phases[0].startHour : null,
+          lastHour,
+          headline: phases.length ? phases[0].name : null,
+          unconfirmedHours: phases.filter((p) => p.confidence && p.confidence !== 'confirmed').length,
+          // A day that runs past midnight spills onto the next one. Derived.
+          spillsOver: Boolean(lastHour !== null && lastHour > 24),
+        };
+      });
+
+    for (let date = fromISO; date <= toISO; date = this.shiftDay(date, 1)) {
+      const entries: ReturnType<WeddingStore['calendarDays']>[number]['entries'] = [];
+      for (const e of events) {
+        const own = e.project.weddingDate === date;
+        const spill = e.spillsOver && this.shiftDay(e.project.weddingDate, 1) === date;
+        if (!own && !spill) continue;
+        entries.push({
+          projectId: e.project.id,
+          projectName: e.project.coupleNames || e.project.title,
+          typeLabel: eventType(e.project.eventTypeId).label,
+          isCurrent: e.project.id === this.currentProject.id,
+          isDemo: Boolean(e.project.isDemo),
+          part: own ? 'day' : 'overnight',
+          moments: own ? e.phases.length : e.phases.filter((p) => p.endHour > 24).length,
+          firstHour: own ? e.firstHour : 24,
+          lastHour: e.lastHour,
+          headline: own ? e.headline : 'Fin de la veille',
+          people: e.people,
+          unconfirmedHours: own ? e.unconfirmedHours : 0,
+          place: e.project.locationName || '',
+        });
+      }
+      out.push({ date, weekday: this.weekdayOf(date), isToday: date === today, entries });
+      if (out.length > 400) break; // a year, plus a safety margin
+    }
+    return out;
+  }
+
+  /**
+   * ONE PERSON'S OWN CALENDAR — derived, never entered twice.
+   *
+   * Across every stored event, the days this person is expected on. Inside an
+   * event, their hours come from the moments they are attached to; the detail
+   * stays where it belongs — getCallSheet(). Between events, the person is
+   * recognised BY NAME, and every such row says so.
+   */
+  public personCalendar(personId: string, fromISO: string, toISO: string): {
+    date: string;
+    projectId: string;
+    projectName: string;
+    matchedByName: boolean;
+    firstHour: number | null;
+    lastHour: number | null;
+    moments: { name: string; startHour: number; endHour: number }[];
+  }[] {
+    const person = this.persons.find((p) => p.id === personId);
+    if (!person) return [];
+    const out: ReturnType<WeddingStore['personCalendar']> = [];
+
+    for (const project of getStoredProjects()) {
+      const date = project.weddingDate;
+      if (!date || date < fromISO || date > toISO) continue;
+      const snap = this.projectSnapshot(project.id);
+      if (!snap) continue;
+      const isCurrent = project.id === this.currentProject.id;
+      const twin = isCurrent
+        ? person
+        : snap.persons.find((p) => p.displayName?.toLowerCase() === person.displayName.toLowerCase());
+      if (!twin) continue;
+      const moments = snap.phases
+        .filter((p) => (p.personIds ?? []).includes(twin.id))
+        .sort((a, b) => a.startHour - b.startHour)
+        .map((p) => ({ name: p.name, startHour: p.startHour, endHour: p.endHour }));
+      if (moments.length === 0) continue;
+      out.push({
+        date,
+        projectId: project.id,
+        projectName: project.coupleNames || project.title,
+        matchedByName: !isCurrent,
+        firstHour: moments[0].startHour,
+        lastHour: Math.max(...moments.map((m) => m.endHour)),
+        moments,
+      });
+    }
+    return out.sort((a, b) => a.date.localeCompare(b.date));
+  }
+
   /** One line per event: what it holds, and what it is still waiting for. */
   public adminEvents(): {
     project: WeddingProject;

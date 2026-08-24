@@ -14,6 +14,7 @@ import { PRODUCT_NAME, PRODUCT_MARK } from '../../design/productIdentity';
 import { OrganisationSection } from './organisation/OrganisationSection';
 import { GlobalSearch } from './GlobalSearch';
 import { AdminConsole } from './admin/AdminConsole';
+import { CalendarStudio } from './calendar/CalendarStudio';
 import './mirror.css';
 
 // ---------------------------------------------------------------------------
@@ -73,6 +74,7 @@ function ProductNav() {
   const store = weddingStore;
   const [searchOpen, setSearchOpen] = useState(false);
   const [adminOpen, setAdminOpen] = useState(false);
+  const [calendarOpen, setCalendarOpen] = useState(false);
   const go = (id: string) => {
     const el = document.getElementById(id);
     el?.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -118,6 +120,9 @@ function ProductNav() {
           ))}
         </div>
         <span style={{ flex: 1 }} />
+        <button onClick={() => setCalendarOpen(true)} style={productNavBtn} data-jourj="nav-calendar">
+          Calendrier
+        </button>
         <button onClick={() => setSearchOpen(true)} style={productNavBtn} data-jourj="nav-search" aria-label="Recherche">
           Rechercher
         </button>
@@ -131,6 +136,7 @@ function ProductNav() {
       </nav>
       {searchOpen && <GlobalSearch onClose={() => setSearchOpen(false)} />}
       {adminOpen && <AdminConsole onClose={() => setAdminOpen(false)} />}
+      {calendarOpen && <CalendarStudio onClose={() => setCalendarOpen(false)} />}
     </>
   );
 }

@@ -150,7 +150,7 @@ check('le hero est un outil : champ + import + types',
     // LOCATOR ADAPTED (convergence finale): seven kinds of day became eleven,
     // each one really changing the engine's vocabulary. Same guarantee: one
     // field, one import, one type selector — and it must be a real menu.
-    && document.querySelectorAll('[data-landing="type"] option').length === 11));
+    && document.querySelectorAll('[data-landing="type"] option').length === 14));
 await shot('01-hero-outil');
 await noOverflow('Page publique');
 

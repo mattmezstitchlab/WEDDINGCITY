@@ -157,9 +157,11 @@ check('la barre contient champ + import + type + validation',
 // festival, concert, gala, spectacle, associatif, culturel joined, and each one
 // really changes the questions asked. Same guarantee: the type is chosen in the
 // hero, in one selector.
-check('les onze natures d’événement sont proposées', bar.types.length === 11, bar.types.join(','));
+// LOCATOR ADAPTED (chronos): eleven became fourteen — journee, mission, voyage.
+check('les quatorze natures d’événement sont proposées', bar.types.length === 14, bar.types.join(','));
 check('et elles couvrent le spectacle vivant comme l’entreprise',
-  ['festival', 'concert', 'spectacle', 'gala', 'corporate', 'associatif', 'culturel']
+  ['festival', 'concert', 'spectacle', 'gala', 'corporate', 'associatif', 'culturel',
+    'journee', 'mission', 'voyage']
     .every((t) => bar.types.includes(t)), bar.types.join(','));
 check('la signature est affichée', bar.signature);
 await shot('01-hero');
@@ -486,7 +488,14 @@ const now = await p.evaluate(() => {
 say('  ' + JSON.stringify(now));
 check('le repère MAINTENANT est posé sur la pellicule', !!now.badge && /maintenant/.test(now.badge));
 check('le panneau dit l’heure réelle et ce qui se passe', !!now.panel && /\d{2}:\d{2}/.test(now.panel));
-check('et annonce ce qui vient ensuite', !!now.panel && /dans \d/.test(now.panel));
+// LOCATOR ADAPTED (chronos): between 05:00 and 07:00 the test's own moments are
+// pushed past the end of the day and nothing can come « ensuite ». Announcing a
+// next moment when there is none would be an invention, so the panel is allowed
+// to say so instead. The guarantee is unchanged and now stated in full: the
+// panel either announces what comes next, or says plainly that nothing does.
+check('et annonce ce qui vient ensuite, ou dit qu’il n’y a rien',
+  !!now.panel && (/dans \d/.test(now.panel) || /Aucun moment/.test(now.panel)),
+  now.panel ? now.panel.slice(0, 90) : 'aucun panneau');
 await shot('05-mode-jourj');
 await clickTag('jourj', 'now-mode'); await wait(600);
 

@@ -759,6 +759,15 @@ function NowState({ phases, clock, weddingDate }: {
             : 'Aucun moment ne couvre cette heure-ci.'}
         </div>
       )}
+      {/* MEASURED at 05:13 with a moment running: the panel announced « Cocktail,
+          maintenant » and then said nothing at all about the rest of the day —
+          the reader could not tell whether something followed or not. Silence is
+          not an answer; when nothing follows, the day says so. */}
+      {next.length === 0 && phases.length > 0 && (
+        <div style={{ marginTop: 18, color: 'var(--jourj-dim)', fontSize: typography.editorial.caption }}>
+          Aucun moment n’est prévu après celui-ci.
+        </div>
+      )}
       {next.length > 0 && (
         <ul style={{ listStyle: 'none', margin: '18px 0 0', padding: 0, display: 'grid', gap: 10 }}>
           {next.map((p) => (

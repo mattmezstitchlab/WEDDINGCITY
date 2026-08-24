@@ -96,12 +96,17 @@ try {
     // vocabulary and the questions of the engine (see design/eventTypes).
     // The guarantee is unchanged and checked more strictly than before: the
     // choice is made in the hero, in ONE select, and it is a real menu.
+    // PRODUCT DECISION (chronos): eleven kinds of day became FOURTEEN — a
+    // journée, a mission and a voyage joined, because the calendar makes them
+    // real. Each one carries its own vocabulary, questions and estimated
+    // shape; « tournée » was deliberately NOT added, since a tour is several
+    // events read together, not a type of its own.
     const typeOptions = doc.querySelectorAll('[data-landing="type"] option');
-    r.check(typeOptions.length === 11,
+    r.check(typeOptions.length === 14,
       'and the kind of event is chosen right there', String(typeOptions.length));
     r.check(doc.querySelectorAll('[data-landing="type"]').length === 1,
       'there is exactly one type selector on the page');
-    r.check(['Mariage', 'Festival', 'Concert', 'Gala', 'Spectacle']
+    r.check(['Mariage', 'Festival', 'Concert', 'Gala', 'Spectacle', 'Journée', 'Mission', 'Voyage']
       .every((label) => [...typeOptions].some((o) => o.textContent.trim() === label)),
       'and it really carries the kinds of day the engine knows');
     r.check(/const start = \(\) =>/.test(landingSrc) && /: create\(\)/.test(landingSrc),

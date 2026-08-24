@@ -17,7 +17,12 @@
 
 export type EventTypeId =
   | 'mariage' | 'corporate' | 'seminaire' | 'festival' | 'concert' | 'spectacle'
-  | 'gala' | 'associatif' | 'culturel' | 'anniversaire' | 'autre'
+  | 'gala' | 'associatif' | 'culturel' | 'anniversaire'
+  // CHRONOS: the same engine, at another scale of life. A « tournée » is not a
+  // type of its own — it is several events of the kinds above, read together in
+  // the calendar. Creating a type for it would duplicate Mission and Voyage.
+  | 'journee' | 'mission' | 'voyage'
+  | 'autre'
   // Legacy ids: kept so projects created before this pass keep their
   // vocabulary. They are resolvable, they are simply no longer offered.
   | 'fete' | 'convention' | 'soiree';
@@ -150,6 +155,50 @@ const CULTURAL_MOMENTS: EventTypeSchema['momentWords'] = [
   { re: /d[ée]crochage|d[ée]montage/i, label: 'Démontage' },
 ];
 
+/** An ordinary day — personal or professional. The words one really uses. */
+const DAY_MOMENTS: EventTypeSchema['momentWords'] = [
+  { re: /r[ée]veil|lever/i, label: 'Réveil' },
+  { re: /d[ée]part/i, label: 'Départ' },
+  { re: /trajet|route|trajet retour/i, label: 'Trajet' },
+  { re: /rendez-?vous|rdv/i, label: 'Rendez-vous' },
+  { re: /r[ée]union|point|call|visio/i, label: 'Réunion' },
+  { re: /d[ée]jeuner|midi/i, label: 'Déjeuner' },
+  { re: /pause|caf[ée]/i, label: 'Pause' },
+  { re: /travail|bureau|atelier/i, label: 'Travail' },
+  { re: /retour/i, label: 'Retour' },
+  { re: /d[îi]ner|soir/i, label: 'Dîner' },
+];
+
+/** A mission: a period organised around one objective. */
+const MISSION_MOMENTS: EventTypeSchema['momentWords'] = [
+  { re: /brief(?:ing)?|point de d[ée]part/i, label: 'Briefing' },
+  { re: /d[ée]part/i, label: 'Départ' },
+  { re: /trajet|route|train|avion|vol/i, label: 'Trajet' },
+  { re: /arriv[ée]e/i, label: 'Arrivée' },
+  { re: /installation|montage|mise en place/i, label: 'Installation' },
+  { re: /rep[ée]rage|visite technique/i, label: 'Repérage' },
+  { re: /intervention|prestation|mission|plateau/i, label: 'Intervention' },
+  { re: /r[ée]union|point/i, label: 'Point' },
+  { re: /d[ée]montage|rangement/i, label: 'Démontage' },
+  { re: /restitution|d[ée]brief/i, label: 'Restitution' },
+  { re: /retour/i, label: 'Retour' },
+];
+
+/** A journey: getting there, sleeping there, coming back. */
+const TRIP_MOMENTS: EventTypeSchema['momentWords'] = [
+  { re: /d[ée]part/i, label: 'Départ' },
+  { re: /enregistrement|check-?in a[ée]roport/i, label: 'Enregistrement' },
+  { re: /vol|avion/i, label: 'Vol' },
+  { re: /train|tgv|gare/i, label: 'Train' },
+  { re: /route|voiture|trajet/i, label: 'Route' },
+  { re: /arriv[ée]e/i, label: 'Arrivée' },
+  { re: /h[ôo]tel|check-?in|nuit|logement|h[ée]bergement/i, label: 'Hébergement' },
+  { re: /visite|balade|activit[ée]/i, label: 'Visite' },
+  { re: /d[ée]jeuner|d[îi]ner|repas/i, label: 'Repas' },
+  { re: /check-?out|lib[ée]ration/i, label: 'Départ de l’hébergement' },
+  { re: /retour/i, label: 'Retour' },
+];
+
 /** Kept for a christening-like day: still reachable through « Autre ». */
 const CEREMONY_MOMENTS: EventTypeSchema['momentWords'] = [
   { re: /accueil/i, label: 'Accueil' },
@@ -249,6 +298,32 @@ const GALA_SKELETON: EventTypeSchema['skeleton'] = [
   { label: 'Prises de parole', startHour: 22, endHour: 22.5 },
   { label: 'Spectacle', startHour: 22.5, endHour: 23.5 },
   { label: 'Soirée', startHour: 23.5, endHour: 26 },
+];
+
+const DAY_SKELETON: EventTypeSchema['skeleton'] = [
+  { label: 'Départ', startHour: 8, endHour: 8.5 },
+  { label: 'Rendez-vous', startHour: 9.5, endHour: 11 },
+  { label: 'Déjeuner', startHour: 12.5, endHour: 13.5 },
+  { label: 'Travail', startHour: 14, endHour: 17 },
+  { label: 'Retour', startHour: 18, endHour: 19 },
+];
+
+const MISSION_SKELETON: EventTypeSchema['skeleton'] = [
+  { label: 'Briefing', startHour: 8, endHour: 9 },
+  { label: 'Départ', startHour: 9, endHour: 9.5 },
+  { label: 'Trajet', startHour: 9.5, endHour: 12 },
+  { label: 'Installation', startHour: 14, endHour: 16 },
+  { label: 'Intervention', startHour: 17, endHour: 19 },
+  { label: 'Démontage', startHour: 19, endHour: 20 },
+  { label: 'Retour', startHour: 20, endHour: 22 },
+];
+
+const TRIP_SKELETON: EventTypeSchema['skeleton'] = [
+  { label: 'Départ', startHour: 7, endHour: 7.5 },
+  { label: 'Trajet', startHour: 7.5, endHour: 11 },
+  { label: 'Arrivée', startHour: 11, endHour: 12 },
+  { label: 'Hébergement', startHour: 15, endHour: 16 },
+  { label: 'Repas', startHour: 20, endHour: 21.5 },
 ];
 
 const DATE_FIELD = { key: 'date', label: 'Date', placeholder: 'AAAA-MM-JJ' } as const;
@@ -415,6 +490,54 @@ export const EVENT_TYPES: EventTypeSchema[] = [
     skeleton: PARTY_SKELETON,
   },
   {
+    id: 'journee',
+    label: 'Journée',
+    principalsLabel: 'Cette journée',
+    principalsQuestion: 'Comment appelez-vous cette journée ? Elle ne sera pas nommée à votre place.',
+    fields: [
+      { key: 'principals', label: 'Cette journée', placeholder: 'Journée de tournage, déménagement…' },
+      DATE_FIELD,
+      { key: 'place', label: 'Lieu principal', placeholder: 'Où cela se passe-t-il ?' },
+      { key: 'headcount', label: 'Personnes concernées', placeholder: '4' },
+    ],
+    momentWords: DAY_MOMENTS,
+    headcountLabel: 'personnes',
+    intakeLine: 'Un planning, un billet, une convocation, une liste de rendez-vous.',
+    skeleton: DAY_SKELETON,
+  },
+  {
+    id: 'mission',
+    label: 'Mission',
+    principalsLabel: 'L’objet de la mission',
+    principalsQuestion: 'Quel est l’objet de cette mission ? Il ne sera pas deviné.',
+    fields: [
+      { key: 'principals', label: 'L’objet de la mission', placeholder: 'Prestation, tournage, installation…' },
+      DATE_FIELD,
+      { key: 'place', label: 'Lieu', placeholder: 'Où se déroule-t-elle ?' },
+      { key: 'headcount', label: 'Personnes engagées', placeholder: '6' },
+    ],
+    momentWords: MISSION_MOMENTS,
+    headcountLabel: 'personnes',
+    intakeLine: 'Ordre de mission, fiche technique, contrat, planning, billets.',
+    skeleton: MISSION_SKELETON,
+  },
+  {
+    id: 'voyage',
+    label: 'Voyage',
+    principalsLabel: 'Le voyage',
+    principalsQuestion: 'Comment appelez-vous ce voyage ? Il ne sera pas nommé à votre place.',
+    fields: [
+      { key: 'principals', label: 'Le voyage', placeholder: 'Lille → Barcelone' },
+      DATE_FIELD,
+      { key: 'place', label: 'Destination', placeholder: 'Ville, adresse…' },
+      { key: 'headcount', label: 'Voyageurs', placeholder: '2' },
+    ],
+    momentWords: TRIP_MOMENTS,
+    headcountLabel: 'voyageurs',
+    intakeLine: 'Billets, réservation d’hôtel, itinéraire, convocation, contrat.',
+    skeleton: TRIP_SKELETON,
+  },
+  {
     id: 'autre',
     label: 'Autre',
     principalsLabel: null,
@@ -425,7 +548,7 @@ export const EVENT_TYPES: EventTypeSchema[] = [
       { key: 'place', label: 'Lieu', placeholder: 'Où cela se passe-t-il ?' },
       { key: 'headcount', label: 'Personnes attendues', placeholder: '30' },
     ],
-    momentWords: [...PARTY_MOMENTS, ...PRO_MOMENTS, ...CEREMONY_MOMENTS, ...STAGE_MOMENTS],
+    momentWords: [...PARTY_MOMENTS, ...PRO_MOMENTS, ...CEREMONY_MOMENTS, ...STAGE_MOMENTS, ...TRIP_MOMENTS],
     headcountLabel: 'personnes',
     intakeLine: 'Tout document décrivant le déroulé, les personnes ou les prestataires.',
     // Nothing is proposed for an event whose nature is unknown: a conventional
