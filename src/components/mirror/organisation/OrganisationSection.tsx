@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { weddingStore } from '../../../game/weddingStore';
 import { typography } from '../../../design/tokens';
 import { SeatingPlan } from './SeatingPlan';
+import { ScenariosPanel } from './ScenariosPanel';
 
 // ---------------------------------------------------------------------------
 // ORGANISATION — the part of the day that is not an hour.
@@ -48,6 +49,12 @@ export function OrganisationSection() {
             ))}
           </ul>
         )}
+      </div>
+
+      {/* ---- scenarios: a parallel day ---- */}
+      <div style={block} id="scenarios">
+        <h3 style={h3}>Scénarios</h3>
+        <ScenariosPanel />
       </div>
 
       {/* ---- seating ---- */}

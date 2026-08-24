@@ -409,6 +409,62 @@ try {
   r.check(/data-org="carrying"/.test(seatSrc), 'in the seating plan the guest follows the pointer');
   r.check(/est complète/.test(seatSrc), 'and a full table says so instead of refusing silently');
 
+  // -------------------------------------------------------------------------
+  console.log('\n[9/9] V2 — editorial media, and real scenarios');
+  // -------------------------------------------------------------------------
+  const registry = read('design', 'editorialRegistry.ts');
+  r.check(!/from '\.\.\/game|weddingStore|localStorage/.test(registry),
+    'the editorial registry cannot reach the engine or storage');
+  r.check(/EDITORIAL_PEOPLE/.test(registry) && /EDITORIAL_COVERS/.test(registry)
+    && /EDITORIAL_TRACKS/.test(registry),
+    'it holds the portraits, the sleeves and the demonstration tracks');
+  r.check(/EDITORIAL_DISCLAIMER/.test(registry)
+    && /jamais à votre événement/.test(registry),
+    'and one sentence every demonstration must show');
+
+  const landingSrc2 = read('components', 'mirror', 'MirrorLanding.tsx');
+  r.check(/EDITORIAL_PEOPLE/.test(landingSrc2) && /EDITORIAL_TRACKS/.test(landingSrc2),
+    'the public page uses the registry rather than inventing its own assets');
+  r.check(/data-landing="closing-title"/.test(landingSrc2)
+    && /Tout commence par un moment/.test(landingSrc2)
+    && /Un mariage commence par un oui/.test(landingSrc2),
+    'the closing line is universal, with a wedding variant');
+
+  // A scenario is a branch: created, changed, compared, applied, discarded —
+  // and the real day never moves on its own. Executed, not read.
+  const scenPhases = store.phases.map((x) => `${x.id}:${x.startHour}`).join('|');
+  const scenario = store.createScenario('Pluie');
+  r.check(Boolean(scenario) && store.scenarios.length === 1, 'a scenario can be branched');
+  r.check(scenario.phases.length === store.phases.length,
+    'it copies the day, moment for moment', `${scenario.phases.length}/${store.phases.length}`);
+  r.check(store.createScenario('  ') === null, 'a scenario without a name is refused');
+
+  const first = scenario.phases[0];
+  r.check(store.scenarioShiftPhase(scenario.id, first.id, 0.5, true),
+    'a moment can be moved inside the branch');
+  r.check(store.phases.map((x) => `${x.id}:${x.startHour}`).join('|') === scenPhases,
+    'and the real day does not move', 'unchanged');
+  const scenDiff = store.scenarioDiff(scenario.id);
+  r.check(scenDiff.filter((d) => d.changed).length === scenario.phases.length,
+    'the comparison lists every moment carried', JSON.stringify(scenDiff.filter((d) => d.changed).length));
+  r.check(scenDiff.every((d) => !d.changed || d.deltaMinutes === 30),
+    'with the exact difference in minutes');
+
+  const applyOne = store.applyScenario(scenario.id, [first.id]);
+  r.check(applyOne?.applied.length === 1, 'a single line can be applied', JSON.stringify(applyOne));
+  r.check(store.phases.find((x) => x.id === first.id).startHour === first.startHour,
+    'and that moment now matches the branch');
+  const applyAll = store.applyScenario(scenario.id);
+  r.check(applyAll !== null && store.scenarioDiff(scenario.id).every((d) => !d.changed),
+    'applying everything aligns the day on the branch');
+  r.check(store.discardScenario(scenario.id) && store.scenarios.length === 0,
+    'a branch can be abandoned');
+
+  // Scenarios are part of the project snapshot, so they cannot travel.
+  const schema = read('game', 'persistenceSchema.ts');
+  r.check(/scenarios: TimelineScenario\[\]/.test(schema) && /{ key: 'scenarios', kind: 'list' }/.test(schema),
+    'scenarios are persisted with the project, and only with it');
+
   un();
 } finally {
   harness.cleanup();

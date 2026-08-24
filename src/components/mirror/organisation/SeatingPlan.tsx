@@ -18,6 +18,10 @@ export function SeatingPlan() {
   const store = weddingStore;
   const [carrying, setCarrying] = useState<{ guestId: string; name: string; x: number; y: number } | null>(null);
   const [overTable, setOverTable] = useState<string | null>(null);
+  // MEASURED: a quick drop landed nowhere. `overTable` is React state, so the
+  // pointerup handler could still read the value from before the last move.
+  // The ref is the truth; the state only drives the highlight.
+  const overRef = useRef<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
   const floorRef = useRef<HTMLDivElement>(null);
 
@@ -51,26 +55,29 @@ export function SeatingPlan() {
     if (!carrying) return;
     setCarrying({ ...carrying, x: e.clientX, y: e.clientY });
     const el = document.elementFromPoint(e.clientX, e.clientY)?.closest('[data-table-id]');
-    setOverTable(el?.getAttribute('data-table-id') ?? null);
+    const id = el?.getAttribute('data-table-id') ?? null;
+    overRef.current = id;
+    setOverTable(id);
   };
 
   const onPointerUp = () => {
     if (!carrying) return;
-    const target = overTable;
+    const target = overRef.current;
     const guestId = carrying.guestId;
     setCarrying(null);
     setOverTable(null);
+    overRef.current = null;
     const onFloor = target === 'unseated' ? null : target;
     if (target) drop(guestId, onFloor);
   };
 
   const startCarry = (e: React.PointerEvent, guestId: string, name: string) => {
-    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    try { (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId); } catch { /* keep carrying */ }
     setCarrying({ guestId, name, x: e.clientX, y: e.clientY });
   };
 
   return (
-    <div onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerCancel={() => setCarrying(null)}>
+    <div onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerCancel={() => { setCarrying(null); overRef.current = null; }}>
       <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', marginBottom: 16 }}>
         <button
           onClick={() => { store.addSeatingTable(8); setNote('Table ajoutée — 8 places.'); }}

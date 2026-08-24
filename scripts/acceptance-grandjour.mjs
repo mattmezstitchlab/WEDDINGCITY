@@ -321,11 +321,11 @@ const editorial = await p.evaluate(() => {
     scenarios: document.querySelectorAll('[data-landing="scenario-tab"]').length,
     steps: document.querySelectorAll('[data-landing="steps"] li').length,
     people: document.querySelectorAll('[data-landing="people"] .wc-gj-person').length,
-    music: document.querySelectorAll('[data-landing="music"] .wc-gj-music-row').length,
-    closing: /Tout commence par un oui/.test(t),
+    music: document.querySelectorAll('[data-landing="track"]').length,
+    closing: /commence par un oui|commence par un moment/.test(t),
     oldLine: /commence par un nom/.test(t),
-    honestMusic: /Aucune jaquette n’est inventée/.test(t),
-    honestPeople: /jamais un portrait inventé/.test(t),
+    honestMusic: /jamais à votre événement/.test(t),
+    honestPeople: /tant qu’une photo n’existe pas, des initiales/.test(t),
   };
 });
 say('  ' + JSON.stringify(editorial));
@@ -333,8 +333,8 @@ check('les sections numérotées 02 → 11 sont là', editorial.indexes.length >
 check('la section scénarios propose trois plans', editorial.scenarios === 3, String(editorial.scenarios));
 check('l’import est raconté en cinq étapes', editorial.steps === 5, String(editorial.steps));
 check('la section people montre les liens', editorial.people === 3, String(editorial.people));
-check('la section musique montre l’heure et la durée', editorial.music === 3, String(editorial.music));
-check('la dernière section dit « Tout commence par un oui »', editorial.closing);
+check('la section musique montre pochette, heure et durée', editorial.music === 3, String(editorial.music));
+check('la dernière section porte une accroche émotionnelle', editorial.closing);
 check('l’ancienne phrase administrative a disparu', !editorial.oldLine);
 check('aucune pochette ni portrait n’est inventé, et c’est écrit',
   editorial.honestMusic && editorial.honestPeople);
@@ -417,7 +417,10 @@ check('sa journée est vide', s.phases.length === 0, String(s.phases.length));
 check('le produit porte le nom LE GRAND JOUR', /LE GRAND JOUR/.test(s.text));
 
 // two moments around "now", so MODE JOUR J has something to say
-const nowH = new Date().getHours() + new Date().getMinutes() / 60;
+// The model counts the wedding night as 24 → 30, so an hour before dawn is
+// read as 25:00, not 01:00 — the test must place its moments the same way.
+const rawNow = new Date().getHours() + new Date().getMinutes() / 60;
+const nowH = rawNow < 7 ? rawNow + 24 : rawNow;
 const mk = async (name, start, minutes) => {
   await p.evaluate(() => {
     const btn = document.querySelector('[data-jourj="add-moment"]') || document.querySelector('[data-jourj="empty-add"]');
@@ -430,9 +433,9 @@ const mk = async (name, start, minutes) => {
   await clickTag('jourj', 'moment-create');
   await wait(500);
 };
-await mk('Cocktail', Math.max(7.5, nowH - 0.5), 90);
-await mk('Dîner', Math.min(26, nowH + 2), 120);
-await mk('Soirée', Math.min(26.5, nowH + 4), 120);
+await mk('Cocktail', Math.max(7.5, Math.min(25.5, nowH - 0.5)), 90);
+await mk('Dîner', Math.max(9, Math.min(26, nowH + 2)), 120);
+await mk('Soirée', Math.max(11, Math.min(27, nowH + 4)), 120);
 // A late moment typed as "01:04" must be read as the NIGHT of the wedding day.
 const nightMoment = (await stateOf()).phases.find((x) => x.name === 'Soirée');
 check('un moment tapé après minuit est placé dans la nuit du jour J',

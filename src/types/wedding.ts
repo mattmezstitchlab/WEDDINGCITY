@@ -476,6 +476,24 @@ export interface TimelinePhase {
   budget?: { amount?: number; deposit?: number; paid?: boolean };
 }
 
+/**
+ * A SCENARIO — a temporary branch of the day.
+ *
+ * It carries a full copy of the moments, with the SAME ids as the real ones, so
+ * a difference can be read moment by moment. It never carries the people, the
+ * documents or the money: those stay attached to the real moments, and a
+ * scenario only asks « et si les heures changeaient ? ».
+ *
+ * The main timeline stays the source of truth until the couple applies the
+ * scenario — entirely, or line by line.
+ */
+export interface TimelineScenario {
+  id: string;
+  name: string;
+  createdAt: string;
+  phases: TimelinePhase[];
+}
+
 export interface NeuralPulse {
   id: string;
   from: [number, number, number];

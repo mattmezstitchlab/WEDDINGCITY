@@ -291,18 +291,24 @@ check('et il ne parle que de choses vérifiables',
 await clickTag('org', 'add-table'); await wait(700);
 s = await state();
 check('une table a été créée', s.tables === 1, String(s.tables));
-const guestBox = await p.evaluate(() => {
+// Bring the plan into view first — a human scrolls to it before dragging.
+await p.evaluate(() => document.querySelector('[data-org="unseated-guest"]')?.scrollIntoView({ block: 'center' }));
+await wait(800);
+const boxes = await p.evaluate(() => {
   const g = document.querySelector('[data-org="unseated-guest"]');
-  if (!g) return null;
-  const r = g.getBoundingClientRect();
-  return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2), name: g.textContent.trim() };
-});
-const tableBox = await p.evaluate(() => {
   const t = document.querySelector('[data-org="table"]');
-  if (!t) return null;
-  const r = t.getBoundingClientRect();
-  return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) };
+  if (!g || !t) return null;
+  const gr = g.getBoundingClientRect();
+  const tr = t.getBoundingClientRect();
+  return {
+    guest: { x: Math.round(gr.left + gr.width / 2), y: Math.round(gr.top + gr.height / 2), name: g.textContent.trim() },
+    table: { x: Math.round(tr.left + tr.width / 2), y: Math.round(tr.top + tr.height / 2) },
+    viewport: window.innerHeight,
+  };
 });
+say('  ' + JSON.stringify(boxes));
+const guestBox = boxes?.guest ?? null;
+const tableBox = boxes?.table ?? null;
 if (guestBox && tableBox) {
   await p.mouse.move(guestBox.x, guestBox.y);
   await p.mouse.down();

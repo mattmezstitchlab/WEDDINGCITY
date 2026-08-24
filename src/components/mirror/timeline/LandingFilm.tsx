@@ -44,9 +44,16 @@ export function LandingFilm({ onOpenMoment, shifted }: {
 
   // The real clock, projected on the demonstration day — so the NOW marker is
   // a real time, not a decorative line.
-  const [clock, setClock] = useState(() => new Date().getHours() + new Date().getMinutes() / 60);
+  // MEASURED: at 03:00 the marker vanished — an hour before dawn belongs to the
+  // night of the day being shown, so it is read as 27:00, not 03:00.
+  const readClock = () => {
+    const d = new Date();
+    const h = d.getHours() + d.getMinutes() / 60;
+    return h < DAY_START ? h + 24 : h;
+  };
+  const [clock, setClock] = useState(readClock);
   useEffect(() => {
-    const id = setInterval(() => setClock(new Date().getHours() + new Date().getMinutes() / 60), 30000);
+    const id = setInterval(() => setClock(readClock()), 30000);
     return () => clearInterval(id);
   }, []);
 

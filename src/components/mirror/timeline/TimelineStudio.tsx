@@ -47,10 +47,16 @@ const MIN_CARD_PX = 96;
 const DEFAULT_DAY_START = 7;
 const DEFAULT_DAY_END = 27;
 
-/** The current time of day, in the same decimal hours as the model. */
+/**
+ * The current time of day, in the same decimal hours as the model.
+ *
+ * MEASURED at 03:00: the marker fell outside the drawn day and disappeared. The
+ * small hours belong to the night of the wedding day — 03:00 is 27:00 here.
+ */
 function nowHour(): number {
   const d = new Date();
-  return d.getHours() + d.getMinutes() / 60;
+  const h = d.getHours() + d.getMinutes() / 60;
+  return h < DEFAULT_DAY_START ? h + 24 : h;
 }
 
 /**

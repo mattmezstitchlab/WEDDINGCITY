@@ -6,6 +6,7 @@ import {
   TaskEntity,
   ConflictEntity,
   TimelinePhase,
+  TimelineScenario,
   GridWave,
   NeuralPulse,
   ImportPresetFile,
@@ -1518,6 +1519,8 @@ function createDefaultDomainState(): PersistedDomainState {
     conflicts: INITIAL_CONFLICTS,
     phases: TIMELINE_PHASES,
     tracks: INITIAL_TRACKS,
+    // A day starts with no parallel branch, demo included.
+    scenarios: [],
     reconstructedVenues: INITIAL_RECONSTRUCTED_VENUES,
     placedObjects: INITIAL_RECONSTRUCTED_VENUES[0].objects,
     adSlots: INITIAL_AD_SLOTS,
@@ -1559,7 +1562,7 @@ function createEmptyDomainState(): PersistedDomainState {
     userIdentity: DEFAULT_USER_IDENTITY,
     userDmcIdentity: DEFAULT_DMC_IDENTITY,
     places: [], agents: [], docs: [], tasks: [], conflicts: [], phases: [],
-    tracks: [], reconstructedVenues: [], placedObjects: [], adSlots: [],
+    tracks: [], scenarios: [], reconstructedVenues: [], placedObjects: [], adSlots: [],
     persons: [], accounts: [], dmcIdentities: [], guests: [], vendors: [],
     seatingTables: [], memberships: [], invitations: [], trackVotes: [],
     media: [], relationships: [],
@@ -1717,6 +1720,9 @@ class WeddingStore {
   public tasks: TaskEntity[] = clone(INITIAL_TASKS);
   public conflicts: ConflictEntity[] = clone(INITIAL_CONFLICTS);
   public phases: TimelinePhase[] = clone(TIMELINE_PHASES);
+  /** Temporary branches of the day. See the SCÉNARIOS block below. */
+  public scenarios: TimelineScenario[] = [];
+  public activeScenarioId: string | null = null;
   public tracks: TrackEntity[] = clone(INITIAL_TRACKS);
 
   public selectedEntity: {
@@ -2647,6 +2653,175 @@ class WeddingStore {
       out.push({ level: 'ok', title: 'Rien à signaler', detail: 'Aucun chevauchement, aucun trou, aucun dépassement de capacité.' });
     }
     return out;
+  }
+
+  // =========================================================================
+  // SCÉNARIOS — a parallel day, next to the real one.
+  //
+  // TECHNICAL AUDIT BEHIND THIS DESIGN (see docs/AUDIT-V2.md):
+  //   · source of truth  : this.phases, and nothing else;
+  //   · snapshot         : serializeDomain/applyDomain already clone the whole
+  //                        domain, so cloning the phases alone is safe and
+  //                        cheap — a scenario is just that clone, with the
+  //                        SAME ids so a difference reads moment by moment;
+  //   · rollback         : discarding a scenario deletes the branch; nothing
+  //                        else was ever touched;
+  //   · propagation      : the branch reuses the same arithmetic as the real
+  //                        timeline (shift the moment, carry the followers);
+  //   · isolation        : scenarios live inside the project snapshot, so they
+  //                        cannot travel between weddings;
+  //   · duplication risk : none — no second timeline engine, no second store.
+  //
+  // THE RULE: the main timeline is never modified until the couple applies the
+  // scenario — entirely, or one line at a time.
+  // =========================================================================
+
+  /** Branch the day. The scenario starts as an exact copy of today's plan. */
+  public createScenario(name: string): TimelineScenario | null {
+    const clean = name?.trim();
+    if (!clean) return null;
+    this.beginMutation('Créer un scénario');
+    const scenario: TimelineScenario = {
+      id: freshId('scen'),
+      name: clean,
+      createdAt: new Date().toISOString(),
+      phases: clone(this.phases),
+    };
+    this.scenarios = [...this.scenarios, scenario];
+    this.activeScenarioId = scenario.id;
+    this.saveCurrentState();
+    this.notify();
+    return scenario;
+  }
+
+  public setActiveScenario(scenarioId: string | null): void {
+    if (scenarioId && !this.scenarios.some((s) => s.id === scenarioId)) return;
+    this.activeScenarioId = scenarioId;
+    this.notify();
+  }
+
+  public renameScenario(scenarioId: string, name: string): boolean {
+    const scenario = this.scenarios.find((s) => s.id === scenarioId);
+    const clean = name?.trim();
+    if (!scenario || !clean) return false;
+    this.beginMutation('Renommer le scénario');
+    scenario.name = clean;
+    this.saveCurrentState();
+    this.notify();
+    return true;
+  }
+
+  /** Delete a branch. The real day never knew it existed. */
+  public discardScenario(scenarioId: string): boolean {
+    const before = this.scenarios.length;
+    this.beginMutation('Abandonner le scénario');
+    this.scenarios = this.scenarios.filter((s) => s.id !== scenarioId);
+    if (this.activeScenarioId === scenarioId) this.activeScenarioId = null;
+    this.saveCurrentState();
+    this.notify();
+    return this.scenarios.length < before;
+  }
+
+  /**
+   * Move a moment INSIDE a scenario. `withFollowing` carries everything that
+   * came after it, exactly like the real timeline does.
+   */
+  public scenarioShiftPhase(
+    scenarioId: string,
+    phaseId: string,
+    deltaHours: number,
+    withFollowing = true,
+  ): boolean {
+    const scenario = this.scenarios.find((s) => s.id === scenarioId);
+    const phase = scenario?.phases.find((p) => p.id === phaseId);
+    if (!scenario || !phase || !Number.isFinite(deltaHours) || Math.abs(deltaHours) < 1e-6) return false;
+
+    const origin = phase.startHour;
+    const targets = withFollowing
+      ? scenario.phases.filter((p) => p.startHour >= origin)
+      : [phase];
+    for (const p of targets) {
+      if (!this.canPlacePhase(p.startHour + deltaHours, p.endHour - p.startHour)) return false;
+    }
+    this.beginMutation('Modifier le scénario');
+    for (const p of targets) this.applyPhaseTime(p, p.startHour + deltaHours, p.endHour - p.startHour);
+    scenario.phases.sort((a, b) => a.startHour - b.startHour);
+    this.saveCurrentState();
+    this.notify();
+    return true;
+  }
+
+  /** Change a moment's place inside a scenario (the « plan B » case). */
+  public scenarioSetPhasePlace(scenarioId: string, phaseId: string, placeId: string | null): boolean {
+    const scenario = this.scenarios.find((s) => s.id === scenarioId);
+    const phase = scenario?.phases.find((p) => p.id === phaseId);
+    if (!scenario || !phase) return false;
+    if (placeId !== null && !this.places.some((p) => p.id === placeId)) return false;
+    this.beginMutation('Lieu du scénario');
+    phase.primaryPlaceId = placeId ?? '';
+    this.saveCurrentState();
+    this.notify();
+    return true;
+  }
+
+  /** What this scenario would change, moment by moment. Pure read. */
+  public scenarioDiff(scenarioId: string): {
+    phaseId: string; name: string;
+    fromStart: number; toStart: number; deltaMinutes: number;
+    fromPlaceId: string; toPlaceId: string;
+    changed: boolean;
+  }[] {
+    const scenario = this.scenarios.find((s) => s.id === scenarioId);
+    if (!scenario) return [];
+    return scenario.phases.map((branch) => {
+      const real = this.phases.find((p) => p.id === branch.id);
+      const fromStart = real?.startHour ?? branch.startHour;
+      const fromPlaceId = real?.primaryPlaceId ?? '';
+      const deltaMinutes = Math.round((branch.startHour - fromStart) * 60);
+      return {
+        phaseId: branch.id,
+        name: branch.name,
+        fromStart,
+        toStart: branch.startHour,
+        deltaMinutes,
+        fromPlaceId,
+        toPlaceId: branch.primaryPlaceId,
+        changed: deltaMinutes !== 0 || fromPlaceId !== branch.primaryPlaceId,
+      };
+    }).sort((a, b) => a.toStart - b.toStart);
+  }
+
+  /**
+   * Bring a scenario into the real day — all of it, or only the moments given.
+   * One mutation, so a single undo puts the day back exactly as it was.
+   */
+  public applyScenario(scenarioId: string, onlyPhaseIds?: string[]): { applied: string[] } | null {
+    const scenario = this.scenarios.find((s) => s.id === scenarioId);
+    if (!scenario) return null;
+    const wanted = new Set(onlyPhaseIds ?? scenario.phases.map((p) => p.id));
+
+    const plan = scenario.phases.filter((p) => wanted.has(p.id) && this.phases.some((r) => r.id === p.id));
+    for (const p of plan) {
+      if (!this.canPlacePhase(p.startHour, p.endHour - p.startHour)) return null;
+    }
+
+    this.beginMutation('Appliquer le scénario');
+    const applied: string[] = [];
+    for (const branch of plan) {
+      const real = this.phases.find((p) => p.id === branch.id);
+      if (!real) continue;
+      const changed = real.startHour !== branch.startHour
+        || real.endHour !== branch.endHour
+        || real.primaryPlaceId !== branch.primaryPlaceId;
+      real.startHour = branch.startHour;
+      real.endHour = branch.endHour;
+      real.primaryPlaceId = branch.primaryPlaceId;
+      if (changed) applied.push(real.id);
+    }
+    this.phases.sort((a, b) => a.startHour - b.startHour);
+    this.saveCurrentState();
+    this.notify();
+    return { applied };
   }
 
   /**

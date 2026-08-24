@@ -50,6 +50,7 @@ import {
   ConflictEntity,
   TrackEntity,
   TimelinePhase,
+  TimelineScenario,
   UserIdentity,
   ReconstructedVenue,
   PlacedObject,
@@ -83,6 +84,8 @@ export interface PersistedDomainState {
   conflicts: ConflictEntity[];
   phases: TimelinePhase[];
   tracks: TrackEntity[];
+  /** Temporary branches of the day. Empty for almost every project. */
+  scenarios: TimelineScenario[];
   reconstructedVenues: ReconstructedVenue[];
   placedObjects: PlacedObject[];
   adSlots: AdDisplaySlot[];
@@ -138,6 +141,7 @@ export const PERSISTED_FIELDS = [
   { key: 'conflicts', kind: 'list' },
   { key: 'phases', kind: 'list', emptyListMeansUnset: true },
   { key: 'tracks', kind: 'list' },
+  { key: 'scenarios', kind: 'list' },
   { key: 'reconstructedVenues', kind: 'list', emptyListMeansUnset: true },
   { key: 'placedObjects', kind: 'list' },
   { key: 'adSlots', kind: 'list', emptyListMeansUnset: true },
