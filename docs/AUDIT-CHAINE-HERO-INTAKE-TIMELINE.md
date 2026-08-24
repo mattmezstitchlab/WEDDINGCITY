@@ -736,3 +736,344 @@ Cette priorité évite de produire une nouvelle couche graphique sur une chaîne
 qui pourrait encore écrire des données par plusieurs chemins.
 
 **Audit terminé. Aucune implémentation de code n’a été réalisée.**
+
+## 19. Décision d’architecture proposée
+
+Cette section ne modifie pas le code. Elle fixe la responsabilité de chaque
+surface avant toute suppression.
+
+### 19.1 HERO
+
+**Rôle final :** une seule entrée de description et d’import.
+
+Le Hero ne crée jamais directement un projet. Champ vide ou champ rempli,
+flèche et action « Créer » ouvrent le même Intake. Le type d’événement reste
+un choix du Hero, car il change le vocabulaire d’analyse.
+
+### 19.2 RAPPORT
+
+**Rôle final :** une revue pré-écriture du même `IntakePlan`.
+
+Le rapport montre les faits, les preuves, les niveaux de certitude, les lacunes
+et les corrections. Il ne devient ni une page de gestion durable ni une
+nouvelle entité Report.
+
+### 19.3 ÉVÉNEMENT
+
+**Rôle final :** le panneau événement partagé par le Jour J.
+
+`EventPanel` est la seule porte des propriétés de `WeddingProject` : nom,
+nature, date, lieu principal, jauge. `ProjectSettingsModal` et les modales de
+création historiques ne sont pas des portes du produit principal.
+
+### 19.4 JOUR J / TIMELINE
+
+**Rôle final :** `TimelineStudio` est le poste de pilotage principal.
+
+Il concentre :
+
+- la lecture temporelle ;
+- l’ajout et le déplacement de moments ;
+- le focus sur le premier moment utile ;
+- la simulation temporaire ;
+- l’ouverture du `MomentHub` ;
+- l’état de chaque moment.
+
+Le clic sur une carte ouvre le `MomentHub` dans le même univers. Le déplacement
+par glissement reste un geste propre à la pellicule, validé par la même logique
+métier ; il ne doit pas créer un second formulaire de temps.
+
+### 19.5 MOMENTHUB
+
+**Rôle final :** porte unique de toute propriété appartenant directement à un
+moment.
+
+Cela comprend : heure, durée, titre, sous-titre, lieu, personnes,
+prestataires, musique, médias, tâches, notes, repas, logistique, budget,
+certitude et scénarios liés.
+
+Les autres surfaces peuvent résumer ou pointer vers le Hub, mais ne doivent pas
+réécrire ces propriétés.
+
+### 19.6 COMPOSER / CANVAS
+
+**Décision proposée :** Composer ne doit plus être une destination de gestion de
+la journée.
+
+Le programme du Canvas réordonne les mêmes moments et écrit déjà une partie des
+mêmes relations. Il n’a pas de capacité autonome suffisante face à la Timeline
+et au MomentHub. Son onglet `Ordre du jour` doit donc sortir de l’expérience
+principale.
+
+Les fiches transverses `Personnes`, `Prestataires`, `Lieux`, `Musique` et
+`Médias` peuvent rester utiles, car elles travaillent sur une entité à travers
+plusieurs moments. Elles doivent être réduites à ce rôle précis :
+
+- pas de seconde Timeline ;
+- pas d’édition de propriété d’un moment ;
+- pas de bouton « Voir dans le Monde » depuis le produit ;
+- retour explicite vers le moment concerné quand une relation est consultée.
+
+Le shell clair pleine page est donc soit transformé en panneau de fiches
+transverses secondaire, soit rendu accessible depuis un contexte précis. Il ne
+figure plus comme « Composer » dans la navigation du couple.
+
+### 19.7 MIRRORTIMELINE
+
+**Rôle final :** projection éditoriale de lecture, pas outil de pilotage.
+
+Elle peut présenter le récit d’une journée, mais :
+
+- elle ne contient aucun formulaire ;
+- un clic sur un moment ouvre le `MomentHub` ;
+- un clic sur une relation ouvre la fiche concernée ou le Hub ;
+- elle ne doit pas ouvrir le World depuis le produit principal.
+
+Si sa présence crée une impression de Timeline 2, elle doit être réduite à une
+lecture narrative ou à un lien de retour vers le Jour J.
+
+### 19.8 CALENDRIER
+
+**Rôle final :** projection de navigation à plusieurs échelles.
+
+Il lit la même date et les mêmes phases, n’édite pas un moment, ne possède pas
+de stockage parallèle et renvoie au Jour J en centrant le moment demandé.
+
+### 19.9 ORGANISATION
+
+**Rôle final :** projection transversale pour l’équipe, le plan de table, les
+scénarios et les documents répartis sur plusieurs moments.
+
+Elle ne réédite pas un moment. Un élément qui concerne un moment renvoie au
+`MomentHub` de ce moment.
+
+### 19.10 ADMINISTRATION
+
+**Rôle final :** surface séparée pour plusieurs événements et coordination.
+
+Elle ne doit pas apparaître comme une rubrique normale d’un mariage de couple.
+La condition actuelle est une politique d’interface locale. Elle ne constitue
+pas une sécurité technique tant qu’aucun serveur ne porte l’autorité.
+
+## 20. Matrice complète des responsabilités
+
+| Fonction | Donnée | Propriété de quoi ? | Interface actuelle | Interface unique recommandée | Décision |
+|---|---|---|---|---|---|
+| Décrire le projet | texte + fichiers | intention d’entrée | Hero, `WeddingCreationModal` | Hero → Intake | Fusionner |
+| Choisir la nature | `eventTypeId` | événement | Hero, EventPanel, anciennes modales | Hero avant création, EventPanel après | Deux moments du cycle, une écriture par étape |
+| Lire les faits | `IntakePlan` | proposition temporaire | IntakeStudio | IntakeStudio | Garder |
+| Corriger le rapport | `IntakePlan` | proposition temporaire | IntakeStudio | IntakeStudio | Garder |
+| Créer le projet | `WeddingProject` + domaine | événement + projet | Intake, WeddingCreation, CreateWedding | commande unique d’application | Fusionner |
+| Nom/date/lieu/jauge | `WeddingProject` | événement | EventPanel, ProjectSettings, créations | EventPanel après création | Retirer les doublons principaux |
+| Ajouter un moment | `TimelinePhase` | moment | TimelineStudio, modèles | TimelineStudio | Garder |
+| Lire l’heure et la durée | `TimelinePhase` | moment | TimelineStudio, MirrorTimeline, Canvas | TimelineStudio | Les autres lisent seulement |
+| Modifier heure/durée/titre | `TimelinePhase` | moment | MomentHub, geste Timeline, anciens Canvas | MomentHub + geste temporel Timeline | Un seul éditeur, geste contrôlé |
+| Réordonner les moments | ordre des `phases` | journée | Timeline, MomentHub, Canvas Programme | Timeline, avec accessibilité Hub | Retirer du Canvas |
+| Associer un lieu | `primaryPlaceId` | relation moment → lieu | MomentHub, Canvas lecture, fiches | MomentHub | Une porte d’attache |
+| Modifier une fiche lieu | `Place` | entité transverse | Canvas Places, anciennes surfaces World | fiche transverse ciblée | Garder hors édition de moment |
+| Associer une personne | `personIds` | relation moment → personne | MomentHub | MomentHub | Garder |
+| Modifier une personne | `Person` / `Guest` | entité transverse | Canvas People, CrewPanel | fiche transverse ciblée | Garder hors moment |
+| Associer un prestataire | `vendorIds` | relation moment → prestataire | MomentHub | MomentHub | Garder |
+| Modifier un prestataire | `Vendor` | entité transverse | Canvas Vendors, CrewPanel | fiche transverse ciblée | Garder hors moment |
+| Associer musique | `linkedPhaseId` / `phase.trackIds` | relation morceau → moment | MomentHub, Canvas Programme, MusicSurface | MomentHub pour la relation | Retirer la liaison concurrente du Canvas |
+| Modifier un morceau | `TrackEntity` | ressource musicale | Canvas Music, MomentHub partiel | fiche musique pour la ressource | Garder une fiche, pas deux relations |
+| Associer média/document | `MediaAsset.ownerKind/ownerId` | ressource ou relation | MomentHub, Canvas Programme, MediaSurface | MomentHub pour un moment | Clarifier MediaSurface comme collection |
+| Créer une tâche | `TaskEntity` | action liée au moment | MomentHub, Crew / anciens outils | MomentHub pour une tâche de moment | Contextualiser |
+| Lire les risques | `phaseFindings` | projection du moment | carte, MomentHub | carte résumé + Hub détail | Garder un seul moteur |
+| Lire l’état global | `projectFindings`, `readiness` | projection événement | Lab, Cockpit, Admin | Cockpit + Hub/Lab selon portée | Garder, sans duplication de calcul |
+| Créer un scénario | `TimelineScenario` | branche de journée | SimulationBar, MomentHub, EventPanel, Organisation | SimulationBar ou Hub selon contexte | Un moteur, deux contextes lisibles |
+| Déplacer en simulation | état temporaire | projection de journée | SimulationBar textuelle | TimelineStudio + SimulationBar | Étendre visuellement |
+| Appliquer une simulation | `phases` | journée réelle | SimulationBar, ScenariosPanel | action explicite dans simulation | Garder |
+| Déclarer l’extérieur | `phase.outdoor` | propriété du moment | MomentHub | MomentHub | Garder |
+| Tester la météo | `weatherImpact` | projection temporaire | SimulationBar | même simulation dans Timeline | Étendre sans stockage parallèle |
+| Lire plusieurs jours | `calendarDays` | calendrier dérivé | CalendarStudio | CalendarStudio | Garder |
+| Ouvrir un jour | projet actif + focus phase | navigation | Calendrier, Admin, recherche | `openMoment()` puis Timeline | Une porte de focus |
+| Lire un moment dans le récit | `phases` | projection éditoriale | MirrorTimeline | lecture + Hub | Pas d’édition locale |
+| Explorer le World | projection legacy | outil historique | plusieurs boutons Mirror/Canvas | aucune porte produit | Retirer des surfaces principales |
+| Administrer plusieurs événements | projets persistés | exploitation | AdminConsole | Admin séparée, politique locale | Garder hors couple |
+
+## 21. Audit des boutons par nature sémantique
+
+### Naviguer vers un lieu de produit
+
+- `La journée` → `jour-j` ;
+- `Les gens` → fiches / projection personnes ;
+- `L’organisation` → organisation transversale ;
+- `Souvenirs` → médias ;
+- `Calendrier` → projection calendrier.
+
+Ces entrées peuvent rester dans une navigation courte, mais elles ne doivent
+pas contenir d’écriture cachée.
+
+### Agir
+
+- `Créer` ;
+- `+ Ajouter un moment` ;
+- `Créer une tâche` ;
+- `Générer un document` ;
+- `Créer un plan B` ;
+- `Appliquer` ;
+- `Décaler pour de vrai` ;
+- `Abandonner` / `Ne rien changer`.
+
+Ces actions doivent être affichées à proximité de l’objet qu’elles modifient,
+pas dans la navigation globale.
+
+### Configurer ou lire un mode
+
+- zoom ;
+- `Toute la journée` ;
+- `Mode Jour J` ;
+- sections d’accordéon ;
+- échelles du Calendrier ;
+- filtre et recherche.
+
+Ces éléments sont des contrôles de lecture ou de contexte, pas des lieux de
+stockage.
+
+### Ouvrir un contexte
+
+- clic sur une carte de moment ;
+- `Ouvrir ce moment` ;
+- `Régler ce moment` ;
+- `Ouvrir ce moment` depuis une simulation ;
+- ouverture depuis Calendrier, recherche ou Administration.
+
+Tous doivent converger vers `openMoment()` puis `MomentHub`.
+
+### Administrer
+
+- `Administration` ;
+- filtres multi-événements ;
+- dossiers personne inter-événements.
+
+Ces commandes restent hors de la navigation courante du couple.
+
+### Accès World à retirer du produit principal
+
+L’audit du code trouve encore des appels et libellés visibles dans :
+
+- `MirrorTimeline.tsx` ;
+- `MirrorPeople.tsx` ;
+- `MirrorSections.tsx` ;
+- `CanvasCore.tsx`.
+
+Exemples : `Voir dans le Monde`, `Explorer dans le Monde`,
+`showEventInWorld()`, `showPlaceInWorld()` et `showPersonInWorld()`.
+
+C’est une contradiction concrète avec la décision de ne plus exposer le World
+comme destination du produit principal. Une relation lisible doit ouvrir le Hub
+ou une fiche, pas changer de projection.
+
+## 22. Couverture du moteur de simulation
+
+Le moteur commun peut recevoir les cas suivants sans nouveau moteur :
+
+| Situation | Calcul commun nécessaire | Projection temporaire | Donnée réelle modifiée seulement après |
+|---|---|---|---|
+| Retard / avance | décalage signé + propagation | cartes et horaires simulés | validation utilisateur |
+| Changement de durée | nouvelle fin + propagation éventuelle | largeur et suites impactées | validation utilisateur |
+| Pluie / canicule | sélection des moments extérieurs déclarés | accent visuel, moments concernés, alternatives existantes | création/applicaton d’un scénario |
+| Prestataire indisponible | retrait simulé d’une relation + conflits | personnes/moments à risque | validation ou remplacement explicite |
+| Déplacement d’un lieu | changement simulé de `primaryPlaceId` | lieu alternatif et impacts | application du scénario |
+| Annulation d’un moment | phase marquée dans la branche | carte barrée / suites recalculées | application explicite |
+| Moment prolongé | variation de durée ou fin | largeur, marges, collisions | validation utilisateur |
+
+Le contrat commun doit être une projection de branche avec :
+
+- un état source réel immuable pendant le test ;
+- un état projeté non persisté ;
+- la liste des éléments affectés ;
+- les conflits ;
+- les marges restantes ;
+- les options « appliquer », « créer un scénario », « revenir à la réalité ».
+
+Pour la pluie, aucune météo réelle ne doit être suggérée. Le ciel et la pluie
+visuels sont une ambiance de simulation, pas une prévision. Ils peuvent être
+animés dans le même environnement de Timeline, sans réintroduire le World comme
+seconde destination.
+
+## 23. Plan final en passes
+
+### Passe A — décision d’architecture
+
+- appliquer la matrice ci-dessus comme contrat de responsabilité ;
+- sortir Composer de la navigation comme poste de pilotage ;
+- conserver seulement les fiches transverses utiles ;
+- faire de MomentHub l’unique éditeur contextuel ;
+- transformer MirrorTimeline en lecture ;
+- retirer les accès World des surfaces principales ;
+- réduire la navigation aux lieux, avec actions et contextes à part.
+
+**Garde-fou :** aucun champ supprimé sans retrouver sa porte unique dans
+MomentHub, EventPanel ou une fiche transverse.
+
+### Passe B — chaîne HERO → Rapport → Événement
+
+- un seul Intake champ rempli ou vide ;
+- correction du faux couple ;
+- lecture des entités explicitement nommées ;
+- absence de rôle transformé en nom ;
+- dates réelles ;
+- occurrences non fusionnées à tort ;
+- suppression des valeurs par défaut inventées.
+
+### Passe C — application unique
+
+- une commande d’application du plan ;
+- documents dans `MediaAsset` uniquement ;
+- preuves et certitudes conservées ;
+- relations vers les moments fondées sur les preuves ;
+- idempotence et absence de doublon après génération et reload.
+
+### Passe D — arrivée intelligente dans le Jour J
+
+- ouverture directe de `TimelineStudio` ;
+- cadrage sur la plage réellement créée ;
+- premier moment visible immédiatement ;
+- focus cohérent si l’entrée vient du Calendrier, de la recherche ou du rapport ;
+- MomentHub ouvrable sans changement mental de produit.
+
+### Passe E — simulation visible
+
+- projection temporaire sur les cartes réelles ;
+- retard, avance, durée et propagation ;
+- conflits et marges visibles ;
+- météo simulée et moments extérieurs identifiés ;
+- scénario appliqué uniquement après validation ;
+- retour à la journée réelle sans écriture cachée.
+
+### Passe F — nettoyage UX
+
+- navigation mobile lisible ;
+- actions sorties de la barre globale ;
+- pictogrammes sémantiques unifiés avec `Icons.tsx` ;
+- une information = un signal principal ;
+- suppression des badges redondants ;
+- revue visuelle 1440 / 1024 / 768 / 390 px.
+
+## 24. Acceptation de l’architecture avant modification
+
+Les décisions à confirmer avant le premier changement de code sont :
+
+1. `Composer` sort-il bien de la navigation principale comme poste de pilotage ?
+2. Ses fiches transverses restent-elles accessibles dans une surface secondaire,
+   sans onglet `Ordre du jour` ?
+3. `MomentHub` devient-il la porte unique d’édition directe d’un moment ?
+4. `MirrorTimeline` reste-t-elle une lecture éditoriale, sans accès World ?
+5. La simulation doit-elle projeter les horaires sur les cartes existantes sans
+   jamais modifier `phases` avant validation ?
+6. Le premier cadrage après génération doit-il se faire sur la plage occupée,
+   avec le premier moment réel visible ?
+
+### Recommandation
+
+Je recommande de valider les six points ci-dessus. Ils respectent le moteur
+existant, évitent une refonte et donnent une règle simple :
+
+> **La Timeline lit et pilote la journée. Le MomentHub édite un moment. Les
+> fiches transverses éditent une entité. Le Calendrier navigue. Le récit lit.
+> L’Administration reste séparée.**
+
+**État final : audit complété, matrice des responsabilités produite, aucune
+modification de code réalisée. Arrêt avant implémentation.**
