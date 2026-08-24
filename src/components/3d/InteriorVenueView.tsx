@@ -1,9 +1,10 @@
-import { useRef, useMemo } from 'react';
+import { useRef, useMemo, useEffect } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { RoundedBox } from '@react-three/drei';
 import * as THREE from 'three';
 import { weddingStore, BRAND_ACCENT } from '../../game/weddingStore';
 import { PlacedObject } from '../../types/wedding';
+import { installInput, moveAxes } from '../../game/input';
 
 interface InteriorVenueViewProps {
   venueId: string;
@@ -20,25 +21,28 @@ export function InteriorVenueView({ venueId }: InteriorVenueViewProps) {
   const leftArmRef = useRef<THREE.Mesh>(null);
   const rightArmRef = useRef<THREE.Mesh>(null);
 
-  // Keyboard state for avatar movement
-  const keys = useRef<{ w: boolean; a: boolean; s: boolean; d: boolean }>({ w: false, a: false, s: false, d: false });
+  // Keyboard state for avatar movement.
+  //
+  // This used to be a local `keys` ref that NOTHING ever wrote to, so WASD was
+  // silently inert. The project already shipped a correct, well-tested input
+  // module (game/input.ts) that was never mounted — we install it here rather
+  // than re-implementing key handling.
+  useEffect(() => installInput(), []);
 
   useFrame((state, delta) => {
     // 1. WASD movement of player avatar inside the venue
-    let moveX = 0;
-    let moveZ = 0;
-    if (keys.current.w) moveZ -= 1;
-    if (keys.current.s) moveZ += 1;
-    if (keys.current.a) moveX -= 1;
-    if (keys.current.d) moveX += 1;
+    // moveAxes() is already normalized (diagonals clamped to length 1) and
+    // supports both WASD and the arrow keys. y = forward, scene forward = -Z.
+    const axes = moveAxes();
+    const moveX = axes.x;
+    const moveZ = -axes.y;
 
     const isWalking = moveX !== 0 || moveZ !== 0;
 
     if (isWalking) {
-      const length = Math.hypot(moveX, moveZ);
       const speed = 7.0 * delta;
-      const targetX = THREE.MathUtils.clamp(store.avatarPos[0] + (moveX / length) * speed, -13, 13);
-      const targetZ = THREE.MathUtils.clamp(store.avatarPos[2] + (moveZ / length) * speed, -13, 13);
+      const targetX = THREE.MathUtils.clamp(store.avatarPos[0] + moveX * speed, -13, 13);
+      const targetZ = THREE.MathUtils.clamp(store.avatarPos[2] + moveZ * speed, -13, 13);
       store.avatarPos = [targetX, 0, targetZ];
       store.avatarRot = Math.atan2(moveX, moveZ);
 
@@ -80,29 +84,24 @@ export function InteriorVenueView({ venueId }: InteriorVenueViewProps) {
 
       {/* 1. Architectural Perimeter Walls with Glass Windows & Door Portals */}
       {/* Back Wall */}
-      <mesh position={[0, 4, -14]} receiveShadow>
-        <boxGeometry args={[30, 8, 0.4]} />
+      <RoundedBox args={[30, 8, 0.4]} radius={0.045} smoothness={3} position={[0, 4, -14]} receiveShadow>
         <meshStandardMaterial color="#ded7cb" roughness={0.7} />
-      </mesh>
+      </RoundedBox>
       {/* Front Entrance Wall */}
-      <mesh position={[-9, 4, 14]} receiveShadow>
-        <boxGeometry args={[12, 8, 0.4]} />
+      <RoundedBox args={[12, 8, 0.4]} radius={0.045} smoothness={3} position={[-9, 4, 14]} receiveShadow>
         <meshStandardMaterial color="#ded7cb" roughness={0.7} />
-      </mesh>
-      <mesh position={[9, 4, 14]} receiveShadow>
-        <boxGeometry args={[12, 8, 0.4]} />
+      </RoundedBox>
+      <RoundedBox args={[12, 8, 0.4]} radius={0.045} smoothness={3} position={[9, 4, 14]} receiveShadow>
         <meshStandardMaterial color="#ded7cb" roughness={0.7} />
-      </mesh>
+      </RoundedBox>
       {/* Left Wall */}
-      <mesh position={[-15, 4, 0]} rotation={[0, Math.PI / 2, 0]} receiveShadow>
-        <boxGeometry args={[28, 8, 0.4]} />
+      <RoundedBox args={[28, 8, 0.4]} radius={0.045} smoothness={3} position={[-15, 4, 0]} rotation={[0, Math.PI / 2, 0]} receiveShadow>
         <meshStandardMaterial color="#ded7cb" roughness={0.7} />
-      </mesh>
+      </RoundedBox>
       {/* Right Wall */}
-      <mesh position={[15, 4, 0]} rotation={[0, Math.PI / 2, 0]} receiveShadow>
-        <boxGeometry args={[28, 8, 0.4]} />
+      <RoundedBox args={[28, 8, 0.4]} radius={0.045} smoothness={3} position={[15, 4, 0]} rotation={[0, Math.PI / 2, 0]} receiveShadow>
         <meshStandardMaterial color="#ded7cb" roughness={0.7} />
-      </mesh>
+      </RoundedBox>
 
       {/* 2. Steel & Timber Vaulted Ceiling with Skylights */}
       <mesh position={[0, 8, 0]} rotation={[Math.PI / 2, 0, 0]}>
@@ -116,11 +115,11 @@ export function InteriorVenueView({ venueId }: InteriorVenueViewProps) {
           <group key={`${i}_${j}`} position={[cx, 6.2, cz]}>
             <mesh>
               <cylinderGeometry args={[0.02, 0.02, 1.8, 8]} />
-              <meshStandardMaterial color="#e2b448" metalness={0.9} />
+              <meshStandardMaterial color="#e2b448" metalness={0.55} /*tok:brass*/ />
             </mesh>
             <mesh position={[0, -0.9, 0]}>
               <sphereGeometry args={[0.3, 12, 12]} />
-              <meshStandardMaterial color="#ffe8be" emissive="#ffc46b" emissiveIntensity={1.2} />
+              <meshStandardMaterial color="#ffe8be" emissive="#ffc46b" emissiveIntensity={0.42} />
             </mesh>
             <pointLight intensity={1.5} distance={14} color="#ffeed4" />
           </group>
@@ -172,14 +171,12 @@ export function InteriorVenueView({ venueId }: InteriorVenueViewProps) {
         </RoundedBox>
 
         {/* Legs */}
-        <mesh ref={leftLegRef} position={[-0.11, 0.22, 0]}>
-          <boxGeometry args={[0.13, 0.42, 0.13]} />
+        <RoundedBox args={[0.13, 0.42, 0.13]} radius={0.036} smoothness={3} ref={leftLegRef} position={[-0.11, 0.22, 0]}>
           <meshStandardMaterial color="#111520" />
-        </mesh>
-        <mesh ref={rightLegRef} position={[0.11, 0.22, 0]}>
-          <boxGeometry args={[0.13, 0.42, 0.13]} />
+        </RoundedBox>
+        <RoundedBox args={[0.13, 0.42, 0.13]} radius={0.036} smoothness={3} ref={rightLegRef} position={[0.11, 0.22, 0]}>
           <meshStandardMaterial color="#111520" />
-        </mesh>
+        </RoundedBox>
       </group>
     </group>
   );
@@ -229,7 +226,7 @@ function SinglePlacedObject3D({
           {/* Table Runner & Candle */}
           <mesh position={[0, 0.9, 0]}>
             <cylinderGeometry args={[0.2, 0.15, 0.25, 8]} />
-            <meshStandardMaterial color="#ffe8be" emissive="#ffc46b" emissiveIntensity={0.8} />
+            <meshStandardMaterial color="#ffe8be" emissive="#ffc46b" emissiveIntensity={0.42} />
           </mesh>
           {/* Chairs surrounding table */}
           {Array.from({ length: obj.tableCapacity || 8 }).map((_, cIdx) => {
@@ -237,32 +234,29 @@ function SinglePlacedObject3D({
             const cx = Math.cos(angle) * 1.5;
             const cz = Math.sin(angle) * 1.5;
             return (
-              <mesh key={cIdx} position={[cx, 0.32, cz]} rotation={[0, -angle + Math.PI / 2, 0]} castShadow>
-                <boxGeometry args={[0.4, 0.65, 0.4]} />
+              <RoundedBox args={[0.4, 0.65, 0.4]} radius={0.045} smoothness={3} key={cIdx} position={[cx, 0.32, cz]} rotation={[0, -angle + Math.PI / 2, 0]} castShadow>
                 <meshStandardMaterial color="#7a624a" roughness={0.7} />
-              </mesh>
+              </RoundedBox>
             );
           })}
         </group>
       ) : obj.category === 'bar' ? (
         <group>
           <RoundedBox args={[3.6, 1.1, 1.0]} position={[0, 0.55, 0]} castShadow>
-            <meshStandardMaterial color="#111520" roughness={0.3} metalness={0.7} />
+            <meshStandardMaterial color="#111520" roughness={0.3} metalness={0.08} /*tok:matte*/ />
           </RoundedBox>
-          <mesh position={[0, 1.12, 0]}>
-            <boxGeometry args={[3.8, 0.08, 1.1]} />
-            <meshStandardMaterial color={BRAND_ACCENT} metalness={0.8} roughness={0.2} />
-          </mesh>
+          <RoundedBox args={[3.8, 0.08, 1.1]} radius={0.022} smoothness={3} position={[0, 1.12, 0]}>
+            <meshStandardMaterial color={BRAND_ACCENT} metalness={0.55} /*tok:brass*/ roughness={0.32} />
+          </RoundedBox>
         </group>
       ) : obj.category === 'stage' ? (
         <group>
-          <mesh position={[0, 0.25, 0]} castShadow receiveShadow>
-            <boxGeometry args={[4.5, 0.5, 3.0]} />
+          <RoundedBox args={[4.5, 0.5, 3.0]} radius={0.045} smoothness={3} position={[0, 0.25, 0]} castShadow receiveShadow>
             <meshStandardMaterial color="#1a202c" roughness={0.6} />
-          </mesh>
+          </RoundedBox>
           <mesh position={[0, 1.1, -0.8]}>
             <cylinderGeometry args={[0.04, 0.04, 1.2, 8]} />
-            <meshStandardMaterial color={BRAND_ACCENT} metalness={0.9} />
+            <meshStandardMaterial color={BRAND_ACCENT} metalness={0.55} /*tok:brass*/ />
           </mesh>
         </group>
       ) : obj.category === 'lounge' ? (

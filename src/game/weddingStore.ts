@@ -6,6 +6,7 @@ import {
   TaskEntity,
   ConflictEntity,
   TimelinePhase,
+  TimelineScenario,
   GridWave,
   NeuralPulse,
   ImportPresetFile,
@@ -20,16 +21,22 @@ import {
   PlacedObject,
   DmcIdentity,
   AdDisplaySlot,
+  Certainty,
 } from '../types/wedding';
+import { CERTAINTY } from '../design/certainty';
+import { eventType } from '../design/eventTypes';
 import { generateWorldFromDescription } from './worldEngine';
+import type { IntakePlan } from './projectIntake';
 import { DEFAULT_DMC_IDENTITY } from './dmcPalette';
 import { INITIAL_AD_SLOTS } from './advertisingEngine';
 import { weddingAudio } from './audio';
 import {
+  hasChosenProject,
   getStoredProjects,
   saveWeddingProject,
   getActiveProjectId,
   setActiveProjectId,
+  clearActiveProjectId,
   savePersistedState,
   loadPersistedState,
   getActiveAccount,
@@ -38,16 +45,44 @@ import {
   getStoredAccounts,
 } from './persistence';
 
-// Apple Vision Pro & Spatial Design System Constants
-export const BRAND_ACCENT = '#e2b448'; // Refined Champagne Titanium / Warm Light
-export const BRAND_BG = '#08090d';
-export const BRAND_SURFACE = '#12151e';
-export const BRAND_SURFACE_HOVER = '#181c28';
-export const BRAND_BORDER = 'rgba(255, 255, 255, 0.09)';
-export const BRAND_BORDER_ACTIVE = 'rgba(226, 180, 72, 0.6)';
-export const BRAND_TEXT_MUTED = '#717684';
-export const BRAND_TEXT_PRIMARY = '#f5f5f7';
-export const BRAND_TEXT_SECONDARY = '#9ba1b0';
+// Apple Vision Pro & Spatial Design System Constants.
+// Values now live in ./brand (dependency-free) to avoid the module cycle that
+// crashed startup. Re-exported here so every existing import keeps working.
+import { BRAND_ACCENT } from './brand';
+
+/** The six editorial sections, shared by the Mirror and the Canvas. */
+export type CanvasSection = 'programme' | 'people' | 'vendors' | 'places' | 'music' | 'media';
+import { PlaceKind } from '../types/wedding';
+import {
+  Person,
+  PersonCraft, UserAccountV2, DmcIdentityRecord, Guest, Vendor, SeatingTable,
+  ProjectMembership, Invitation, TrackVote, Capability, MembershipRole, RsvpStatus,
+  MediaAsset, MediaKind, MediaOwnerKind, MediaProvenance, EntityOrigin,
+  PersonRelationship, RelationshipKind,
+} from '../types/identity';
+import {
+  migrateIdentityModel, MigrationReport, emptyIdentityState, capabilitiesForRole,
+  membershipRoleForAgentRole, personIdForAgent, guestIdForPerson, createGuestFromAgent,
+  createSeatingTable, createInvitation, createMembership, createAccount, createDmcRecord,
+  dmcIdForPerson, tableIdForNumber, freshId, invitationIdForCode,
+} from './identityModel';
+import { reportDiagnostic } from './diagnostics';
+import {
+  PersistedDomainState,
+  serializeDomain,
+  applyDomain,
+} from './persistenceSchema';
+export {
+  BRAND_ACCENT,
+  BRAND_BG,
+  BRAND_SURFACE,
+  BRAND_SURFACE_HOVER,
+  BRAND_BORDER,
+  BRAND_BORDER_ACTIVE,
+  BRAND_TEXT_MUTED,
+  BRAND_TEXT_PRIMARY,
+  BRAND_TEXT_SECONDARY,
+} from './brand';
 
 // Initial Reconstructed Venues
 export const INITIAL_RECONSTRUCTED_VENUES: ReconstructedVenue[] = [
@@ -799,6 +834,89 @@ export const INITIAL_AGENTS: Agent[] = [
 
 // Initial Documents
 export const INITIAL_DOCS: DocumentEntity[] = [
+  // --- Documents that were REFERENCED by places/agents/tasks/phases but never
+  // --- created, leaving 12 dangling links in the default wedding. Detected by
+  // --- checkReferentialIntegrity(); see scripts/check-health.mjs.
+  {
+    id: 'doc_transport_navettes',
+    title: 'Plan de Transport & Navettes Invités',
+    category: 'planning',
+    fileName: 'Navettes_Invites_Bellevue.pdf',
+    rawTextExcerpt: 'Deux navettes 32 places. Rotation hôtel → domaine à 14h30 et 16h00. Retours 01h00 et 02h30. Prestataire : Bellevue Transferts.',
+    amount: 1450,
+    depositAmount: 450,
+    isPaid: true,
+    extractedDate: '14 Juin 2025',
+    extractedHour: '14:30',
+    connectedAgentIds: ['agent_driver'],
+    connectedPlaceIds: ['place_parking', 'place_hotel'],
+    connectedTaskIds: [],
+    createdAtHour: 10,
+  },
+  {
+    id: 'doc_contrat_domaine',
+    title: 'Contrat de Location — Domaine de Bellevue',
+    category: 'contrat',
+    fileName: 'Contrat_Domaine_Bellevue_Signe.pdf',
+    rawTextExcerpt: 'Location du manoir et du parc du 13 au 15 Juin. Capacité 150 personnes. Caution 3 000 €. Fin de musique amplifiée à 02h00.',
+    amount: 9800,
+    depositAmount: 2940,
+    isPaid: true,
+    extractedDate: '13 Juin 2025',
+    extractedHour: '10:00',
+    connectedAgentIds: [],
+    connectedPlaceIds: ['place_manoir'],
+    connectedTaskIds: [],
+    createdAtHour: 10,
+  },
+  {
+    id: 'doc_menu_degustation',
+    title: 'Menu Dégustation & Régimes Spéciaux',
+    category: 'devis',
+    fileName: 'Menu_Traiteur_Degustation.pdf',
+    rawTextExcerpt: 'Cocktail 8 pièces, entrée, plat, fromages, pièce montée. 120 couverts dont 6 végétariens, 2 sans gluten, 1 sans lactose.',
+    amount: 11400,
+    depositAmount: 3420,
+    isPaid: false,
+    extractedDate: '14 Juin 2025',
+    extractedHour: '19:30',
+    connectedAgentIds: ['agent_caterer_lead'],
+    connectedPlaceIds: ['place_reception'],
+    connectedTaskIds: [],
+    createdAtHour: 11,
+  },
+  {
+    id: 'doc_playlist_premiere_danse',
+    title: 'Playlist Ouverture de Bal & Consignes DJ',
+    category: 'planning',
+    fileName: 'Playlist_Premiere_Danse.pdf',
+    rawTextExcerpt: 'Première danse à 22h45. Titre d’ouverture puis montée progressive. Pas de musique amplifiée après 02h00.',
+    amount: 0,
+    depositAmount: 0,
+    isPaid: true,
+    extractedDate: '14 Juin 2025',
+    extractedHour: '22:45',
+    connectedAgentIds: ['agent_dj'],
+    connectedPlaceIds: ['place_dancefloor'],
+    connectedTaskIds: ['task_ouverture_bal'],
+    createdAtHour: 12,
+  },
+  {
+    id: 'doc_facture_photo',
+    title: 'Facture Photographe — Reportage Complet',
+    category: 'facture',
+    fileName: 'Facture_Photographe_JourJ.pdf',
+    rawTextExcerpt: 'Reportage 12h, second shooter, retouches 400 photos, album 30x30. Solde à régler sous 30 jours.',
+    amount: 3200,
+    depositAmount: 960,
+    isPaid: false,
+    extractedDate: '14 Juin 2025',
+    extractedHour: '12:00',
+    connectedAgentIds: ['agent_photographer'],
+    connectedPlaceIds: [],
+    connectedTaskIds: [],
+    createdAtHour: 11,
+  },
   {
     id: 'doc_planning_master',
     title: 'Master Planning Jour J — V8',
@@ -912,6 +1030,19 @@ export const INITIAL_DOCS: DocumentEntity[] = [
 
 // Initial Tasks
 export const INITIAL_TASKS: TaskEntity[] = [
+  // Referenced by place_manoir.connectedTaskIds but never created.
+  {
+    id: 'task_check_coiffure',
+    title: 'Vérifier coiffure & maquillage des mariées',
+    category: 'logistique',
+    dueHour: 13,
+    isDone: false,
+    urgent: false,
+    assignedAgentId: 'agent_bride',
+    assignedPlaceId: 'place_manoir',
+    connectedDocIds: [],
+    connectedAgentIds: ['agent_bride'],
+  },
   {
     id: 'task_habillage_mariee',
     title: 'Habillage & Préparatifs des Mariés',
@@ -1348,6 +1479,101 @@ export const CHAOS_PRESETS: ImportPresetFile[] = [
 ];
 
 // Wedding Store Class with Real Persistent Multi-Project Architecture
+/** Default avatar identity. Single definition, shared by the class field and the reset factory. */
+export const DEFAULT_USER_IDENTITY: UserIdentity = {
+  role: 'wedding_planner',
+  name: 'Sophie Étoile',
+  roleTitle: 'Cheffe d\u2019Orchestre du Jour J',
+  outfitColor: '#e2b448',
+  accessory: 'clipboard',
+  avatarIcon: 'planner',
+  isCreated: true,
+};
+
+/**
+ * Deep copy, so callers cannot mutate the module-level INITIAL_* constants.
+ *
+ * `[...INITIAL_AD_SLOTS]` only copies the array — the element objects stay
+ * shared. Claiming an ad slot therefore mutated the "pristine" constant
+ * itself, which leaked state across project switches and made defaults
+ * non-pristine. Cloning removes that whole class of contamination.
+ */
+function clone<T>(value: T): T {
+  if (typeof structuredClone === 'function') return structuredClone(value);
+  return JSON.parse(JSON.stringify(value)) as T;
+}
+
+/**
+ * Pristine defaults for every persisted field. Declared once, used by both the
+ * "no snapshot" and the "partial snapshot" paths.
+ */
+function createDefaultDomainState(): PersistedDomainState {
+  return clone({
+    time: 15.4,
+    userIdentity: DEFAULT_USER_IDENTITY,
+    // MEASURED IN THE BROWSER (journey acceptance): DEFAULT_DMC_IDENTITY
+    // carries `customBadgeText: 'Clara & Alexandre'`, so every brand-new
+    // wedding was persisted with the demo couple written inside it. An empty
+    // world knows no names until someone types them.
+    userDmcIdentity: { ...DEFAULT_DMC_IDENTITY, customBadgeText: '' },
+    places: INITIAL_PLACES,
+    agents: INITIAL_AGENTS,
+    docs: INITIAL_DOCS,
+    tasks: INITIAL_TASKS,
+    conflicts: INITIAL_CONFLICTS,
+    phases: TIMELINE_PHASES,
+    tracks: INITIAL_TRACKS,
+    // A day starts with no parallel branch, demo included.
+    scenarios: [],
+    reconstructedVenues: INITIAL_RECONSTRUCTED_VENUES,
+    placedObjects: INITIAL_RECONSTRUCTED_VENUES[0].objects,
+    adSlots: INITIAL_AD_SLOTS,
+    // Identity model starts empty; migrateIdentityModel() derives it from the
+    // agents right after restore, so a fresh project is populated too.
+    persons: [], accounts: [], dmcIdentities: [], guests: [], vendors: [],
+    seatingTables: [], memberships: [], invitations: [], trackVotes: [],
+    media: [], relationships: [],
+    currentPersonId: null,
+  });
+}
+
+/**
+ * A brand-new project's domain: EMPTY.
+ *
+ * MEASURED IN THE BROWSER (multi-project acceptance): creating a wedding
+ * through the real form produced a project that already contained the demo —
+ * 12 places called "Hôtel de Ville & Cérémonie Civile", 35 people called
+ * "Clara Dubois"…, 10 tracks, 7 phases. A couple creating their wedding
+ * inherited somebody else's.
+ *
+ * A new project therefore starts with nothing but what its creator typed. The
+ * empty states across World, Mirror and Canvas already explain what is missing
+ * and how to add it, so an empty project is legible rather than broken.
+ */
+/** The light at that hour of the day. Derived, never asked. */
+function atmosphereForHour(hour: number): TimelinePhase['bgAtmosphere'] {
+  const h = ((hour % 24) + 24) % 24;
+  if (h < 12) return 'morning';
+  if (h < 17) return 'afternoon';
+  if (h < 19.5) return 'golden';
+  if (h < 21.5) return 'dusk';
+  return 'night';
+}
+
+function createEmptyDomainState(): PersistedDomainState {
+  return clone({
+    time: 15.0,
+    userIdentity: DEFAULT_USER_IDENTITY,
+    userDmcIdentity: DEFAULT_DMC_IDENTITY,
+    places: [], agents: [], docs: [], tasks: [], conflicts: [], phases: [],
+    tracks: [], scenarios: [], reconstructedVenues: [], placedObjects: [], adSlots: [],
+    persons: [], accounts: [], dmcIdentities: [], guests: [], vendors: [],
+    seatingTables: [], memberships: [], invitations: [], trackVotes: [],
+    media: [], relationships: [],
+    currentPersonId: null,
+  });
+}
+
 class WeddingStore {
   public version: number = 0;
   public time: number = 15.4;
@@ -1359,6 +1585,11 @@ class WeddingStore {
   public showIdentityModal: boolean = false;
   public brandMenuOpen: boolean = false;
   public createWeddingModalOpen: boolean = false;
+  /**
+   * The editorial creation surface (Mirror). Same business path as the World
+   * panel — see startWeddingCreation — but dressed for the public site.
+   */
+  public weddingCreationOpen: boolean = false;
   public landingPageModalOpen: boolean = false;
   public guideDocModalOpen: boolean = false;
   public inviteModalOpen: boolean = false;
@@ -1375,22 +1606,91 @@ class WeddingStore {
   public adSlotModalOpen: boolean = false;
   public selectedAdSlotId: string | null = null;
   public systemNerveModalOpen: boolean = false;
+  /** Composition-mode surface: guest constellation (Phase B prototype). */
+  public constellationOpen: boolean = false;
+
+  // -------------------------------------------------------------------------
+  // PROJECTIONS (Phase C)
+  //
+  // Editorial sections shared by Mirror and Canvas (01..06). Declared here
+  // because the store carries the intent from one surface to the other.
+  //
+  // (see CANVAS_TABS in components/canvas/CanvasCore — same six ids)
+  // One World Model, several renderers. This is only WHICH projection is on
+  // screen — never a second copy of the data.
+  // -------------------------------------------------------------------------
+  public projection: 'world' | 'mirror' = 'world';
+  /**
+   * False until this browser has opened or created a wedding.
+   *
+   * The store still holds a project (the demo) so the engine always has
+   * something coherent to work with, but the interface must NOT present it:
+   * a first-time visitor lands on the Mirror as a public site, and no demo
+   * data is shown until they choose or create a wedding.
+   */
+  public projectChosen: boolean = true;
+  /** Entity the user arrived on when crossing from another projection. */
+  public mirrorFocusPersonId: string | null = null;
+
+  /** Real persistence state, surfaced by the Canvas. Never optimistic. */
+  public saveState: 'idle' | 'saving' | 'saved' | 'error' = 'idle';
+  public lastSavedAt: string | null = null;
+
+  // Canvas context: what the user is currently composing.
+  public canvasOpen: boolean = false;
+  public canvasFocus: { kind: 'event' | 'person' | 'vendor' | 'place' | 'song'; id: string } | null = null;
+  /** Section the Canvas should open on when no single entity is focused. */
+  public canvasSection: CanvasSection | null = null;
+  /**
+   * Incremented every time a surface asks the Canvas to open somewhere.
+   * The shells compare it to what they last honoured, so clicking "Composer"
+   * in 04 LIEUX always lands on 04 — even if the user had wandered to 05 and
+   * the requested section has not changed.
+   */
+  public canvasIntent: number = 0;
 
   // Real World -> 3D World / Interior State
   public interiorMode: boolean = false;
   public activeVenueId: string | null = null;
   public constructionMode: boolean = false;
-  public reconstructedVenues: ReconstructedVenue[] = [...INITIAL_RECONSTRUCTED_VENUES];
-  public placedObjects: PlacedObject[] = [...INITIAL_RECONSTRUCTED_VENUES[0].objects];
+  public reconstructedVenues: ReconstructedVenue[] = clone(INITIAL_RECONSTRUCTED_VENUES);
+  public placedObjects: PlacedObject[] = clone(INITIAL_RECONSTRUCTED_VENUES[0].objects);
   public selectedObjectId: string | null = null;
   public avatarPos: [number, number, number] = [0, 0, 8];
   public avatarRot: number = 0;
 
   // Advertising Grid 3D Slots
-  public adSlots: AdDisplaySlot[] = [...INITIAL_AD_SLOTS];
+  public adSlots: AdDisplaySlot[] = clone(INITIAL_AD_SLOTS);
 
   // DMC ID Identity (DMC Color + DMC Symbol)
-  public userDmcIdentity: DmcIdentity = { ...DEFAULT_DMC_IDENTITY };
+  public userDmcIdentity: DmcIdentity = clone(DEFAULT_DMC_IDENTITY);
+
+  // -------------------------------------------------------------------------
+  // First-order identity model (schema v3).
+  //
+  // `Agent` remains the spatial projection; these are the domain identities.
+  // Everything here is related by stable ID — never by role or display name.
+  // -------------------------------------------------------------------------
+  public persons: Person[] = [];
+  public accounts: UserAccountV2[] = [];
+  public dmcIdentities: DmcIdentityRecord[] = [];
+  public guests: Guest[] = [];
+  public vendors: Vendor[] = [];
+  public seatingTables: SeatingTable[] = [];
+  public memberships: ProjectMembership[] = [];
+  public invitations: Invitation[] = [];
+  public trackVotes: TrackVote[] = [];
+  /**
+   * Media assets. Starts EMPTY and is never seeded: the architecture is ready,
+   * but no photo is invented to make the product look finished.
+   */
+  public media: MediaAsset[] = [];
+  /** First-order edges between people. */
+  public relationships: PersonRelationship[] = [];
+  /** The person this session acts as. Replaces role-based avatar matching. */
+  public currentPersonId: string | null = null;
+  /** Result of the last identity migration, surfaced by the System Nerve. */
+  public lastMigrationReport: MigrationReport | null = null;
 
   // Active Project & Account
   public currentProject: WeddingProject = {
@@ -1412,27 +1712,22 @@ class WeddingStore {
   public activeAccount: UserAccount | null = null;
 
   // Identity state
-  public userIdentity: UserIdentity = {
-    role: 'wedding_planner',
-    name: 'Sophie Étoile',
-    roleTitle: 'Cheffe d’Orchestre du Jour J',
-    outfitColor: '#e2b448',
-    accessory: 'clipboard',
-    avatarIcon: 'planner',
-    isCreated: true,
-  };
+  public userIdentity: UserIdentity = clone(DEFAULT_USER_IDENTITY);
 
   public introCinematicActive: boolean = false;
   public introProgress: number = 1.0;
 
-  public places: Place[] = [...INITIAL_PLACES];
+  public places: Place[] = clone(INITIAL_PLACES);
   public vehicles: TransitVehicle[] = [...INITIAL_VEHICLES];
-  public agents: Agent[] = [...INITIAL_AGENTS];
-  public docs: DocumentEntity[] = [...INITIAL_DOCS];
-  public tasks: TaskEntity[] = [...INITIAL_TASKS];
-  public conflicts: ConflictEntity[] = [...INITIAL_CONFLICTS];
-  public phases: TimelinePhase[] = [...TIMELINE_PHASES];
-  public tracks: TrackEntity[] = [...INITIAL_TRACKS];
+  public agents: Agent[] = clone(INITIAL_AGENTS);
+  public docs: DocumentEntity[] = clone(INITIAL_DOCS);
+  public tasks: TaskEntity[] = clone(INITIAL_TASKS);
+  public conflicts: ConflictEntity[] = clone(INITIAL_CONFLICTS);
+  public phases: TimelinePhase[] = clone(TIMELINE_PHASES);
+  /** Temporary branches of the day. See the SCÉNARIOS block below. */
+  public scenarios: TimelineScenario[] = [];
+  public activeScenarioId: string | null = null;
+  public tracks: TrackEntity[] = clone(INITIAL_TRACKS);
 
   public selectedEntity: {
     type: 'agent' | 'place' | 'document' | 'task' | 'phase' | 'conflict' | 'route' | 'track' | 'object' | 'venue';
@@ -1459,6 +1754,13 @@ class WeddingStore {
 
   private listeners: Set<() => void> = new Set();
 
+  /**
+   * What the last restore actually recovered vs. silently defaulted.
+   * Exposed so the System Nerve can report non-persisted state instead of
+   * letting it disappear without a trace.
+   */
+  public lastRestoreReport: ReturnType<typeof applyDomain> | null = null;
+
   constructor() {
     this.initFromPersistence();
   }
@@ -1466,50 +1768,3622 @@ class WeddingStore {
   private initFromPersistence() {
     try {
       this.activeAccount = getActiveAccount();
+      this.projectChosen = hasChosenProject();
+      // The product opens on the Mirror, always: the public site when no
+      // wedding has been chosen, the Jour J timeline when one has.
+      this.projection = 'mirror';
       const activeProjId = getActiveProjectId();
       const projects = getStoredProjects();
       const proj = projects.find((p) => p.id === activeProjId) || projects[0];
       if (proj) {
         this.currentProject = proj;
         const saved = loadPersistedState(proj.id);
-        if (saved) {
-          this.time = saved.time || this.time;
-          this.userIdentity = saved.userIdentity || this.userIdentity;
-          this.places = saved.places && saved.places.length > 0 ? saved.places : this.places;
-          this.agents = saved.agents && saved.agents.length > 0 ? saved.agents : this.agents;
-          this.docs = saved.docs && saved.docs.length > 0 ? saved.docs : this.docs;
-          this.tasks = saved.tasks && saved.tasks.length > 0 ? saved.tasks : this.tasks;
-          this.conflicts = saved.conflicts || this.conflicts;
-          this.tracks = saved.tracks && saved.tracks.length > 0 ? saved.tracks : this.tracks;
-          this.reconstructedVenues = saved.reconstructedVenues && saved.reconstructedVenues.length > 0 ? saved.reconstructedVenues : this.reconstructedVenues;
-          this.placedObjects = saved.placedObjects && saved.placedObjects.length > 0 ? saved.placedObjects : this.placedObjects;
-        }
+        // MEASURED IN THE BROWSER (multi-project acceptance): the fallback used
+        // to be `serializeDomain(this)` — the class fields, which are the DEMO.
+        // A real wedding legitimately has no places, no agents and no phases,
+        // and `emptyListMeansUnset` turns those empty lists into "absent", so
+        // after a reload the demo estate came back and 20 demo guests appeared
+        // in someone else's wedding. The fallback now depends on the project:
+        // the demo falls back to the demo, a real wedding to an empty world.
+        const fallback = proj.isDemo ? serializeDomain(this) : createEmptyDomainState();
+        // A real project with no snapshot yet must also start empty, not with
+        // the constants the class was constructed with.
+        this.lastRestoreReport = applyDomain(this, saved ?? null, fallback);
+        this.ensureIdentityModel();
       }
-    } catch {
-      // safe fallback
+    } catch (error) {
+      reportDiagnostic({ source: 'store', severity: 'error', code: 'store_persist_failed', error });
     }
   }
 
-  public saveCurrentState() {
+  // =========================================================================
+  // CANVAS MUTATIONS
+  //
+  // Every one of these VALIDATES before touching the store, returns a
+  // structured outcome, and persists. A projection never writes its own copy.
+  // =========================================================================
+
+  /**
+   * Open the composition surface WITHOUT changing projection.
+   *
+   * Phase D forced `projection = 'world'`, which threw an editorial user back
+   * into the 3D scene the moment they clicked "Modifier". The Canvas is a mode,
+   * not a place: it now composes on top of whichever projection is open, and
+   * the shell adapts (side panel over World, editorial surface inside Mirror).
+   */
+  /**
+   * THE single entry point for "create my wedding".
+   *
+   * Every call-to-action — landing navigation, hero, end of page, brand menu —
+   * goes through this one method, so there is exactly one creation flow and it
+   * is the one already validated by the multi-project acceptance pass.
+   */
+  public startWeddingCreation(): void {
+    this.brandMenuOpen = false;
+    this.worldLabModalOpen = false;
+    // Two doors, one room. From the public site (or before any wedding is
+    // open) the editorial surface opens; from inside the 3D world the existing
+    // spatial panel stays. Both end on createRealWedding.
+    if (!this.projectChosen || this.projection === 'mirror') {
+      this.weddingCreationOpen = true;
+      this.createWeddingModalOpen = false;
+    } else {
+      this.createWeddingModalOpen = true;
+    }
+    this.notify();
+  }
+
+  /** Leave the creation surface without creating anything. */
+  public cancelWeddingCreation(): void {
+    this.weddingCreationOpen = false;
+    this.createWeddingModalOpen = false;
+    this.notify();
+  }
+
+  /** A wedding is now open: the landing must step aside. */
+  private markProjectChosen(): void {
+    this.projectChosen = true;
+  }
+
+  /**
+   * Close the current wedding and go back to the public site.
+   *
+   * MEASURED IN THE BROWSER (journey acceptance): after the first wedding was
+   * opened, nothing in the product led back to the landing and its
+   * "Mes mariages" list — the only exit was clearing the browser storage.
+   *
+   * This is a NAVIGATION, not a deletion: every project and every snapshot
+   * stays exactly where it is. Only "which wedding is open" is forgotten, and
+   * the selections that belong to that wedding are dropped so no id survives
+   * into the next one.
+   */
+  public returnToLanding(): void {
+    this.saveCurrentState();
+    clearActiveProjectId();
+    this.projectChosen = false;
+    this.projection = 'mirror';
+    this.canvasOpen = false;
+    this.canvasFocus = null;
+    this.canvasSection = null;
+    this.selectedEntity = null;
+    this.mirrorFocusPersonId = null;
+    this.interiorMode = false;
+    this.brandMenuOpen = false;
+    this.weddingCreationOpen = false;
+    this.createWeddingModalOpen = false;
+    this.notify();
+  }
+
+  public openCanvas(
+    focus?: { kind: 'event' | 'person' | 'vendor' | 'place' | 'song'; id: string },
+    section?: CanvasSection,
+  ): void {
+    this.canvasOpen = true;
+    this.showIdentityModal = false;
+    if (focus) this.canvasFocus = focus;
+    // A section hint lets the Mirror open the Canvas ALREADY on the matching
+    // surface ("Composer" in 04 LIEUX opens 04 Lieux), with no extra
+    // navigation. An entity focus still wins, since it is more specific.
+    if (section) { this.canvasSection = section; this.canvasIntent++; }
+    else if (focus) { this.canvasSection = null; this.canvasIntent++; }
+    this.notify();
+  }
+
+  /** Which shell should wrap the Canvas core, derived from the active projection. */
+  public getCanvasShell(): 'world' | 'mirror' {
+    return this.projection === 'mirror' ? 'mirror' : 'world';
+  }
+
+  public closeCanvas(): void {
+    this.canvasOpen = false;
+    this.notify();
+  }
+
+  public setCanvasFocus(focus: { kind: 'event' | 'person' | 'vendor' | 'place' | 'song'; id: string } | null): void {
+    this.canvasFocus = focus;
+    this.notify();
+  }
+
+
+
+  // --- D2: moments ---------------------------------------------------------
+
+  public setPhaseTitle(phaseId: string, name: string): boolean {
+    const phase = this.phases.find((p) => p.id === phaseId);
+    if (!phase || !name.trim()) return false;
+    this.beginMutation('Renommer le moment');
+    phase.name = name.trim();
+    this.saveCurrentState();
+    this.notify();
+    return true;
+  }
+
+  public setPhaseNotes(phaseId: string, notes: string): boolean {
+    const phase = this.phases.find((p) => p.id === phaseId);
+    if (!phase) return false;
+    this.beginMutation('Note du moment');
+    phase.notes = notes.trim() || undefined;
+    this.saveCurrentState();
+    this.notify();
+    return true;
+  }
+
+  /** Move a moment in time. Refuses an inverted or out-of-day window. */
+  public setPhaseTime(phaseId: string, startHour: number, endHour?: number): boolean {
+    const phase = this.phases.find((p) => p.id === phaseId);
+    if (!phase) return false;
+    const duration = endHour !== undefined ? endHour - startHour : phase.endHour - phase.startHour;
+    if (!this.canPlacePhase(startHour, duration)) return false;
+    this.beginMutation('Déplacer le moment');
+    this.applyPhaseTime(phase, startHour, duration);
+    this.saveCurrentState();
+    this.notify();
+    return true;
+  }
+
+  /** Single validation rule for every temporal move. */
+  private canPlacePhase(startHour: number, duration: number): boolean {
+    if (!Number.isFinite(startHour) || !Number.isFinite(duration) || duration <= 0) return false;
+    return startHour >= 0 && startHour + duration <= 30;
+  }
+
+  private applyPhaseTime(phase: { startHour: number; endHour: number }, startHour: number, duration: number): void {
+    phase.startHour = startHour;
+    phase.endHour = startHour + duration;
+  }
+
+  /**
+   * Move a moment to another position in the programme (drag & drop, or the
+   * keyboard equivalent).
+   *
+   * WHAT IT DOES, EXACTLY: the moments are re-chained in the new order from the
+   * earliest existing start time, and EACH MOMENT KEEPS ITS OWN DURATION.
+   * Nothing is invented — no new hour appears out of thin air, the first start
+   * and every duration come from the data — and the result can never overlap.
+   *
+   * One `beginMutation`, so the whole move is a single undo step; one save, so
+   * it survives a reload; one `notify`, so World, Mirror and Canvas re-derive
+   * together.
+   *
+   * Returns false when the move is impossible or would change nothing.
+   */
+  public movePhaseToIndex(phaseId: string, targetIndex: number): boolean {
+    const ordered = [...this.phases].sort((a, b) => a.startHour - b.startHour);
+    const from = ordered.findIndex((p) => p.id === phaseId);
+    if (from < 0) return false;
+    const to = Math.max(0, Math.min(ordered.length - 1, Math.trunc(targetIndex)));
+    if (to === from) return false;
+
+    const reordered = [...ordered];
+    const [moved] = reordered.splice(from, 1);
+    reordered.splice(to, 0, moved);
+
+    const durations = new Map(ordered.map((p) => [p.id, p.endHour - p.startHour]));
+    const firstStart = ordered[0].startHour;
+
+    // Validate the whole plan BEFORE touching anything: a refused move must
+    // leave the programme exactly as it was.
+    let cursor = firstStart;
+    for (const p of reordered) {
+      const duration = durations.get(p.id) ?? 0;
+      if (!this.canPlacePhase(cursor, duration)) return false;
+      cursor += duration;
+    }
+
+    this.beginMutation('Réordonner le programme');
+    cursor = firstStart;
+    for (const p of reordered) {
+      const duration = durations.get(p.id) ?? 0;
+      this.applyPhaseTime(p, cursor, duration);
+      cursor += duration;
+    }
+    this.saveCurrentState();
+    this.notify();
+    return true;
+  }
+
+  // =========================================================================
+  // THE MOMENT IS THE PRODUCT
+  //
+  // A wedding is built one moment at a time, from an empty day. Everything
+  // below writes to the SAME phases array the World and the Mirror already
+  // read, so a moment created here exists everywhere at once. Nothing is ever
+  // pre-filled: a new moment carries only what the couple typed.
+  // =========================================================================
+
+  /**
+   * Create a moment on the day.
+   *
+   * `startHour` and `durationHours` are real numbers of hours (14.5 = 14:30).
+   * The moment is placed exactly where it is asked to be; it is NOT chained
+   * after the previous one, because two moments can legitimately overlap
+   * (the photographer shoots while the room is being set up).
+   */
+  public createPhase(input: {
+    name: string;
+    startHour: number;
+    durationHours?: number;
+    subtitle?: string;
+    placeId?: string | null;
+  }): TimelinePhase | null {
+    const name = input.name?.trim();
+    if (!name) return null;
+    const duration = input.durationHours && input.durationHours > 0 ? input.durationHours : 1;
+    if (!this.canPlacePhase(input.startHour, duration)) return null;
+
+    this.beginMutation('Ajouter un moment');
+    const phase: TimelinePhase = {
+      id: freshId('phase'),
+      startHour: input.startHour,
+      endHour: input.startHour + duration,
+      name,
+      subtitle: input.subtitle?.trim() || '',
+      icon: 'moment',
+      primaryPlaceId: input.placeId && this.places.some((p) => p.id === input.placeId) ? input.placeId : '',
+      highlightAction: '',
+      bgAtmosphere: atmosphereForHour(input.startHour),
+      keyAgentIds: [],
+      keyDocIds: [],
+      keyTaskIds: [],
+      ambientTrack: 'prep',
+    };
+    this.phases.push(phase);
+    this.phases.sort((a, b) => a.startHour - b.startHour);
+    this.saveCurrentState();
+    this.notify();
+    return phase;
+  }
+
+  /** Remove a moment. What was attached to it survives; only the link goes. */
+  public deletePhase(phaseId: string): boolean {
+    const idx = this.phases.findIndex((p) => p.id === phaseId);
+    if (idx < 0) return false;
+    this.beginMutation('Supprimer le moment');
+    this.phases.splice(idx, 1);
+    for (const t of this.tracks) if (t.linkedPhaseId === phaseId) t.linkedPhaseId = undefined;
+    for (const t of this.tasks) if (t.phaseId === phaseId) t.phaseId = undefined;
+    this.saveCurrentState();
+    this.notify();
+    return true;
+  }
+
+  /**
+   * Move a moment in time AND carry everything that follows it.
+   *
+   * This is the chain the day really has: pushing the dinner back pushes the
+   * speeches, the cake and the first dance with it. The shift is computed from
+   * the moment's own displacement and applied to every LATER moment, in one
+   * undo step. Returns the ids that moved with it, so the interface can say
+   * exactly what happened instead of guessing.
+   */
+  public shiftPhaseAndFollowing(phaseId: string, newStartHour: number): { moved: string[] } | null {
+    const phase = this.phases.find((p) => p.id === phaseId);
+    if (!phase) return null;
+    const delta = newStartHour - phase.startHour;
+    if (!Number.isFinite(delta) || Math.abs(delta) < 1e-6) return null;
+
+    const followers = this.phases.filter((p) => p.id !== phaseId && p.startHour >= phase.startHour);
+    const plan = [phase, ...followers];
+    for (const p of plan) {
+      if (!this.canPlacePhase(p.startHour + delta, p.endHour - p.startHour)) return null;
+    }
+
+    this.beginMutation('Décaler le moment et la suite');
+    for (const p of plan) this.applyPhaseTime(p, p.startHour + delta, p.endHour - p.startHour);
+    this.phases.sort((a, b) => a.startHour - b.startHour);
+    this.saveCurrentState();
+    this.notify();
+    return { moved: followers.map((p) => p.id) };
+  }
+
+  /**
+   * Carry the moments that come AFTER one, by the same delta.
+   *
+   * Called when the couple accepts the proposal shown after a move ("décaler
+   * aussi les 3 moments suivants ?"). The consequence is never applied
+   * silently — the timeline asks first, this executes the answer.
+   */
+  public shiftPhasesAfter(phaseId: string, delta: number): { moved: string[] } | null {
+    const phase = this.phases.find((p) => p.id === phaseId);
+    if (!phase || !Number.isFinite(delta) || Math.abs(delta) < 1e-6) return null;
+    // "After" is judged on where the moved moment came FROM, so a moment
+    // dragged later still carries the ones that used to follow it.
+    const origin = phase.startHour - delta;
+    const followers = this.phases.filter((p) => p.id !== phaseId && p.startHour >= origin);
+    if (followers.length === 0) return null;
+    for (const p of followers) {
+      if (!this.canPlacePhase(p.startHour + delta, p.endHour - p.startHour)) return null;
+    }
+    this.beginMutation('Décaler la suite de la journée');
+    for (const p of followers) this.applyPhaseTime(p, p.startHour + delta, p.endHour - p.startHour);
+    this.phases.sort((a, b) => a.startHour - b.startHour);
+    this.saveCurrentState();
+    this.notify();
+    return { moved: followers.map((p) => p.id) };
+  }
+
+  /** Which moments a move would carry, without moving anything. */
+  public phasesAfter(phaseId: string): TimelinePhase[] {
+    const phase = this.phases.find((p) => p.id === phaseId);
+    if (!phase) return [];
+    return this.phases
+      .filter((p) => p.id !== phaseId && p.startHour >= phase.startHour)
+      .sort((a, b) => a.startHour - b.startHour);
+  }
+
+  /** Change only the length of a moment. */
+  public setPhaseDuration(phaseId: string, durationHours: number): boolean {
+    const phase = this.phases.find((p) => p.id === phaseId);
+    if (!phase) return false;
+    if (!this.canPlacePhase(phase.startHour, durationHours)) return false;
+    this.beginMutation('Durée du moment');
+    this.applyPhaseTime(phase, phase.startHour, durationHours);
+    this.saveCurrentState();
+    this.notify();
+    return true;
+  }
+
+  public setPhaseSubtitle(phaseId: string, subtitle: string): boolean {
+    const phase = this.phases.find((p) => p.id === phaseId);
+    if (!phase) return false;
+    this.beginMutation('Description du moment');
+    phase.subtitle = subtitle.trim();
+    this.saveCurrentState();
+    this.notify();
+    return true;
+  }
+
+  // --- the moment's dimensions --------------------------------------------
+
+  public attachPersonToPhase(phaseId: string, personId: string): boolean {
+    const phase = this.phases.find((p) => p.id === phaseId);
+    if (!phase || !this.persons.some((p) => p.id === personId)) return false;
+    const current = phase.personIds ?? [];
+    if (current.includes(personId)) return true;
+    this.beginMutation('Ajouter une personne au moment');
+    phase.personIds = [...current, personId];
+    this.saveCurrentState();
+    this.notify();
+    return true;
+  }
+
+  public detachPersonFromPhase(phaseId: string, personId: string): boolean {
+    const phase = this.phases.find((p) => p.id === phaseId);
+    if (!phase?.personIds?.includes(personId)) return false;
+    this.beginMutation('Retirer une personne du moment');
+    phase.personIds = phase.personIds.filter((id) => id !== personId);
+    this.saveCurrentState();
+    this.notify();
+    return true;
+  }
+
+  public attachTrackToPhase(phaseId: string, trackId: string): boolean {
+    const phase = this.phases.find((p) => p.id === phaseId);
+    const track = this.tracks.find((t) => t.id === trackId);
+    if (!phase || !track) return false;
+    const current = phase.trackIds ?? [];
+    this.beginMutation('Musique du moment');
+    if (!current.includes(trackId)) phase.trackIds = [...current, trackId];
+    // One truth: the track also knows which moment it belongs to.
+    track.linkedPhaseId = phaseId;
+    this.saveCurrentState();
+    this.notify();
+    return true;
+  }
+
+  public detachTrackFromPhase(phaseId: string, trackId: string): boolean {
+    const phase = this.phases.find((p) => p.id === phaseId);
+    if (!phase) return false;
+    this.beginMutation('Retirer le morceau du moment');
+    phase.trackIds = (phase.trackIds ?? []).filter((id) => id !== trackId);
+    const track = this.tracks.find((t) => t.id === trackId);
+    if (track?.linkedPhaseId === phaseId) track.linkedPhaseId = undefined;
+    this.saveCurrentState();
+    this.notify();
+    return true;
+  }
+
+  /** A task written on a moment. `dueHour` defaults to the moment's start. */
+  public createTaskForPhase(phaseId: string, title: string, cost?: number): TaskEntity | null {
+    const phase = this.phases.find((p) => p.id === phaseId);
+    const clean = title?.trim();
+    if (!phase || !clean) return null;
+    this.beginMutation('Ajouter une tâche');
+    const task: TaskEntity = {
+      id: freshId('task'),
+      title: clean,
+      category: 'logistique',
+      phaseId,
+      dueHour: phase.startHour,
+      isDone: false,
+      urgent: false,
+      cost: Number.isFinite(cost) && (cost as number) > 0 ? cost : undefined,
+      sourceOrigin: 'USER',
+      connectedDocIds: [],
+      connectedAgentIds: [],
+    };
+    this.tasks.push(task);
+    phase.taskIds = [...(phase.taskIds ?? []), task.id];
+    phase.keyTaskIds = [...(phase.keyTaskIds ?? []), task.id];
+    this.saveCurrentState();
+    this.notify();
+    return task;
+  }
+
+  /**
+   * The real length of a track, as written on the sleeve ("3:45").
+   *
+   * It matters temporally: the hub compares the music asked for to the length
+   * of the moment, and offers to lengthen the moment when the two disagree.
+   */
+  public setTrackDuration(trackId: string, duration: string): boolean {
+    const track = this.tracks.find((t) => t.id === trackId);
+    if (!track) return false;
+    const clean = duration.trim();
+    if (clean && !/^\d{1,2}:[0-5]\d$/.test(clean)) return false;
+    this.beginMutation('Durée du morceau');
+    track.duration = clean;
+    this.saveCurrentState();
+    this.notify();
+    return true;
+  }
+
+  public toggleTaskDone(taskId: string): boolean {
+    const task = this.tasks.find((t) => t.id === taskId);
+    if (!task) return false;
+    this.beginMutation('Tâche faite');
+    task.isDone = !task.isDone;
+    this.saveCurrentState();
+    this.notify();
+    return true;
+  }
+
+  /** Free lines: the shots the couple really asked for. */
+  public addPhaseShot(phaseId: string, shot: string): boolean {
+    const phase = this.phases.find((p) => p.id === phaseId);
+    const clean = shot?.trim();
+    if (!phase || !clean) return false;
+    this.beginMutation('Ajouter un plan à photographier');
+    phase.shots = [...(phase.shots ?? []), clean];
+    this.saveCurrentState();
+    this.notify();
+    return true;
+  }
+
+  public removePhaseShot(phaseId: string, index: number): boolean {
+    const phase = this.phases.find((p) => p.id === phaseId);
+    if (!phase?.shots || index < 0 || index >= phase.shots.length) return false;
+    this.beginMutation('Retirer un plan');
+    phase.shots = phase.shots.filter((_, i) => i !== index);
+    if (phase.shots.length === 0) phase.shots = undefined;
+    this.saveCurrentState();
+    this.notify();
+    return true;
+  }
+
+  public setPhaseMeal(phaseId: string, meal: { menu?: string; allergies?: string; headcount?: number }): boolean {
+    const phase = this.phases.find((p) => p.id === phaseId);
+    if (!phase) return false;
+    this.beginMutation('Repas du moment');
+    const next = { ...(phase.meal ?? {}), ...meal };
+    const cleaned = {
+      menu: next.menu?.trim() || undefined,
+      allergies: next.allergies?.trim() || undefined,
+      headcount: Number.isFinite(next.headcount) && (next.headcount as number) > 0 ? next.headcount : undefined,
+    };
+    phase.meal = cleaned.menu || cleaned.allergies || cleaned.headcount ? cleaned : undefined;
+    this.saveCurrentState();
+    this.notify();
+    return true;
+  }
+
+  public setPhaseLogistics(phaseId: string, logistics: string): boolean {
+    const phase = this.phases.find((p) => p.id === phaseId);
+    if (!phase) return false;
+    this.beginMutation('Logistique du moment');
+    phase.logistics = logistics.trim() || undefined;
+    this.saveCurrentState();
+    this.notify();
+    return true;
+  }
+
+  public setPhaseBudget(phaseId: string, budget: { amount?: number; deposit?: number; paid?: boolean }): boolean {
+    const phase = this.phases.find((p) => p.id === phaseId);
+    if (!phase) return false;
+    this.beginMutation('Budget du moment');
+    const next = { ...(phase.budget ?? {}), ...budget };
+    const amount = Number.isFinite(next.amount) && (next.amount as number) >= 0 ? next.amount : undefined;
+    const deposit = Number.isFinite(next.deposit) && (next.deposit as number) >= 0 ? next.deposit : undefined;
+    phase.budget = amount !== undefined || deposit !== undefined || next.paid
+      ? { amount, deposit, paid: next.paid }
+      : undefined;
+    this.saveCurrentState();
+    this.notify();
+    return true;
+  }
+
+  /** What the day costs, summed from what was really entered on the moments. */
+  public getTimelineBudget(): { committed: number; deposits: number; paid: number; withBudget: number } {
+    let committed = 0; let deposits = 0; let paid = 0; let withBudget = 0;
+    for (const p of this.phases) {
+      if (!p.budget) continue;
+      withBudget++;
+      committed += p.budget.amount ?? 0;
+      deposits += p.budget.deposit ?? 0;
+      if (p.budget.paid) paid += p.budget.amount ?? 0;
+    }
+    return { committed, deposits, paid, withBudget };
+  }
+
+  /** Attach a media already in the project to a moment (re-owning it). */
+  public attachMediaToPhase(mediaId: string, phaseId: string): boolean {
+    const asset = this.media.find((m) => m.id === mediaId);
+    if (!asset || !this.phases.some((p) => p.id === phaseId)) return false;
+    this.beginMutation('Rattacher le document au moment');
+    asset.ownerKind = 'event';
+    asset.ownerId = phaseId;
+    asset.updatedAt = new Date().toISOString();
+    this.saveCurrentState();
+    this.notify();
+    return true;
+  }
+
+  /** Everything hanging on a moment, resolved. Pure read, no invention. */
+  public getPhaseHub(phaseId: string) {
+    const phase = this.phases.find((p) => p.id === phaseId) ?? null;
+    if (!phase) return null;
+    const persons = (phase.personIds ?? [])
+      .map((id) => this.persons.find((p) => p.id === id))
+      .filter(Boolean);
+    const vendors = (phase.vendorIds ?? [])
+      .map((id) => this.vendors.find((v) => v.id === id))
+      .filter(Boolean);
+    const tracks = this.tracks.filter(
+      (t) => (phase.trackIds ?? []).includes(t.id) || t.linkedPhaseId === phase.id,
+    );
+    const tasks = this.tasks.filter((t) => t.phaseId === phase.id);
+    const media = this.media.filter((m) => m.ownerKind === 'event' && m.ownerId === phase.id);
+    const place = this.places.find((p) => p.id === phase.primaryPlaceId) ?? null;
+    return { phase, persons, vendors, tracks, tasks, media, place };
+  }
+
+  /**
+   * WHAT THIS MOMENT IS MISSING — the state of one scene, read out loud.
+   *
+   * Same grammar as projectFindings() and crewFindings(): a level, a title, a
+   * detail. It is DERIVED, never stored, so it can never drift from the data.
+   * It is deliberately the third caller of one idea, not a third engine.
+   *
+   * It says only what the project really knows. A moment with nobody on it is
+   * not « incomplete » — some moments have nobody. It is reported as a gap only
+   * when something else in the project implies a hole.
+   */
+  public phaseFindings(phaseId: string): {
+    level: 'ok' | 'gap' | 'conflict';
+    title: string;
+    detail: string;
+    /** When the gap can be closed by generating a document, who it concerns. */
+    personId?: string;
+    vendorId?: string;
+    docKind?: string;
+  }[] {
+    const hub = this.getPhaseHub(phaseId);
+    if (!hub) return [];
+    const { phase, persons, vendors, tracks, tasks, media, place } = hub;
+    const out: ReturnType<WeddingStore['phaseFindings']> = [];
+    const clock = (h: number) => `${String(Math.floor(h) % 24).padStart(2, '0')}:${String(Math.round((h % 1) * 60)).padStart(2, '0')}`;
+
+    // --- the hour itself ------------------------------------------------
+    if (phase.confidence && phase.confidence !== 'confirmed') {
+      out.push({
+        level: 'gap',
+        title: `Horaire ${CERTAINTY[phase.confidence].label.toLowerCase()}`,
+        detail: phase.confidenceNote || CERTAINTY[phase.confidence].meaning,
+      });
+    } else {
+      out.push({ level: 'ok', title: 'Horaire', detail: `${clock(phase.startHour)} → ${clock(phase.endHour)}` });
+    }
+
+    // --- the place --------------------------------------------------------
+    if (place) out.push({ level: 'ok', title: 'Lieu', detail: place.name });
+    else out.push({ level: 'gap', title: 'Lieu à définir', detail: 'Aucun lieu rattaché à ce moment.' });
+
+    // --- who is there -----------------------------------------------------
+    if (persons.length > 0) {
+      out.push({
+        level: 'ok',
+        title: 'Personnes',
+        detail: persons.map((p) => (p!.craft?.role ? `${p!.displayName} (${p!.craft!.role})` : p!.displayName)).join(', '),
+      });
+    }
+    for (const vendor of vendors) {
+      if (!vendor) continue;
+      out.push({
+        level: vendor.status === 'contracted' ? 'ok' : 'gap',
+        title: vendor.companyName,
+        detail: vendor.status === 'contracted'
+          ? 'Prestataire engagé.'
+          : `Prestataire au statut « ${vendor.status} » — rien n’est signé dans le projet.`,
+        vendorId: vendor.id,
+      });
+    }
+
+    // --- what a craft needs, and nobody has answered ----------------------
+    for (const person of persons) {
+      if (!person?.craft) continue;
+      const needs = person.craft.requirements ?? [];
+      if (needs.length > 0 && (person.craft.notes ?? '').trim() === '') {
+        out.push({
+          level: 'gap',
+          title: `${person.displayName} — besoins techniques`,
+          detail: `${needs.length} besoin${needs.length > 1 ? 's' : ''} déclaré${needs.length > 1 ? 's' : ''} : ${needs.join(', ')}.`,
+          personId: person.id,
+        });
+      }
+    }
+
+    // --- documents --------------------------------------------------------
+    for (const missing of this.missingDocumentsForPhase(phaseId)) {
+      out.push({
+        level: 'gap',
+        title: missing.title,
+        detail: missing.detail,
+        personId: missing.personId,
+        vendorId: missing.vendorId,
+        docKind: missing.docKind,
+      });
+    }
+    if (media.length > 0) {
+      out.push({ level: 'ok', title: 'Documents', detail: `${media.length} document${media.length > 1 ? 's' : ''} rattaché${media.length > 1 ? 's' : ''}.` });
+    }
+
+    // --- two people in two places at once, at this hour -------------------
+    for (const person of persons) {
+      if (!person) continue;
+      const elsewhere = this.phases.filter(
+        (p) => p.id !== phase.id
+          && (p.personIds ?? []).includes(person.id)
+          && p.startHour < phase.endHour && p.endHour > phase.startHour,
+      );
+      for (const other of elsewhere) {
+        out.push({
+          level: 'conflict',
+          title: `${person.displayName} est attendu deux fois`,
+          detail: `« ${phase.name} » ${clock(phase.startHour)}–${clock(phase.endHour)} et « ${other.name} » ${clock(other.startHour)}–${clock(other.endHour)}.`,
+          personId: person.id,
+        });
+      }
+    }
+
+    if (tracks.length > 0) out.push({ level: 'ok', title: 'Musique', detail: `${tracks.length} morceau${tracks.length > 1 ? 'x' : ''}.` });
+    const open = tasks.filter((t) => !t.isDone);
+    if (open.length > 0) {
+      out.push({ level: 'gap', title: 'Tâches en cours', detail: open.map((t) => t.title).join(', ') });
+    }
+
+    return out;
+  }
+
+  /**
+   * WHICH DOCUMENT IS MISSING HERE — and only where the answer is certain.
+   *
+   * A proposal is made only when the project holds enough to produce a real
+   * document: a named person with a craft, or a vendor engaged on this moment.
+   * Nothing is fabricated — the generated document itself writes « À CONFIRMER »
+   * wherever the project does not know (see generateAdminDocument).
+   */
+  public missingDocumentsForPhase(phaseId: string): {
+    title: string; detail: string; docKind: string; personId?: string; vendorId?: string;
+  }[] {
+    const hub = this.getPhaseHub(phaseId);
+    if (!hub) return [];
+    const out: { title: string; detail: string; docKind: string; personId?: string; vendorId?: string }[] = [];
+
+    const titlesFor = (kind: MediaOwnerKind, id: string) =>
+      this.media.filter((m) => m.ownerKind === kind && m.ownerId === id)
+        .map((m) => `${m.title ?? ''} ${m.fileName ?? ''}`.toLowerCase());
+
+    for (const person of hub.persons) {
+      if (!person?.craft?.role) continue;
+      const docs = titlesFor('person', person.id);
+      if (!docs.some((t) => /contrat|cession|engagement/.test(t))) {
+        out.push({
+          title: `${person.displayName} — contrat absent`,
+          detail: `${person.craft.role} sur « ${hub.phase.name} », aucun contrat rattaché à cette personne.`,
+          docKind: 'Contrat',
+          personId: person.id,
+        });
+      }
+      if ((person.craft.requirements ?? []).length > 0
+        && !docs.some((t) => /fiche technique|technique/.test(t))) {
+        out.push({
+          title: `${person.displayName} — fiche technique absente`,
+          detail: `${(person.craft.requirements ?? []).length} besoin(s) déclaré(s), aucune fiche technique rattachée.`,
+          docKind: 'Fiche technique',
+          personId: person.id,
+        });
+      }
+      if (!docs.some((t) => /feuille de route|route/.test(t)) && this.getCallSheet(person.id)?.rows.length) {
+        out.push({
+          title: `${person.displayName} — feuille de route absente`,
+          detail: 'Son déroulé existe déjà dans la pellicule : le document peut être produit tel quel.',
+          docKind: 'Feuille de route',
+          personId: person.id,
+        });
+      }
+    }
+
+    for (const vendor of hub.vendors) {
+      if (!vendor) continue;
+      const docs = titlesFor('vendor', vendor.id);
+      if (vendor.status === 'contracted' && !docs.some((t) => /contrat/.test(t))) {
+        out.push({
+          title: `${vendor.companyName} — contrat absent`,
+          detail: 'Le prestataire est marqué engagé, aucun contrat n’est rattaché.',
+          docKind: 'Contrat',
+          vendorId: vendor.id,
+        });
+      }
+      if (vendor.status === 'quoted' && !docs.some((t) => /devis/.test(t))) {
+        out.push({
+          title: `${vendor.companyName} — devis absent`,
+          detail: 'Le prestataire est au stade du devis, aucun devis n’est rattaché.',
+          docKind: 'Devis',
+          vendorId: vendor.id,
+        });
+      }
+    }
+
+    return out;
+  }
+
+  /**
+   * WHERE THIS DAY STANDS — and on exactly what the product counts.
+   *
+   * « 68 % préparé » means nothing if nobody can see the ruler. So there is no
+   * hidden weighting here and no secret model: EIGHT markers, each one a fact
+   * the project either holds or does not, each one shown to the user with its
+   * own answer. The score is how many are held.
+   *
+   * A projection, like every reading in this product: it stores nothing, and it
+   * invents nothing — a marker nobody has answered counts as not held, never as
+   * « probably fine ».
+   */
+  public readiness(): {
+    score: number;
+    total: number;
+    markers: { id: string; label: string; done: boolean; detail: string }[];
+    nextAction: { title: string; detail: string } | null;
+    conflicts: number;
+    nextMoment: { id: string; name: string; startHour: number } | null;
+  } {
+    const project = this.currentProject;
+    const phases = [...this.phases].sort((a, b) => a.startHour - b.startHour);
+    const documents = this.media.filter((m) => m.kind === 'document');
+    const engaged = this.vendors.filter((v) => v.status === 'contracted');
+    const unconfirmed = phases.filter((p) => p.confidence && p.confidence !== 'confirmed');
+    const withoutPlace = phases.filter((p) => !p.primaryPlaceId);
+    const withPeople = phases.filter((p) => (p.personIds ?? []).length > 0);
+
+    const markers = [
+      {
+        id: 'date', label: 'Une date', done: Boolean(project.weddingDate),
+        detail: project.weddingDate || 'pas encore décidée',
+      },
+      {
+        id: 'place', label: 'Un lieu principal', done: Boolean(project.locationName),
+        detail: project.locationName || 'pas encore choisi',
+      },
+      {
+        id: 'moments', label: 'Des moments', done: phases.length > 0,
+        detail: phases.length ? `${phases.length} posés sur la pellicule` : 'la journée est vide',
+      },
+      {
+        id: 'hours', label: 'Des horaires confirmés',
+        done: phases.length > 0 && unconfirmed.length === 0,
+        detail: phases.length === 0
+          ? 'aucun horaire'
+          : unconfirmed.length === 0 ? 'tous confirmés' : `${unconfirmed.length} encore estimés`,
+      },
+      {
+        id: 'places', label: 'Un lieu par moment',
+        done: phases.length > 0 && withoutPlace.length === 0,
+        detail: phases.length === 0
+          ? 'aucun moment'
+          : withoutPlace.length === 0 ? 'chaque moment a le sien' : `${withoutPlace.length} sans lieu`,
+      },
+      {
+        id: 'people', label: 'Des personnes attendues', done: withPeople.length > 0,
+        detail: withPeople.length
+          ? `${withPeople.length} moment${withPeople.length > 1 ? 's' : ''} avec quelqu’un`
+          : 'personne n’est encore rattaché',
+      },
+      {
+        id: 'vendors', label: 'Un prestataire engagé', done: engaged.length > 0,
+        detail: engaged.length
+          ? engaged.map((v) => v.companyName).join(', ')
+          : `${this.vendors.length} prestataire(s), aucun marqué engagé`,
+      },
+      {
+        id: 'documents', label: 'Un document', done: documents.length > 0,
+        detail: documents.length ? `${documents.length} rattaché(s)` : 'aucun document',
+      },
+    ];
+
+    const findings = this.projectFindings();
+    const firstGap = findings.find((f) => f.level === 'gap') ?? null;
+    const clock = this.time;
+    const next = phases.find((p) => p.startHour > clock) ?? phases[0] ?? null;
+
+    return {
+      score: markers.filter((m) => m.done).length,
+      total: markers.length,
+      markers,
+      nextAction: firstGap ? { title: firstGap.title, detail: firstGap.detail } : null,
+      conflicts: findings.filter((f) => f.level === 'conflict').length,
+      nextMoment: next ? { id: next.id, name: next.name, startHour: next.startHour } : null,
+    };
+  }
+
+  /** Declare that a moment happens outside. The product never guesses it. */
+  public setPhaseOutdoor(phaseId: string, outdoor: boolean): boolean {
+    const phase = this.phases.find((p) => p.id === phaseId);
+    if (!phase) return false;
+    this.beginMutation('Déclarer un moment en extérieur');
+    phase.outdoor = outdoor || undefined;
+    this.saveCurrentState();
+    this.notify();
+    return true;
+  }
+
+  /**
+   * WHAT A WEATHER CONDITION WOULD TOUCH — a simulation, and nothing else.
+   *
+   * There is no weather service connected to this product and none is
+   * simulated: the condition and the hour come from the user's own hand. All
+   * this reads is which moments they have DECLARED as happening outside, and
+   * which of them cover that hour. A moment nobody declared is reported as
+   * « non déclaré », never as « à l'abri ».
+   */
+  public weatherImpact(hour: number): {
+    exposed: { id: string; name: string; startHour: number; endHour: number }[];
+    undeclared: number;
+    sheltered: number;
+  } {
+    const covering = this.phases.filter((p) => hour >= p.startHour && hour < p.endHour);
+    return {
+      exposed: covering
+        .filter((p) => p.outdoor === true)
+        .map((p) => ({ id: p.id, name: p.name, startHour: p.startHour, endHour: p.endHour })),
+      undeclared: covering.filter((p) => p.outdoor === undefined).length,
+      sheltered: covering.filter((p) => p.outdoor === false).length,
+    };
+  }
+
+  /**
+   * WHAT MOVING THIS MOMENT REALLY DOES — named, before anything happens.
+   *
+   * Pure projection over the SAME propagation rule as shiftPhasesAfter(): the
+   * moments after it slide by the same delta. It changes nothing; it lists who
+   * and what would move, and which collisions the move would create.
+   */
+  public propagationImpact(phaseId: string, deltaHours: number): {
+    moment: { id: string; name: string; from: number; to: number };
+    people: { id: string; name: string; role: string | null; from: number; to: number }[];
+    vendors: { id: string; name: string }[];
+    followers: { id: string; name: string; from: number; to: number }[];
+    conflicts: { title: string; detail: string; personId?: string }[];
+  } | null {
+    const phase = this.phases.find((p) => p.id === phaseId);
+    if (!phase) return null;
+    const clock = (h: number) => `${String(Math.floor(h) % 24).padStart(2, '0')}:${String(Math.round((h % 1) * 60)).padStart(2, '0')}`;
+
+    const followers = this.phasesAfter(phaseId).map((p) => ({
+      id: p.id, name: p.name, from: p.startHour, to: p.startHour + deltaHours,
+    }));
+    const movedIds = new Set([phaseId, ...followers.map((f) => f.id)]);
+
+    // Everyone attached to a moment that moves, moves with it.
+    const people: { id: string; name: string; role: string | null; from: number; to: number }[] = [];
+    for (const person of this.persons) {
+      const theirs = this.phases
+        .filter((p) => movedIds.has(p.id) && (p.personIds ?? []).includes(person.id))
+        .sort((a, b) => a.startHour - b.startHour);
+      if (theirs.length === 0) continue;
+      people.push({
+        id: person.id,
+        name: person.displayName,
+        role: person.craft?.role ?? null,
+        from: theirs[0].startHour,
+        to: theirs[0].startHour + deltaHours,
+      });
+    }
+
+    const vendors = this.vendors
+      .filter((v) => this.phases.some((p) => movedIds.has(p.id) && (p.vendorIds ?? []).includes(v.id)))
+      .map((v) => ({ id: v.id, name: v.companyName }));
+
+    // What the move would break: a person needed by a moment that does NOT move.
+    const conflicts: { title: string; detail: string; personId?: string }[] = [];
+    for (const person of this.persons) {
+      const moved = this.phases.filter((p) => movedIds.has(p.id) && (p.personIds ?? []).includes(person.id));
+      const still = this.phases.filter((p) => !movedIds.has(p.id) && (p.personIds ?? []).includes(person.id));
+      for (const m of moved) {
+        for (const s of still) {
+          const newStart = m.startHour + deltaHours;
+          const newEnd = m.endHour + deltaHours;
+          if (newStart < s.endHour && newEnd > s.startHour) {
+            conflicts.push({
+              title: `${person.displayName} serait attendu deux fois`,
+              detail: `« ${m.name} » passerait à ${clock(newStart)}–${clock(newEnd)}, alors que « ${s.name} » reste à ${clock(s.startHour)}–${clock(s.endHour)}.`,
+              personId: person.id,
+            });
+          }
+        }
+      }
+    }
+    // A moment pushed past the end of the day is a fact worth saying.
+    for (const f of followers) {
+      if (f.to >= 30) {
+        conflicts.push({ title: `« ${f.name} » sortirait de la journée`, detail: `Nouvel horaire : ${clock(f.to)}.` });
+      }
+    }
+
+    return {
+      moment: { id: phase.id, name: phase.name, from: phase.startHour, to: phase.startHour + deltaHours },
+      people, vendors, followers, conflicts,
+    };
+  }
+
+  /**
+   * Turn a validated intake plan into the project itself.
+   *
+   * The plan comes from projectIntake (pure reading) AND from the corrections
+   * the user made on screen: only the items still marked `keep` are created.
+   * One mutation, one save — so the whole "chaos → journée" step is a single
+   * undo, and a reload gives back exactly this.
+   *
+   * It creates NOTHING that is not in the plan: no default moment, no filler
+   * guest, no invented venue.
+   */
+  public applyIntakePlan(plan: IntakePlan): {
+    phases: number; people: number; vendors: number; places: number; tracks: number;
+  } {
+    this.beginMutation('Construire la journée à partir des documents');
+    const out = { phases: 0, people: 0, vendors: 0, places: 0, tracks: 0 };
+
+    for (const place of plan.places.filter((x) => x.keep)) {
+      if (this.createPlaceSilently(place.name)) out.places++;
+    }
+
+    for (const moment of plan.moments.filter((m) => m.keep)) {
+      const duration = Math.max(0.25, moment.endHour - moment.startHour);
+      if (!this.canPlacePhase(moment.startHour, duration)) continue;
+      const phase: TimelinePhase = {
+        id: freshId('phase'),
+        startHour: moment.startHour,
+        endHour: moment.startHour + duration,
+        name: moment.label,
+        subtitle: '',
+        icon: 'moment',
+        primaryPlaceId: '',
+        highlightAction: '',
+        bgAtmosphere: atmosphereForHour(moment.startHour),
+        keyAgentIds: [], keyDocIds: [], keyTaskIds: [],
+        ambientTrack: 'prep',
+        // The degree of certainty travels WITH the hour. A proposed day stays
+        // visibly proposed on the film until a human settles it.
+        confidence: moment.confidence,
+        confidenceNote: moment.evidence,
+      };
+      this.phases.push(phase);
+      out.phases++;
+    }
+    this.phases.sort((a, b) => a.startHour - b.startHour);
+
+    for (const person of plan.people.filter((x) => x.keep)) {
+      if (this.intakePerson(person.name)) out.people++;
+    }
+    for (const vendor of plan.vendors.filter((x) => x.keep)) {
+      if (this.createVendorSilently(vendor.name)) out.vendors++;
+    }
+    for (const track of plan.tracks.filter((x) => x.keep)) {
+      if (this.createTrackSilently(track.title, track.artist)) out.tracks++;
+    }
+
+    if (plan.guestCountTarget && this.currentProject) {
+      this.currentProject = { ...this.currentProject, guestCountTarget: plan.guestCountTarget };
+      saveWeddingProject(this.currentProject);
+    }
+    // The kind of day is remembered: after creation, the whole product keeps
+    // speaking the vocabulary the user chose in the hero.
+    if (this.currentProject && this.currentProject.eventTypeId !== plan.eventTypeId) {
+      this.currentProject = { ...this.currentProject, eventTypeId: plan.eventTypeId };
+      saveWeddingProject(this.currentProject);
+    }
+
+    this.ensureIdentityModel();
+    this.saveCurrentState();
+    this.notify();
+    return out;
+  }
+
+  /**
+   * Same shape as createPlace(), minus its own undo step: the whole intake is
+   * ONE mutation. Refuses a name that already exists, so re-reading the same
+   * documents never duplicates a venue.
+   */
+  private createPlaceSilently(name: string): Place | null {
+    const clean = name?.trim();
+    if (!clean) return null;
+    if (this.places.some((p) => p.name.toLowerCase() === clean.toLowerCase())) return null;
+    const index = this.places.length;
+    const angle = (index / 12) * Math.PI * 2;
+    const place: Place = {
+      id: freshId('place'),
+      name: clean,
+      code: clean.slice(0, 12).toUpperCase(),
+      kind: 'other',
+      zone: 'manoir',
+      pos: [Math.cos(angle) * 34, 0, Math.sin(angle) * 34],
+      gpsCoordinates: '',
+      capacity: 0,
+      currentPax: 0,
+      description: '',
+      icon: 'manoir',
+      themeColor: BRAND_ACCENT,
+      activeFromHour: 10,
+      activeToHour: 24,
+      connectedAgentIds: [],
+      connectedDocIds: [],
+      connectedTaskIds: [],
+    };
+    this.places.push(place);
+    return place;
+  }
+
+  /** Reuses the existing silent person factory, and refuses a duplicate name. */
+  private intakePerson(displayName: string): Person | null {
+    const clean = displayName?.trim();
+    if (!clean) return null;
+    if (this.persons.some((p) => p.displayName.toLowerCase() === clean.toLowerCase())) return null;
+    const at = new Date().toISOString();
+    const person = this.createPersonSilently(clean);
+    this.guests.push({
+      id: freshId('guest'),
+      projectId: this.currentProject.id,
+      personId: person.id,
+      rsvp: { status: 'pending', plusOnes: 0 },
+      seating: {},
+      side: 'both',
+      origin: 'manual',
+      createdAt: at, updatedAt: at,
+    });
+    return person;
+  }
+
+  private createVendorSilently(companyName: string): Vendor | null {
+    const clean = companyName?.trim();
+    if (!clean) return null;
+    if (this.vendors.some((v) => v.companyName.toLowerCase() === clean.toLowerCase())) return null;
+    const at = new Date().toISOString();
+    const vendor: Vendor = {
+      id: freshId('vendor'),
+      projectId: this.currentProject.id,
+      companyName: clean,
+      category: 'autre',
+      status: 'prospect',
+      documentIds: [], taskIds: [], placeIds: [],
+      origin: 'manual',
+      createdAt: at, updatedAt: at,
+    };
+    this.vendors.push(vendor);
+    return vendor;
+  }
+
+  private createTrackSilently(title: string, artist: string): TrackEntity | null {
+    const t = title?.trim();
+    if (!t) return null;
+    if (this.tracks.some((x) => x.title.toLowerCase() === t.toLowerCase())) return null;
+    const track: TrackEntity = {
+      id: freshId('trk'), title: t, artist: artist?.trim() || '—',
+      moment: 'soiree', status: 'pending', bpm: 0, energy: 3, duration: '',
+      suggestedBy: 'Import', votes: 0,
+    };
+    this.tracks.push(track);
+    return track;
+  }
+
+  // =========================================================================
+  // SPECTACLE — those who make the moment happen.
+  //
+  // NO NEW ENTITY (see docs/AUDIT-SPECTACLE.md): a performer is a Person with a
+  // craft, their presence is the moment they are attached to, their contract is
+  // a MediaAsset, their setup is a Task. The call sheet below is a PROJECTION —
+  // never stored — so moving a moment recomputes every road map at once.
+  // =========================================================================
+
+  /** Give a person a craft, or correct it. Everything is optional. */
+  public setPersonCraft(personId: string, patch: Partial<PersonCraft>): boolean {
+    const person = this.persons.find((p) => p.id === personId);
+    if (!person) return false;
+    const role = (patch.role ?? person.craft?.role ?? '').trim();
+    if (!role) return false;
+    this.beginMutation('Métier de la personne');
+    const next: PersonCraft = { ...(person.craft ?? { role }), ...patch, role };
+    // Empty strings are absences, not values.
+    for (const key of ['speciality', 'status', 'zone', 'fee', 'notes', 'professionalNumber', 'vendorId'] as const) {
+      const value = next[key];
+      if (typeof value === 'string' && !value.trim()) delete next[key];
+    }
+    person.craft = next;
+    person.updatedAt = new Date().toISOString();
+    this.saveCurrentState();
+    this.notify();
+    return true;
+  }
+
+  public removePersonCraft(personId: string): boolean {
+    const person = this.persons.find((p) => p.id === personId);
+    if (!person?.craft) return false;
+    this.beginMutation('Retirer le métier');
+    person.craft = undefined;
+    this.saveCurrentState();
+    this.notify();
+    return true;
+  }
+
+  public addCraftRequirement(personId: string, requirement: string): boolean {
+    const person = this.persons.find((p) => p.id === personId);
+    const clean = requirement?.trim();
+    if (!person?.craft || !clean) return false;
+    this.beginMutation('Besoin technique');
+    person.craft.requirements = [...(person.craft.requirements ?? []), clean];
+    this.saveCurrentState();
+    this.notify();
+    return true;
+  }
+
+  public removeCraftRequirement(personId: string, index: number): boolean {
+    const person = this.persons.find((p) => p.id === personId);
+    const list = person?.craft?.requirements;
+    if (!person?.craft || !list || index < 0 || index >= list.length) return false;
+    this.beginMutation('Retirer un besoin technique');
+    person.craft.requirements = list.filter((_, i) => i !== index);
+    if (person.craft.requirements.length === 0) person.craft.requirements = undefined;
+    this.saveCurrentState();
+    this.notify();
+    return true;
+  }
+
+  /** Everyone who works the day: a person with a craft. */
+  public getCrew(): Person[] {
+    return this.persons
+      .filter((p) => Boolean(p.craft?.role))
+      .sort((a, b) => (a.craft!.role).localeCompare(b.craft!.role, 'fr'));
+  }
+
+  /** The crew expected at one moment. */
+  public getCrewForPhase(phaseId: string): Person[] {
+    const phase = this.phases.find((p) => p.id === phaseId);
+    if (!phase) return [];
+    return (phase.personIds ?? [])
+      .map((id) => this.persons.find((p) => p.id === id))
+      .filter((p): p is Person => Boolean(p?.craft?.role));
+  }
+
+  /**
+   * « MA JOURNÉE » — one person's road map, derived from the timeline.
+   *
+   * Arrival, setup and teardown appear ONLY when the person declared how long
+   * they need: no default 30 minutes is invented. Every row carries the id of
+   * the moment it comes from, so nothing here is a copy.
+   */
+  public getCallSheet(personId: string): {
+    person: Person;
+    rows: { hour: number; label: string; kind: 'setup' | 'moment' | 'teardown'; phaseId?: string; placeName?: string }[];
+    firstHour: number | null;
+    lastHour: number | null;
+  } | null {
+    const person = this.persons.find((p) => p.id === personId);
+    if (!person) return null;
+
+    const moments = this.phases
+      .filter((p) => (p.personIds ?? []).includes(personId))
+      .sort((a, b) => a.startHour - b.startHour);
+
+    const rows: { hour: number; label: string; kind: 'setup' | 'moment' | 'teardown'; phaseId?: string; placeName?: string }[] = [];
+    const placeName = (id: string) => this.places.find((pl) => pl.id === id)?.name;
+
+    if (moments.length > 0) {
+      const setup = person.craft?.setupMinutes;
+      if (setup && setup > 0) {
+        rows.push({
+          hour: moments[0].startHour - setup / 60,
+          label: `Arrivée et installation (${setup} min)`,
+          kind: 'setup',
+          placeName: placeName(moments[0].primaryPlaceId),
+        });
+      }
+      for (const m of moments) {
+        rows.push({ hour: m.startHour, label: m.name, kind: 'moment', phaseId: m.id, placeName: placeName(m.primaryPlaceId) });
+      }
+      const teardown = person.craft?.teardownMinutes;
+      const last = moments[moments.length - 1];
+      if (teardown && teardown > 0) {
+        rows.push({ hour: last.endHour, label: `Démontage (${teardown} min)`, kind: 'teardown', placeName: placeName(last.primaryPlaceId) });
+      }
+    }
+
+    rows.sort((a, b) => a.hour - b.hour);
+    return {
+      person,
+      rows,
+      firstHour: rows.length ? rows[0].hour : null,
+      lastHour: rows.length ? rows[rows.length - 1].hour : null,
+    };
+  }
+
+  /**
+   * What the crew makes visible: someone expected in two places at once, a
+   * craft with no moment, a declared need nobody has answered.
+   *
+   * Read-only, deterministic, and silent when there is nothing to say.
+   */
+  public crewFindings(): { level: 'conflict' | 'gap'; personId: string; title: string; detail: string }[] {
+    const out: { level: 'conflict' | 'gap'; personId: string; title: string; detail: string }[] = [];
+    const clock = (h: number) => `${String(Math.floor(h) % 24).padStart(2, '0')}:${String(Math.round((h % 1) * 60)).padStart(2, '0')}`;
+
+    for (const person of this.getCrew()) {
+      const moments = this.phases
+        .filter((p) => (p.personIds ?? []).includes(person.id))
+        .sort((a, b) => a.startHour - b.startHour);
+
+      for (let i = 0; i < moments.length - 1; i++) {
+        if (moments[i].endHour > moments[i + 1].startHour + 1e-6) {
+          out.push({
+            level: 'conflict',
+            personId: person.id,
+            title: `${person.displayName} est attendu·e à deux endroits`,
+            detail: `${moments[i].name} finit à ${clock(moments[i].endHour)} et ${moments[i + 1].name} commence à ${clock(moments[i + 1].startHour)}.`,
+          });
+        }
+      }
+
+      const setup = person.craft?.setupMinutes ?? 0;
+      if (setup > 0 && moments.length > 0 && moments[0].startHour - setup / 60 < 0) {
+        out.push({
+          level: 'conflict',
+          personId: person.id,
+          title: `${person.displayName} n’a pas le temps de s’installer`,
+          detail: `${setup} min d’installation avant ${clock(moments[0].startHour)} sortent de la journée.`,
+        });
+      }
+
+      if (moments.length === 0) {
+        out.push({
+          level: 'gap',
+          personId: person.id,
+          title: `${person.displayName} n’est rattaché·e à aucun moment`,
+          detail: `${person.craft?.role} sans horaire : personne ne saura quand l’attendre.`,
+        });
+      }
+
+      const hasContract = this.media.some((m) => m.ownerKind === 'person' && m.ownerId === person.id);
+      if (!hasContract && moments.length > 0) {
+        out.push({
+          level: 'gap',
+          personId: person.id,
+          title: `Aucun document pour ${person.displayName}`,
+          detail: 'Contrat, fiche technique ou fiche de route : rien n’est rattaché à cette personne.',
+        });
+      }
+
+      if (!person.craft?.requirements || person.craft.requirements.length === 0) {
+        out.push({
+          level: 'gap',
+          personId: person.id,
+          title: `Besoins techniques non déclarés — ${person.displayName}`,
+          detail: 'Son, lumière, électricité, loge, repas : rien n’a été écrit, donc rien ne peut être vérifié.',
+        });
+      }
+    }
+    return out;
+  }
+
+  /** Who is working between two hours — the question the day J asks. */
+  public whoWorksBetween(fromHour: number, toHour: number): {
+    person: Person; moments: string[];
+  }[] {
+    const out: { person: Person; moments: string[] }[] = [];
+    for (const person of this.getCrew()) {
+      const moments = this.phases
+        .filter((p) => (p.personIds ?? []).includes(person.id))
+        .filter((p) => p.startHour < toHour && p.endHour > fromHour)
+        .sort((a, b) => a.startHour - b.startHour);
+      if (moments.length > 0) out.push({ person, moments: moments.map((m) => m.name) });
+    }
+    return out;
+  }
+
+  // =========================================================================
+  // ORCHESTRATION — several events, one identity, no second database.
+  //
+  // Everything below is either a pure READ across the project snapshots that
+  // already exist, or a write into an entity that already exists (a task, a
+  // media). No « Mission », no « TravelSheet », no second timeline.
+  // =========================================================================
+
+  /** Where an artist comes from and sleeps. Free text, nothing booked. */
+  public setPersonTravel(personId: string, patch: Partial<NonNullable<PersonCraft['travel']>>): boolean {
+    const person = this.persons.find((p) => p.id === personId);
+    if (!person?.craft) return false;
+    this.beginMutation('Déplacement de la personne');
+    const next = { ...(person.craft.travel ?? {}), ...patch };
+    for (const key of Object.keys(next) as (keyof typeof next)[]) {
+      if (!String(next[key] ?? '').trim()) delete next[key];
+    }
+    person.craft.travel = Object.keys(next).length > 0 ? next : undefined;
+    person.updatedAt = new Date().toISOString();
+    this.saveCurrentState();
+    this.notify();
+    return true;
+  }
+
+  /**
+   * DELEGATION — « vérifier le contrat de Matt ».
+   *
+   * A mission is a TaskEntity with someone on it. Same list, same persistence,
+   * same undo: nothing new to keep in sync.
+   */
+  public createMission(input: {
+    title: string; assignedPersonId?: string; phaseId?: string; dueHour?: number;
+  }): TaskEntity | null {
+    const title = input.title?.trim();
+    if (!title) return null;
+    if (input.assignedPersonId && !this.persons.some((p) => p.id === input.assignedPersonId)) return null;
+    if (input.phaseId && !this.phases.some((p) => p.id === input.phaseId)) return null;
+
+    this.beginMutation('Déléguer une mission');
+    const task: TaskEntity = {
+      id: freshId('task'),
+      title,
+      category: 'logistique',
+      phaseId: input.phaseId,
+      dueHour: input.dueHour ?? (input.phaseId
+        ? this.phases.find((p) => p.id === input.phaseId)?.startHour ?? this.time
+        : this.time),
+      isDone: false,
+      urgent: false,
+      assignedPersonId: input.assignedPersonId,
+      status: 'todo',
+      sourceOrigin: 'USER',
+      connectedDocIds: [],
+      connectedAgentIds: [],
+    };
+    this.tasks.push(task);
+    if (input.phaseId) {
+      const phase = this.phases.find((p) => p.id === input.phaseId);
+      if (phase) phase.taskIds = [...(phase.taskIds ?? []), task.id];
+    }
+    this.saveCurrentState();
+    this.notify();
+    return task;
+  }
+
+  public setMissionStatus(taskId: string, status: NonNullable<TaskEntity['status']>): boolean {
+    const task = this.tasks.find((t) => t.id === taskId);
+    if (!task) return false;
+    this.beginMutation('Statut de la mission');
+    task.status = status;
+    task.isDone = status === 'done';
+    this.saveCurrentState();
+    this.notify();
+    return true;
+  }
+
+  /** The missions of one person — what they, and only they, must handle. */
+  public getMissionsFor(personId: string): TaskEntity[] {
+    return this.tasks.filter((t) => t.assignedPersonId === personId);
+  }
+
+  /**
+   * SEVERAL EVENTS, ONE PERSON.
+   *
+   * Reads the OTHER projects' snapshots — read only, nothing copied — and
+   * reports someone booked twice on the same day.
+   *
+   * HONESTY: projects do not share ids, so the match is made on the displayed
+   * name. Two namesakes in two weddings are not the same human being, and this
+   * product does not decide that for you: every line is « à confirmer ».
+   */
+  public crossEventConflicts(): {
+    personName: string; otherProjectId: string; otherProjectName: string;
+    here: string; there: string; sameDay: boolean;
+  }[] {
+    const out: {
+      personName: string; otherProjectId: string; otherProjectName: string;
+      here: string; there: string; sameDay: boolean;
+    }[] = [];
+    const clock = (h: number) => `${String(Math.floor(h) % 24).padStart(2, '0')}:${String(Math.round((h % 1) * 60)).padStart(2, '0')}`;
+
+    const mine = this.getCrew().map((person) => ({
+      person,
+      windows: this.phases
+        .filter((p) => (p.personIds ?? []).includes(person.id))
+        .map((p) => ({ name: p.name, start: p.startHour, end: p.endHour })),
+    })).filter((x) => x.windows.length > 0);
+    if (mine.length === 0) return out;
+
+    for (const project of getStoredProjects()) {
+      if (project.id === this.currentProject.id) continue;
+      const snapshot = loadPersistedState(project.id);
+      if (!snapshot) continue;
+      const persons = (snapshot as unknown as { persons?: Person[] }).persons ?? [];
+      const phases = (snapshot as unknown as { phases?: TimelinePhase[] }).phases ?? [];
+      const sameDay = Boolean(project.weddingDate && this.currentProject.weddingDate
+        && project.weddingDate === this.currentProject.weddingDate);
+
+      for (const { person, windows } of mine) {
+        const twin = persons.find((p) => p.displayName?.toLowerCase() === person.displayName.toLowerCase());
+        if (!twin) continue;
+        const theirs = phases.filter((p) => (p.personIds ?? []).includes(twin.id));
+        if (theirs.length === 0) continue;
+
+        for (const w of windows) {
+          for (const t of theirs) {
+            const overlaps = t.startHour < w.end && t.endHour > w.start;
+            if (!sameDay || !overlaps) continue;
+            out.push({
+              personName: person.displayName,
+              otherProjectId: project.id,
+              otherProjectName: project.coupleNames || project.title,
+              here: `${w.name} ${clock(w.start)}–${clock(w.end)}`,
+              there: `${t.name} ${clock(t.startHour)}–${clock(t.endHour)}`,
+              sameDay,
+            });
+          }
+        }
+      }
+    }
+    return out;
+  }
+
+  /**
+   * WHO COULD REPLACE THEM — a proposal, never a substitution.
+   *
+   * Same craft, and free during the hours the missing person covers. Nobody is
+   * invented: only people already in this project are proposed, and the swap
+   * is left to a human.
+   */
+  public findReplacements(personId: string): { person: Person; reason: string }[] {
+    const person = this.persons.find((p) => p.id === personId);
+    if (!person?.craft?.role) return [];
+    const windows = this.phases
+      .filter((p) => (p.personIds ?? []).includes(personId))
+      .map((p) => ({ start: p.startHour, end: p.endHour }));
+
+    return this.persons
+      .filter((candidate) => candidate.id !== personId)
+      .filter((candidate) => candidate.craft?.role?.toLowerCase() === person.craft!.role.toLowerCase())
+      .map((candidate) => {
+        const busy = this.phases
+          .filter((p) => (p.personIds ?? []).includes(candidate.id))
+          .filter((p) => windows.some((w) => p.startHour < w.end && p.endHour > w.start));
+        return {
+          person: candidate,
+          reason: busy.length === 0
+            ? `Même métier (${candidate.craft!.role}), libre sur ces heures.`
+            : `Même métier, mais déjà pris sur ${busy.map((b) => b.name).join(', ')}.`,
+          free: busy.length === 0,
+        };
+      })
+      .sort((a, b) => Number(b.free) - Number(a.free))
+      .map(({ person: p, reason }) => ({ person: p, reason }));
+  }
+
+  /**
+   * ADMINISTRATION — produce a document from what the project really knows.
+   *
+   * The result is a MediaAsset of this project (one document system, not two).
+   * Every field the project does not know is written « À CONFIRMER » in the
+   * document itself: nothing is invented, and the gap is visible on paper.
+   */
+  public generateAdminDocument(input: {
+    docKind: string;
+    authorKind: string;
+    recipientKind: string;
+    recipientName: string;
+    personId?: string;
+    phaseId?: string;
+  }): MediaAsset | null {
+    const docKind = input.docKind?.trim();
+    const recipientName = input.recipientName?.trim();
+    if (!docKind || !recipientName) return null;
+
+    const person = input.personId ? this.persons.find((p) => p.id === input.personId) ?? null : null;
+    const phase = input.phaseId ? this.phases.find((p) => p.id === input.phaseId) ?? null : null;
+    const clock = (h: number) => `${String(Math.floor(h) % 24).padStart(2, '0')}:${String(Math.round((h % 1) * 60)).padStart(2, '0')}`;
+    const unknown = 'À CONFIRMER';
+
+    const sheet = person ? this.getCallSheet(person.id) : null;
+    const lines: string[] = [
+      docKind.toUpperCase(),
+      '',
+      `Émis par : ${input.authorKind || unknown}`,
+      `Destinataire (${input.recipientKind || unknown}) : ${recipientName}`,
+      `Événement : ${this.currentProject.coupleNames || this.currentProject.title}`,
+      `Date : ${this.currentProject.weddingDate || unknown}`,
+      `Lieu : ${this.currentProject.locationName || unknown}`,
+      '',
+    ];
+
+    if (person) {
+      lines.push(
+        `Personne : ${person.displayName}`,
+        `Métier : ${person.craft?.role ?? unknown}`,
+        `Statut : ${person.craft?.status ?? unknown}`,
+        `Téléphone : ${person.phone ?? unknown}`,
+        `E-mail : ${person.email ?? unknown}`,
+        `Rémunération : ${person.craft?.fee ?? unknown}`,
+        '',
+      );
+      if (sheet && sheet.rows.length > 0) {
+        lines.push('DÉROULÉ');
+        for (const row of sheet.rows) {
+          lines.push(`  ${clock(row.hour)}  ${row.label}${row.placeName ? ` — ${row.placeName}` : ''}`);
+        }
+        lines.push('');
+      } else {
+        lines.push('DÉROULÉ : ' + unknown, '');
+      }
+      const needs = person.craft?.requirements ?? [];
+      lines.push('BESOINS TECHNIQUES', needs.length ? needs.map((n) => `  · ${n}`).join('\n') : `  ${unknown}`, '');
+      const travel = person.craft?.travel;
+      if (travel && Object.keys(travel).length > 0) {
+        lines.push('DÉPLACEMENT',
+          `  Départ : ${travel.from ?? unknown}`,
+          `  Arrivée : ${travel.arrival ?? unknown}`,
+          `  Transport : ${travel.transport ?? unknown}`,
+          `  Navette : ${travel.shuttle ?? unknown}`,
+          `  Hébergement : ${travel.hotel ?? unknown}`,
+          `  Retour : ${travel.departure ?? unknown}`,
+          '');
+      }
+    }
+
+    if (phase) {
+      lines.push(`Moment concerné : ${phase.name} (${clock(phase.startHour)} → ${clock(phase.endHour)})`, '');
+    }
+
+    lines.push(
+      'Montant : ' + unknown,
+      'Signature : ' + unknown,
+      '',
+      `Produit par LE GRAND JOUR le ${new Date().toLocaleDateString('fr-FR')}.`,
+      'Les mentions « À CONFIRMER » sont des informations que le projet ne possède pas :',
+      'elles n’ont pas été devinées.',
+    );
+
+    const body = lines.join('\n');
+    const fileName = `${docKind.toLowerCase().replace(/[^a-z0-9]+/gi, '-')}-${recipientName.toLowerCase().replace(/[^a-z0-9]+/gi, '-')}.txt`;
+    const source = `data:text/plain;charset=utf-8,${encodeURIComponent(body)}`;
+
+    return this.addMedia({
+      kind: 'document',
+      source,
+      ownerKind: person ? 'person' : phase ? 'event' : 'wedding',
+      ownerId: person ? person.id : phase ? phase.id : this.currentProject.id,
+      title: `${docKind} — ${recipientName}`,
+      fileName,
+      byteSize: body.length,
+    });
+  }
+
+  /**
+   * ADMINISTRATION — several events, read from one place, without a second base.
+   *
+   * Everything below is READ-ONLY over the projects already stored in this
+   * browser. No new storage key, no copy, no synchronisation: the truth of an
+   * event stays in that event. The current project is read LIVE (so unsaved
+   * work is visible); the others are read from their own snapshot, exactly the
+   * way crossEventConflicts() already does.
+   */
+  private projectSnapshot(projectId: string): {
+    phases: TimelinePhase[]; persons: Person[]; vendors: Vendor[]; media: MediaAsset[]; tasks: TaskEntity[];
+  } | null {
+    if (projectId === this.currentProject.id) {
+      return {
+        phases: this.phases, persons: this.persons, vendors: this.vendors,
+        media: this.media, tasks: this.tasks,
+      };
+    }
+    const snapshot = loadPersistedState(projectId) as unknown as {
+      phases?: TimelinePhase[]; persons?: Person[]; vendors?: Vendor[]; media?: MediaAsset[]; tasks?: TaskEntity[];
+    } | null;
+    if (!snapshot) return null;
+    return {
+      phases: snapshot.phases ?? [], persons: snapshot.persons ?? [], vendors: snapshot.vendors ?? [],
+      media: snapshot.media ?? [], tasks: snapshot.tasks ?? [],
+    };
+  }
+
+  // -------------------------------------------------------------------------
+  // CHRONOS — THE CALENDAR IS A PROJECTION, NOT A SECOND AGENDA.
+  // -------------------------------------------------------------------------
+  // There is one temporal reality in this product and it is already written:
+  // a PROJECT carries the day (`weddingDate`, 'YYYY-MM-DD'), a MOMENT carries
+  // the hours inside it (`startHour`/`endHour`). Nobody had ever read the two
+  // together — that is all a calendar is.
+  //
+  // Everything below is a pure projection: it stores nothing, writes nothing,
+  // creates no key, copies no hour. Change a moment and the calendar changes,
+  // because it never held a copy of it. The 30-hour ceiling of the timeline is
+  // untouched: a three-day trip is three days, each with its own readable
+  // timeline — not one 72-hour ribbon nobody can read.
+  //
+  // Dates are handled as plain 'YYYY-MM-DD' strings, exactly as they are
+  // stored. No Date arithmetic across time zones, no library, no drift.
+  // -------------------------------------------------------------------------
+
+  // -------------------------------------------------------------------------
+  // ONE DOOR TO A MOMENT, WHEREVER YOU COME FROM.
+  //
+  // The calendar, the search, a document, a mission and the administration all
+  // need to say « open THAT moment ». Before this, only the search could, and
+  // it did it by reaching into the DOM: querySelector(...).click(). One broken
+  // selector and the link died silently.
+  //
+  // Now there is one request, read by the timeline: it loads the right event if
+  // needed, then opens the moment. Nothing else knows how the panel works.
+  // -------------------------------------------------------------------------
+  public focusPhaseId: string | null = null;
+
+  public openMoment(phaseId: string, projectId?: string): boolean {
+    if (!phaseId) return false;
+    if (projectId && projectId !== this.currentProject.id) {
+      this.loadProject(projectId);
+    } else if (!this.phases.some((p) => p.id === phaseId)) {
+      return false;
+    }
+    this.focusPhaseId = phaseId;
+    this.notify();
+    return true;
+  }
+
+  /** The timeline consumes the request once, so it cannot re-open by itself. */
+  public consumeMomentFocus(): string | null {
+    const id = this.focusPhaseId;
+    this.focusPhaseId = null;
+    return id;
+  }
+
+  /**
+   * The event itself: what a whole day is called, when and where it happens.
+   *
+   * MEASURED: since the World surfaces were closed, these four fields had no
+   * door left in the product — a couple could not fix a date typo. This is the
+   * ONLY writer; the project stays the single source of truth for them.
+   */
+  public updateEvent(patch: {
+    coupleNames?: string;
+    weddingDate?: string;
+    locationName?: string;
+    eventTypeId?: string;
+    guestCountTarget?: number;
+  }): boolean {
+    if (!this.projectChosen) return false;
+    const next = { ...this.currentProject };
+    let changed = false;
+    if (patch.coupleNames !== undefined && patch.coupleNames.trim() !== next.coupleNames) {
+      next.coupleNames = patch.coupleNames.trim(); changed = true;
+    }
+    if (patch.weddingDate !== undefined && patch.weddingDate.trim() !== next.weddingDate) {
+      // A date is either empty or a real day. Nothing in between is stored.
+      const clean = patch.weddingDate.trim();
+      if (clean && !/^\d{4}-\d{2}-\d{2}$/.test(clean)) return false;
+      next.weddingDate = clean; changed = true;
+    }
+    if (patch.locationName !== undefined && patch.locationName.trim() !== next.locationName) {
+      next.locationName = patch.locationName.trim(); changed = true;
+    }
+    if (patch.eventTypeId !== undefined && patch.eventTypeId !== next.eventTypeId) {
+      next.eventTypeId = patch.eventTypeId; changed = true;
+    }
+    if (patch.guestCountTarget !== undefined && patch.guestCountTarget !== next.guestCountTarget) {
+      next.guestCountTarget = patch.guestCountTarget; changed = true;
+    }
+    if (!changed) return false;
+    this.currentProject = next;
+    saveWeddingProject(this.currentProject);
+    this.notify();
+    return true;
+  }
+
+  /** Days are strings here, on purpose: no time zone can shift a string. */
+  private static dayToParts(iso: string): { y: number; m: number; d: number } | null {
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec((iso || '').trim());
+    if (!m) return null;
+    return { y: Number(m[1]), m: Number(m[2]), d: Number(m[3]) };
+  }
+
+  private static partsToDay(y: number, m: number, d: number): string {
+    return `${String(y).padStart(4, '0')}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+  }
+
+  /** Add days to a 'YYYY-MM-DD', through UTC so no local zone can shift it. */
+  public shiftDay(iso: string, days: number): string {
+    const p = WeddingStore.dayToParts(iso);
+    if (!p) return iso;
+    const t = Date.UTC(p.y, p.m - 1, p.d) + days * 86400000;
+    const d = new Date(t);
+    return WeddingStore.partsToDay(d.getUTCFullYear(), d.getUTCMonth() + 1, d.getUTCDate());
+  }
+
+  /** 1 = Monday … 7 = Sunday. The week starts on Monday, as it does in France. */
+  public weekdayOf(iso: string): number {
+    const p = WeddingStore.dayToParts(iso);
+    if (!p) return 1;
+    const wd = new Date(Date.UTC(p.y, p.m - 1, p.d)).getUTCDay();
+    return wd === 0 ? 7 : wd;
+  }
+
+  public today(): string {
+    const now = new Date();
+    return WeddingStore.partsToDay(now.getFullYear(), now.getMonth() + 1, now.getDate());
+  }
+
+  /**
+   * The window of time a scale covers around an anchor day. One function for
+   * the four scales, so « zoom on time » is a single idea, not four.
+   */
+  public calendarRange(scale: 'day' | 'week' | 'month' | 'year', anchorISO: string): {
+    from: string; to: string; label: string;
+  } {
+    const p = WeddingStore.dayToParts(anchorISO) ?? WeddingStore.dayToParts(this.today())!;
+    const anchor = WeddingStore.partsToDay(p.y, p.m, p.d);
+    const MONTHS = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin',
+      'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
+
+    if (scale === 'day') {
+      return { from: anchor, to: anchor, label: this.longDayLabel(anchor) };
+    }
+    if (scale === 'week') {
+      const from = this.shiftDay(anchor, -(this.weekdayOf(anchor) - 1));
+      const to = this.shiftDay(from, 6);
+      const a = WeddingStore.dayToParts(from)!;
+      const b = WeddingStore.dayToParts(to)!;
+      const label = a.m === b.m
+        ? `${a.d} – ${b.d} ${MONTHS[b.m - 1]} ${b.y}`
+        : `${a.d} ${MONTHS[a.m - 1]} – ${b.d} ${MONTHS[b.m - 1]} ${b.y}`;
+      return { from, to, label };
+    }
+    if (scale === 'month') {
+      const from = WeddingStore.partsToDay(p.y, p.m, 1);
+      const days = new Date(Date.UTC(p.y, p.m, 0)).getUTCDate();
+      return { from, to: WeddingStore.partsToDay(p.y, p.m, days), label: `${MONTHS[p.m - 1]} ${p.y}` };
+    }
+    return {
+      from: WeddingStore.partsToDay(p.y, 1, 1),
+      to: WeddingStore.partsToDay(p.y, 12, 31),
+      label: String(p.y),
+    };
+  }
+
+  public longDayLabel(iso: string): string {
+    const p = WeddingStore.dayToParts(iso);
+    if (!p) return iso;
+    const DAYS = ['lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi', 'dimanche'];
+    const MONTHS = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin',
+      'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
+    return `${DAYS[this.weekdayOf(iso) - 1]} ${p.d} ${MONTHS[p.m - 1]} ${p.y}`;
+  }
+
+  /**
+   * WHAT EACH DAY HOLDS, read from the events already stored.
+   *
+   * A day carries an event when the event's date is that day — and also when
+   * the PREVIOUS day's timeline runs past midnight, because a party ending at
+   * 02:00 really does happen on the next morning. That second case is DERIVED
+   * from `endHour > 24`; nothing is stored twice.
+   */
+  public calendarDays(fromISO: string, toISO: string): {
+    date: string;
+    weekday: number;
+    isToday: boolean;
+    entries: {
+      projectId: string;
+      projectName: string;
+      typeLabel: string;
+      isCurrent: boolean;
+      isDemo: boolean;
+      /** 'day' = the event's own date · 'overnight' = it started the day before. */
+      part: 'day' | 'overnight';
+      moments: number;
+      firstHour: number | null;
+      lastHour: number | null;
+      headline: string | null;
+      people: number;
+      unconfirmedHours: number;
+      place: string;
+    }[];
+  }[] {
+    const out: ReturnType<WeddingStore['calendarDays']> = [];
+    const today = this.today();
+    if (!WeddingStore.dayToParts(fromISO) || !WeddingStore.dayToParts(toISO)) return out;
+
+    // Read each project ONCE, not once per day.
+    const events = getStoredProjects()
+      .filter((project) => Boolean(project.weddingDate))
+      .map((project) => {
+        const snap = this.projectSnapshot(project.id);
+        const phases = (snap?.phases ?? []).slice().sort((a, b) => a.startHour - b.startHour);
+        const persons = new Set<string>();
+        for (const phase of phases) for (const id of phase.personIds ?? []) persons.add(id);
+        const lastHour = phases.length ? Math.max(...phases.map((p) => p.endHour)) : null;
+        return {
+          project,
+          phases,
+          people: persons.size,
+          firstHour: phases.length ? phases[0].startHour : null,
+          lastHour,
+          headline: phases.length ? phases[0].name : null,
+          unconfirmedHours: phases.filter((p) => p.confidence && p.confidence !== 'confirmed').length,
+          // A day that runs past midnight spills onto the next one. Derived.
+          spillsOver: Boolean(lastHour !== null && lastHour > 24),
+        };
+      });
+
+    for (let date = fromISO; date <= toISO; date = this.shiftDay(date, 1)) {
+      const entries: ReturnType<WeddingStore['calendarDays']>[number]['entries'] = [];
+      for (const e of events) {
+        const own = e.project.weddingDate === date;
+        const spill = e.spillsOver && this.shiftDay(e.project.weddingDate, 1) === date;
+        if (!own && !spill) continue;
+        entries.push({
+          projectId: e.project.id,
+          projectName: e.project.coupleNames || e.project.title,
+          typeLabel: eventType(e.project.eventTypeId).label,
+          isCurrent: e.project.id === this.currentProject.id,
+          isDemo: Boolean(e.project.isDemo),
+          part: own ? 'day' : 'overnight',
+          moments: own ? e.phases.length : e.phases.filter((p) => p.endHour > 24).length,
+          firstHour: own ? e.firstHour : 24,
+          lastHour: e.lastHour,
+          headline: own ? e.headline : 'Fin de la veille',
+          people: e.people,
+          unconfirmedHours: own ? e.unconfirmedHours : 0,
+          place: e.project.locationName || '',
+        });
+      }
+      out.push({ date, weekday: this.weekdayOf(date), isToday: date === today, entries });
+      if (out.length > 400) break; // a year, plus a safety margin
+    }
+    return out;
+  }
+
+  /**
+   * ONE PERSON'S OWN CALENDAR — derived, never entered twice.
+   *
+   * Across every stored event, the days this person is expected on. Inside an
+   * event, their hours come from the moments they are attached to; the detail
+   * stays where it belongs — getCallSheet(). Between events, the person is
+   * recognised BY NAME, and every such row says so.
+   */
+  public personCalendar(personId: string, fromISO: string, toISO: string): {
+    date: string;
+    projectId: string;
+    projectName: string;
+    matchedByName: boolean;
+    firstHour: number | null;
+    lastHour: number | null;
+    moments: { name: string; startHour: number; endHour: number }[];
+  }[] {
+    const person = this.persons.find((p) => p.id === personId);
+    if (!person) return [];
+    const out: ReturnType<WeddingStore['personCalendar']> = [];
+
+    for (const project of getStoredProjects()) {
+      const date = project.weddingDate;
+      if (!date || date < fromISO || date > toISO) continue;
+      const snap = this.projectSnapshot(project.id);
+      if (!snap) continue;
+      const isCurrent = project.id === this.currentProject.id;
+      const twin = isCurrent
+        ? person
+        : snap.persons.find((p) => p.displayName?.toLowerCase() === person.displayName.toLowerCase());
+      if (!twin) continue;
+      const moments = snap.phases
+        .filter((p) => (p.personIds ?? []).includes(twin.id))
+        .sort((a, b) => a.startHour - b.startHour)
+        .map((p) => ({ name: p.name, startHour: p.startHour, endHour: p.endHour }));
+      if (moments.length === 0) continue;
+      out.push({
+        date,
+        projectId: project.id,
+        projectName: project.coupleNames || project.title,
+        matchedByName: !isCurrent,
+        firstHour: moments[0].startHour,
+        lastHour: Math.max(...moments.map((m) => m.endHour)),
+        moments,
+      });
+    }
+    return out.sort((a, b) => a.date.localeCompare(b.date));
+  }
+
+  /** One line per event: what it holds, and what it is still waiting for. */
+  public adminEvents(): {
+    project: WeddingProject;
+    isCurrent: boolean;
+    isDemo: boolean;
+    typeLabel: string;
+    moments: number;
+    people: number;
+    crew: number;
+    documents: number;
+    openTasks: number;
+    estimatedHours: number;
+  }[] {
+    return getStoredProjects().map((project) => {
+      const snap = this.projectSnapshot(project.id);
+      const persons = snap?.persons ?? [];
+      return {
+        project,
+        isCurrent: project.id === this.currentProject.id,
+        isDemo: Boolean(project.isDemo),
+        typeLabel: eventType(project.eventTypeId).label,
+        moments: snap?.phases.length ?? 0,
+        people: persons.length,
+        crew: persons.filter((p) => p.craft?.role).length,
+        documents: snap?.media.filter((m) => m.kind === 'document').length ?? 0,
+        openTasks: snap?.tasks.filter((t) => !t.isDone).length ?? 0,
+        estimatedHours: snap?.phases.filter((p) => p.confidence && p.confidence !== 'confirmed').length ?? 0,
+      };
+    }).sort((a, b) => (a.project.weddingDate || '9999').localeCompare(b.project.weddingDate || '9999'));
+  }
+
+  /**
+   * WHAT NEEDS A HUMAN, across every event. Not statistics: a to-do list that
+   * only ever states facts already present in the data.
+   */
+  public adminAlerts(): {
+    kind: 'conflict' | 'document' | 'task' | 'confirm';
+    projectId: string; projectName: string; title: string; detail: string;
+  }[] {
+    const out: ReturnType<WeddingStore['adminAlerts']> = [];
+    const clock = (h: number) => `${String(Math.floor(h) % 24).padStart(2, '0')}:${String(Math.round((h % 1) * 60)).padStart(2, '0')}`;
+
+    for (const project of getStoredProjects()) {
+      // A DEMONSTRATION IS NOT A JOB. The editorial wedding shipped with the
+      // product is a real stored project — but nobody has to chase its missing
+      // contracts. It stays listed among the events, labelled as what it is,
+      // and it never produces work for a human.
+      if (project.isDemo) continue;
+      const snap = this.projectSnapshot(project.id);
+      if (!snap) continue;
+      const name = project.coupleNames || project.title;
+
+      // Someone expected in two places at once, inside the same event.
+      for (const person of snap.persons) {
+        const theirs = snap.phases
+          .filter((p) => (p.personIds ?? []).includes(person.id))
+          .sort((a, b) => a.startHour - b.startHour);
+        for (let i = 0; i < theirs.length - 1; i++) {
+          if (theirs[i].endHour > theirs[i + 1].startHour) {
+            out.push({
+              kind: 'conflict', projectId: project.id, projectName: name,
+              title: `${person.displayName} est attendu deux fois`,
+              detail: `« ${theirs[i].name} » jusqu’à ${clock(theirs[i].endHour)} et « ${theirs[i + 1].name} » dès ${clock(theirs[i + 1].startHour)}.`,
+            });
+          }
+        }
+      }
+
+      // A craft engaged with no contract anywhere in the event.
+      for (const person of snap.persons) {
+        if (!person.craft?.role) continue;
+        const onStage = snap.phases.some((p) => (p.personIds ?? []).includes(person.id));
+        if (!onStage) continue;
+        const docs = snap.media
+          .filter((m) => m.ownerKind === 'person' && m.ownerId === person.id)
+          .map((m) => `${m.title ?? ''} ${m.fileName ?? ''}`.toLowerCase());
+        if (!docs.some((t) => /contrat|cession|engagement/.test(t))) {
+          out.push({
+            kind: 'document', projectId: project.id, projectName: name,
+            title: `${person.displayName} — contrat absent`,
+            detail: `${person.craft.role}, engagé sur cet événement.`,
+          });
+        }
+      }
+
+      // Hours the product proposed and nobody has confirmed.
+      const estimated = snap.phases.filter((p) => p.confidence && p.confidence !== 'confirmed');
+      if (estimated.length > 0) {
+        out.push({
+          kind: 'confirm', projectId: project.id, projectName: name,
+          title: `${estimated.length} horaire${estimated.length > 1 ? 's' : ''} à confirmer`,
+          detail: estimated.map((p) => `${p.name} ${clock(p.startHour)}`).join(', '),
+        });
+      }
+
+      const open = snap.tasks.filter((t) => !t.isDone);
+      if (open.length > 0) {
+        out.push({
+          kind: 'task', projectId: project.id, projectName: name,
+          title: `${open.length} tâche${open.length > 1 ? 's' : ''} en attente`,
+          detail: open.slice(0, 4).map((t) => t.title).join(', '),
+        });
+      }
+    }
+    return out;
+  }
+
+  /**
+   * ONE SEARCH, EVERY EVENT. The same reading as searchEverything(), applied to
+   * each stored project. A result always says which event it belongs to.
+   */
+  public searchAcrossEvents(query: string): {
+    projectId: string; projectName: string;
+    kind: 'person' | 'moment' | 'vendor' | 'document' | 'task' | 'event';
+    id: string; label: string; context: string;
+  }[] {
+    const q = query.trim().toLowerCase();
+    if (q.length < 2) return [];
+    const hit = (s?: string) => Boolean(s && s.toLowerCase().includes(q));
+    const out: ReturnType<WeddingStore['searchAcrossEvents']> = [];
+    const clock = (h: number) => `${String(Math.floor(h) % 24).padStart(2, '0')}:${String(Math.round((h % 1) * 60)).padStart(2, '0')}`;
+
+    for (const project of getStoredProjects()) {
+      const name = project.coupleNames || project.title;
+      const snap = this.projectSnapshot(project.id);
+      if (!snap) continue;
+
+      if (hit(name) || hit(project.title) || hit(project.locationName) || hit(project.weddingDate)) {
+        out.push({
+          projectId: project.id, projectName: name, kind: 'event', id: project.id, label: name,
+          context: [eventType(project.eventTypeId).label, project.weddingDate || 'date à confirmer', project.locationName].filter(Boolean).join(' · '),
+        });
+      }
+      for (const person of snap.persons) {
+        if (!hit(person.displayName) && !hit(person.craft?.role) && !hit(person.craft?.speciality)
+          && !hit(person.email) && !hit(person.phone)) continue;
+        const moments = snap.phases.filter((p) => (p.personIds ?? []).includes(person.id));
+        out.push({
+          projectId: project.id, projectName: name, kind: 'person', id: person.id,
+          label: person.craft?.role ? `${person.displayName} · ${person.craft.role}` : person.displayName,
+          context: moments.length ? moments.map((m) => `${m.name} ${clock(m.startHour)}`).join(', ') : 'aucun moment',
+        });
+      }
+      for (const vendor of snap.vendors) {
+        if (!hit(vendor.companyName)) continue;
+        out.push({
+          projectId: project.id, projectName: name, kind: 'vendor', id: vendor.id,
+          label: vendor.companyName, context: vendor.status,
+        });
+      }
+      for (const phase of snap.phases) {
+        if (!hit(phase.name)) continue;
+        out.push({
+          projectId: project.id, projectName: name, kind: 'moment', id: phase.id,
+          label: phase.name, context: `${clock(phase.startHour)} → ${clock(phase.endHour)}`,
+        });
+      }
+      for (const media of snap.media) {
+        if (!hit(media.title) && !hit(media.fileName)) continue;
+        out.push({
+          projectId: project.id, projectName: name, kind: 'document', id: media.id,
+          label: media.title || media.fileName || 'Document', context: media.ownerKind,
+        });
+      }
+      for (const task of snap.tasks) {
+        if (!hit(task.title)) continue;
+        out.push({
+          projectId: project.id, projectName: name, kind: 'task', id: task.id,
+          label: task.title, context: task.isDone ? 'faite' : 'en attente',
+        });
+      }
+    }
+    return out.slice(0, 60);
+  }
+
+  /**
+   * ONE PERSON, EVERY EVENT — the card the administration is built around.
+   *
+   * The same human is not duplicated: their record lives in each event where
+   * they work, and this projection puts those records side by side. Across
+   * events, the only thing linking them is the NAME — so the card says so, in
+   * those words, and never presents the link as certain.
+   */
+  public personDossier(personId: string): {
+    person: Person;
+    role: string | null;
+    events: {
+      projectId: string; projectName: string; date: string; isCurrent: boolean;
+      matchedByName: boolean;
+      moments: { name: string; startHour: number; endHour: number }[];
+    }[];
+    documents: { id: string; title: string; projectName: string }[];
+    missions: TaskEntity[];
+    nextDate: string | null;
+  } | null {
+    const person = this.persons.find((p) => p.id === personId);
+    if (!person) return null;
+    const events: {
+      projectId: string; projectName: string; date: string; isCurrent: boolean;
+      matchedByName: boolean;
+      moments: { name: string; startHour: number; endHour: number }[];
+    }[] = [];
+    const documents: { id: string; title: string; projectName: string }[] = [];
+
+    for (const project of getStoredProjects()) {
+      const snap = this.projectSnapshot(project.id);
+      if (!snap) continue;
+      const isCurrent = project.id === this.currentProject.id;
+      const twin = isCurrent
+        ? person
+        : snap.persons.find((p) => p.displayName?.toLowerCase() === person.displayName.toLowerCase());
+      if (!twin) continue;
+      const moments = snap.phases
+        .filter((p) => (p.personIds ?? []).includes(twin.id))
+        .sort((a, b) => a.startHour - b.startHour)
+        .map((p) => ({ name: p.name, startHour: p.startHour, endHour: p.endHour }));
+      events.push({
+        projectId: project.id,
+        projectName: project.coupleNames || project.title,
+        date: project.weddingDate || '',
+        isCurrent,
+        matchedByName: !isCurrent,
+        moments,
+      });
+      for (const media of snap.media.filter((m) => m.ownerKind === 'person' && m.ownerId === twin.id)) {
+        documents.push({
+          id: media.id,
+          title: media.title || media.fileName || 'Document',
+          projectName: project.coupleNames || project.title,
+        });
+      }
+    }
+
+    const today = new Date().toISOString().slice(0, 10);
+    const nextDate = events.map((e) => e.date).filter((d) => d && d >= today).sort()[0] ?? null;
+
+    return {
+      person,
+      role: person.craft?.role ?? null,
+      events: events.sort((a, b) => (a.date || '9999').localeCompare(b.date || '9999')),
+      documents,
+      missions: this.getMissionsFor(personId),
+      nextDate,
+    };
+  }
+
+  /**
+   * WHO IS LOOKING — the single place the interface asks « how much of this
+   * belongs to this person? ».
+   *
+   * There is no second permission system: it reads the membership that already
+   * exists (see ProjectMembership). Local single-user mode has no membership at
+   * all, and is therefore the owner of their own day.
+   */
+  public currentRole(): MembershipRole {
+    return this.getCurrentMembership()?.role ?? 'owner';
+  }
+
+  /** True for the people who administer events rather than live them. */
+  public isOrchestrator(): boolean {
+    const role = this.currentRole();
+    return role === 'owner' || role === 'planner';
+  }
+
+  /**
+   * WHO SHOULD SEE THE ADMINISTRATION — and a married couple should not.
+   *
+   * AUDITED: isOrchestrator() answers « owner or planner », and a couple IS the
+   * owner of their own wedding — so the control desk was showing up inside
+   * their day, like a second application hidden in their marriage.
+   *
+   * The honest rule reads two facts that already exist:
+   *   • the role is `planner` — someone organising for others; or
+   *   • this browser holds MORE THAN ONE real event — which is the definition
+   *     of piloting several events. The demonstration does not count.
+   *
+   * Nothing is invented, and nothing is hidden from someone who needs it: a
+   * second event, or the planner role, brings it back.
+   */
+  public pilotsSeveralEvents(): boolean {
+    if (this.currentRole() === 'planner') return true;
+    return getStoredProjects().filter((p) => !p.isDemo).length > 1;
+  }
+
+
+  public searchEverything(query: string): {
+    kind: 'person' | 'moment' | 'place' | 'vendor' | 'track' | 'document' | 'task' | 'table';
+    id: string; label: string; context: string;
+  }[] {
+    const q = query.trim().toLowerCase();
+    if (q.length < 2) return [];
+    const hit = (s?: string) => Boolean(s && s.toLowerCase().includes(q));
+    const out: {
+      kind: 'person' | 'moment' | 'place' | 'vendor' | 'track' | 'document' | 'task' | 'table';
+      id: string; label: string; context: string;
+    }[] = [];
+    const clock = (h: number) => `${String(Math.floor(h) % 24).padStart(2, '0')}:${String(Math.round((h % 1) * 60)).padStart(2, '0')}`;
+
+    for (const p of this.persons) {
+      // A craft is searchable: « saxophoniste », « intermittent », « lumière ».
+      const craft = p.craft;
+      if (!hit(p.displayName) && !hit(p.email) && !hit(p.phone)
+        && !hit(craft?.role) && !hit(craft?.speciality) && !hit(craft?.status)
+        && !(craft?.requirements ?? []).some((r) => hit(r))) continue;
+      const moments = this.phases.filter((ph) => (ph.personIds ?? []).includes(p.id));
+      const guest = this.guests.find((g) => g.personId === p.id);
+      const table = guest?.seating.tableId
+        ? this.seatingTables.find((t) => t.id === guest.seating.tableId)?.label
+        : null;
+      out.push({
+        kind: 'person', id: p.id, label: craft?.role ? `${p.displayName} · ${craft.role}` : p.displayName,
+        context: [
+          craft?.status,
+          moments.length ? `${moments.length} moment${moments.length > 1 ? 's' : ''} : ${moments.map((m) => m.name).join(', ')}` : 'aucun moment',
+          table ? `table ${table}` : null,
+        ].filter(Boolean).join(' · '),
+      });
+    }
+    for (const ph of this.phases) {
+      if (!hit(ph.name) && !hit(ph.subtitle)) continue;
+      out.push({ kind: 'moment', id: ph.id, label: ph.name, context: `${clock(ph.startHour)} → ${clock(ph.endHour)}` });
+    }
+    for (const pl of this.places) {
+      if (!hit(pl.name) && !hit(pl.address)) continue;
+      const used = this.phases.filter((ph) => ph.primaryPlaceId === pl.id);
+      out.push({ kind: 'place', id: pl.id, label: pl.name, context: used.length ? used.map((u) => u.name).join(', ') : 'aucun moment' });
+    }
+    for (const v of this.vendors) {
+      if (!hit(v.companyName) && !hit(v.email) && !hit(v.phone)) continue;
+      const covers = this.phases.filter((ph) => (ph.vendorIds ?? []).includes(v.id));
+      out.push({
+        kind: 'vendor', id: v.id, label: v.companyName,
+        context: covers.length
+          ? `${clock(covers[0].startHour)} → ${clock(covers[covers.length - 1].endHour)} · ${covers.map((c) => c.name).join(', ')}`
+          : 'aucun moment',
+      });
+    }
+    for (const t of this.tracks) {
+      if (!hit(t.title) && !hit(t.artist)) continue;
+      const phase = this.phases.find((ph) => ph.id === t.linkedPhaseId);
+      out.push({ kind: 'track', id: t.id, label: `${t.title} · ${t.artist}`, context: phase ? phase.name : 'hors programme' });
+    }
+    for (const m of this.media) {
+      if (!hit(m.title) && !hit(m.fileName)) continue;
+      const phase = m.ownerKind === 'event' ? this.phases.find((ph) => ph.id === m.ownerId) : null;
+      out.push({ kind: 'document', id: m.id, label: m.title || m.fileName || 'Document', context: phase ? phase.name : m.ownerKind });
+    }
+    for (const t of this.tasks) {
+      if (!hit(t.title)) continue;
+      const phase = this.phases.find((ph) => ph.id === t.phaseId);
+      out.push({ kind: 'task', id: t.id, label: t.title, context: phase ? phase.name : 'sans moment' });
+    }
+    for (const t of this.seatingTables) {
+      if (!hit(t.label)) continue;
+      const { seated, capacity } = this.getTableOccupancy(t.id);
+      out.push({ kind: 'table', id: t.id, label: t.label, context: `${seated}/${capacity} places` });
+    }
+    return out.slice(0, 40);
+  }
+
+  /**
+   * PROJECT INTELLIGENCE — what is missing, what contradicts itself.
+   *
+   * Deterministic reading of the real data. No model, no guess: every line is
+   * a fact about the project, with the number that produced it.
+   */
+  public projectFindings(): { level: 'gap' | 'conflict' | 'ok'; title: string; detail: string }[] {
+    const out: { level: 'gap' | 'conflict' | 'ok'; title: string; detail: string }[] = [];
+    const clock = (h: number) => `${String(Math.floor(h) % 24).padStart(2, '0')}:${String(Math.round((h % 1) * 60)).padStart(2, '0')}`;
+    const phases = [...this.phases].sort((a, b) => a.startHour - b.startHour);
+
+    if (phases.length === 0) {
+      out.push({ level: 'gap', title: 'La journée est vide', detail: 'Aucun moment n’est posé : la pellicule attend le premier.' });
+    }
+    for (let i = 0; i < phases.length - 1; i++) {
+      if (phases[i].endHour > phases[i + 1].startHour + 1e-6) {
+        out.push({
+          level: 'conflict',
+          title: `${phases[i].name} et ${phases[i + 1].name} se chevauchent`,
+          detail: `${clock(phases[i].startHour)}–${clock(phases[i].endHour)} contre ${clock(phases[i + 1].startHour)}–${clock(phases[i + 1].endHour)}.`,
+        });
+      }
+      const gap = phases[i + 1].startHour - phases[i].endHour;
+      if (gap > 2) {
+        out.push({
+          level: 'gap',
+          title: `${Math.round(gap * 10) / 10} h sans rien entre ${phases[i].name} et ${phases[i + 1].name}`,
+          detail: `De ${clock(phases[i].endHour)} à ${clock(phases[i + 1].startHour)}, aucun moment n’est prévu.`,
+        });
+      }
+    }
+    const noPlace = phases.filter((p) => !p.primaryPlaceId);
+    if (noPlace.length > 0) {
+      out.push({ level: 'gap', title: `${noPlace.length} moment(s) sans lieu`, detail: noPlace.map((p) => p.name).join(', ') });
+    }
+    const noPeople = phases.filter((p) => (p.personIds ?? []).length === 0);
+    if (phases.length > 0 && noPeople.length === phases.length) {
+      out.push({
+        level: 'gap',
+        title: 'Personne n’est rattaché à un moment',
+        detail: 'Les personnes existent peut-être, mais aucune n’est attendue à une heure précise.',
+      });
+    }
+    const unseated = this.guests.filter((g) => !g.seating.tableId);
+    if (this.seatingTables.length > 0 && unseated.length > 0) {
+      out.push({ level: 'gap', title: `${unseated.length} invité(s) sans table`, detail: 'Le plan de table n’est pas terminé.' });
+    }
+    for (const t of this.seatingTables) {
+      const { seated, capacity } = this.getTableOccupancy(t.id);
+      if (seated > capacity) {
+        out.push({ level: 'conflict', title: `${t.label} dépasse sa capacité`, detail: `${seated} personnes pour ${capacity} places.` });
+      }
+    }
+    const unattached = this.media.filter((m) => m.ownerKind === 'wedding');
+    if (unattached.length > 0) {
+      out.push({ level: 'gap', title: `${unattached.length} document(s) non rattaché(s)`, detail: 'Ils existent, mais aucun moment ne les porte.' });
+    }
+    const pending = this.tasks.filter((t) => !t.isDone);
+    if (pending.length > 0) {
+      out.push({ level: 'gap', title: `${pending.length} tâche(s) à faire`, detail: pending.slice(0, 3).map((t) => t.title).join(' · ') });
+    }
+    if (out.length === 0 && phases.length > 0) {
+      out.push({ level: 'ok', title: 'Rien à signaler', detail: 'Aucun chevauchement, aucun trou, aucun dépassement de capacité.' });
+    }
+    return out;
+  }
+
+  // =========================================================================
+  // SCÉNARIOS — a parallel day, next to the real one.
+  //
+  // TECHNICAL AUDIT BEHIND THIS DESIGN (see docs/AUDIT-V2.md):
+  //   · source of truth  : this.phases, and nothing else;
+  //   · snapshot         : serializeDomain/applyDomain already clone the whole
+  //                        domain, so cloning the phases alone is safe and
+  //                        cheap — a scenario is just that clone, with the
+  //                        SAME ids so a difference reads moment by moment;
+  //   · rollback         : discarding a scenario deletes the branch; nothing
+  //                        else was ever touched;
+  //   · propagation      : the branch reuses the same arithmetic as the real
+  //                        timeline (shift the moment, carry the followers);
+  //   · isolation        : scenarios live inside the project snapshot, so they
+  //                        cannot travel between weddings;
+  //   · duplication risk : none — no second timeline engine, no second store.
+  //
+  // THE RULE: the main timeline is never modified until the couple applies the
+  // scenario — entirely, or one line at a time.
+  // =========================================================================
+
+  /** Branch the day. The scenario starts as an exact copy of today's plan. */
+  public createScenario(name: string): TimelineScenario | null {
+    const clean = name?.trim();
+    if (!clean) return null;
+    this.beginMutation('Créer un scénario');
+    const scenario: TimelineScenario = {
+      id: freshId('scen'),
+      name: clean,
+      createdAt: new Date().toISOString(),
+      phases: clone(this.phases),
+    };
+    this.scenarios = [...this.scenarios, scenario];
+    this.activeScenarioId = scenario.id;
+    this.saveCurrentState();
+    this.notify();
+    return scenario;
+  }
+
+  public setActiveScenario(scenarioId: string | null): void {
+    if (scenarioId && !this.scenarios.some((s) => s.id === scenarioId)) return;
+    this.activeScenarioId = scenarioId;
+    this.notify();
+  }
+
+  public renameScenario(scenarioId: string, name: string): boolean {
+    const scenario = this.scenarios.find((s) => s.id === scenarioId);
+    const clean = name?.trim();
+    if (!scenario || !clean) return false;
+    this.beginMutation('Renommer le scénario');
+    scenario.name = clean;
+    this.saveCurrentState();
+    this.notify();
+    return true;
+  }
+
+  /** Delete a branch. The real day never knew it existed. */
+  public discardScenario(scenarioId: string): boolean {
+    const before = this.scenarios.length;
+    this.beginMutation('Abandonner le scénario');
+    this.scenarios = this.scenarios.filter((s) => s.id !== scenarioId);
+    if (this.activeScenarioId === scenarioId) this.activeScenarioId = null;
+    this.saveCurrentState();
+    this.notify();
+    return this.scenarios.length < before;
+  }
+
+  /**
+   * Move a moment INSIDE a scenario. `withFollowing` carries everything that
+   * came after it, exactly like the real timeline does.
+   */
+  public scenarioShiftPhase(
+    scenarioId: string,
+    phaseId: string,
+    deltaHours: number,
+    withFollowing = true,
+  ): boolean {
+    const scenario = this.scenarios.find((s) => s.id === scenarioId);
+    const phase = scenario?.phases.find((p) => p.id === phaseId);
+    if (!scenario || !phase || !Number.isFinite(deltaHours) || Math.abs(deltaHours) < 1e-6) return false;
+
+    const origin = phase.startHour;
+    const targets = withFollowing
+      ? scenario.phases.filter((p) => p.startHour >= origin)
+      : [phase];
+    for (const p of targets) {
+      if (!this.canPlacePhase(p.startHour + deltaHours, p.endHour - p.startHour)) return false;
+    }
+    this.beginMutation('Modifier le scénario');
+    for (const p of targets) this.applyPhaseTime(p, p.startHour + deltaHours, p.endHour - p.startHour);
+    scenario.phases.sort((a, b) => a.startHour - b.startHour);
+    this.saveCurrentState();
+    this.notify();
+    return true;
+  }
+
+  /** Change a moment's place inside a scenario (the « plan B » case). */
+  public scenarioSetPhasePlace(scenarioId: string, phaseId: string, placeId: string | null): boolean {
+    const scenario = this.scenarios.find((s) => s.id === scenarioId);
+    const phase = scenario?.phases.find((p) => p.id === phaseId);
+    if (!scenario || !phase) return false;
+    if (placeId !== null && !this.places.some((p) => p.id === placeId)) return false;
+    this.beginMutation('Lieu du scénario');
+    phase.primaryPlaceId = placeId ?? '';
+    this.saveCurrentState();
+    this.notify();
+    return true;
+  }
+
+  /** What this scenario would change, moment by moment. Pure read. */
+  public scenarioDiff(scenarioId: string): {
+    phaseId: string; name: string;
+    fromStart: number; toStart: number; deltaMinutes: number;
+    fromPlaceId: string; toPlaceId: string;
+    changed: boolean;
+  }[] {
+    const scenario = this.scenarios.find((s) => s.id === scenarioId);
+    if (!scenario) return [];
+    return scenario.phases.map((branch) => {
+      const real = this.phases.find((p) => p.id === branch.id);
+      const fromStart = real?.startHour ?? branch.startHour;
+      const fromPlaceId = real?.primaryPlaceId ?? '';
+      const deltaMinutes = Math.round((branch.startHour - fromStart) * 60);
+      return {
+        phaseId: branch.id,
+        name: branch.name,
+        fromStart,
+        toStart: branch.startHour,
+        deltaMinutes,
+        fromPlaceId,
+        toPlaceId: branch.primaryPlaceId,
+        changed: deltaMinutes !== 0 || fromPlaceId !== branch.primaryPlaceId,
+      };
+    }).sort((a, b) => a.toStart - b.toStart);
+  }
+
+  /**
+   * Bring a scenario into the real day — all of it, or only the moments given.
+   * One mutation, so a single undo puts the day back exactly as it was.
+   */
+  public applyScenario(scenarioId: string, onlyPhaseIds?: string[]): { applied: string[] } | null {
+    const scenario = this.scenarios.find((s) => s.id === scenarioId);
+    if (!scenario) return null;
+    const wanted = new Set(onlyPhaseIds ?? scenario.phases.map((p) => p.id));
+
+    const plan = scenario.phases.filter((p) => wanted.has(p.id) && this.phases.some((r) => r.id === p.id));
+    for (const p of plan) {
+      if (!this.canPlacePhase(p.startHour, p.endHour - p.startHour)) return null;
+    }
+
+    this.beginMutation('Appliquer le scénario');
+    const applied: string[] = [];
+    for (const branch of plan) {
+      const real = this.phases.find((p) => p.id === branch.id);
+      if (!real) continue;
+      const changed = real.startHour !== branch.startHour
+        || real.endHour !== branch.endHour
+        || real.primaryPlaceId !== branch.primaryPlaceId;
+      real.startHour = branch.startHour;
+      real.endHour = branch.endHour;
+      real.primaryPlaceId = branch.primaryPlaceId;
+      if (changed) applied.push(real.id);
+    }
+    this.phases.sort((a, b) => a.startHour - b.startHour);
+    this.saveCurrentState();
+    this.notify();
+    return { applied };
+  }
+
+  /**
+   * What a re-ordering WOULD do, without doing it.
+   *
+   * The Canvas asks before it moves: the user sees « Dîner 19:30 → 20:00 » for
+   * every consequence, and validates. Pure read — same arithmetic as
+   * movePhaseToIndex, no mutation, no save, no notify.
+   */
+  public previewMoveToIndex(phaseId: string, targetIndex: number): {
+    id: string; name: string; from: number; to: number;
+  }[] | null {
+    const ordered = [...this.phases].sort((a, b) => a.startHour - b.startHour);
+    const from = ordered.findIndex((p) => p.id === phaseId);
+    if (from < 0) return null;
+    const to = Math.max(0, Math.min(ordered.length - 1, Math.trunc(targetIndex)));
+    if (to === from) return null;
+
+    const reordered = [...ordered];
+    const [moved] = reordered.splice(from, 1);
+    reordered.splice(to, 0, moved);
+
+    const durations = new Map(ordered.map((p) => [p.id, p.endHour - p.startHour]));
+    let cursor = ordered[0].startHour;
+    const out: { id: string; name: string; from: number; to: number }[] = [];
+    for (const p of reordered) {
+      const duration = durations.get(p.id) ?? 0;
+      if (!this.canPlacePhase(cursor, duration)) return null;
+      if (Math.abs(cursor - p.startHour) > 1e-6) {
+        out.push({ id: p.id, name: p.name, from: p.startHour, to: cursor });
+      }
+      cursor += duration;
+    }
+    return out;
+  }
+
+  /** Attach a moment to a place. `null` detaches. */
+  public setPhasePlace(phaseId: string, placeId: string | null): boolean {
+    const phase = this.phases.find((p) => p.id === phaseId);
+    if (!phase) return false;
+    if (placeId !== null && !this.places.some((p) => p.id === placeId)) return false;
+    this.beginMutation('Changer le lieu du moment');
+    phase.primaryPlaceId = placeId ?? '';
+    this.saveCurrentState();
+    this.notify();
+    return true;
+  }
+
+  public attachVendorToPhase(phaseId: string, vendorId: string): boolean {
+    const phase = this.phases.find((p) => p.id === phaseId);
+    const vendor = this.vendors.find((v) => v.id === vendorId);
+    if (!phase || !vendor) return false;
+    const current = phase.vendorIds ?? [];
+    if (current.includes(vendorId)) return true;
+    this.beginMutation('Associer un prestataire');
+    phase.vendorIds = [...current, vendorId];
+    this.saveCurrentState();
+    this.notify();
+    return true;
+  }
+
+  public detachVendorFromPhase(phaseId: string, vendorId: string): boolean {
+    const phase = this.phases.find((p) => p.id === phaseId);
+    if (!phase?.vendorIds?.includes(vendorId)) return false;
+    this.beginMutation('Retirer un prestataire');
+    phase.vendorIds = phase.vendorIds.filter((id) => id !== vendorId);
+    this.saveCurrentState();
+    this.notify();
+    return true;
+  }
+
+  // --- D3: people ----------------------------------------------------------
+
+  /**
+   * Create a real Person, optionally with its Guest facet.
+   * Returns the person, or null when the input is invalid.
+   */
+  public createPerson(input: {
+    displayName: string;
+    givenName?: string;
+    familyName?: string;
+    email?: string;
+    phone?: string;
+    notes?: string;
+    asGuest?: boolean;
+    rsvp?: RsvpStatus;
+    dietary?: string;
+    side?: Guest['side'];
+    tableId?: string | null;
+  }): Person | null {
+    const name = input.displayName?.trim();
+    if (!name) return null;
+    if (input.tableId && !this.seatingTables.some((t) => t.id === input.tableId)) return null;
+
+    this.beginMutation('Créer une personne');
+    const at = new Date().toISOString();
+    const person: Person = {
+      id: freshId('person'),
+      displayName: name,
+      givenName: input.givenName?.trim() || undefined,
+      familyName: input.familyName?.trim() || undefined,
+      email: input.email?.trim() || undefined,
+      phone: input.phone?.trim() || undefined,
+      notes: input.notes?.trim() || undefined,
+      origin: 'manual',
+      createdAt: at,
+      updatedAt: at,
+    };
+    this.persons.push(person);
+
+    if (input.asGuest !== false) {
+      const guest: Guest = {
+        id: guestIdForPerson(person.id),
+        projectId: this.currentProject.id,
+        personId: person.id,
+        rsvp: { status: input.rsvp ?? 'pending', plusOnes: 0 },
+        seating: { tableId: input.tableId ?? undefined },
+        dietary: input.dietary?.trim() || undefined,
+        side: input.side ?? 'unknown',
+        origin: 'manual',
+        createdAt: at,
+        updatedAt: at,
+      };
+      this.guests.push(guest);
+    }
+
+    this.saveCurrentState();
+    this.notify();
+    return person;
+  }
+
+  public updatePerson(personId: string, patch: {
+    displayName?: string; givenName?: string; familyName?: string;
+    email?: string; phone?: string; notes?: string;
+  }): boolean {
+    const person = this.persons.find((p) => p.id === personId);
+    if (!person) return false;
+    if (patch.displayName !== undefined && !patch.displayName.trim()) return false;
+    this.beginMutation('Modifier une personne');
+    if (patch.displayName !== undefined) person.displayName = patch.displayName.trim();
+    if (patch.givenName !== undefined) person.givenName = patch.givenName.trim() || undefined;
+    if (patch.familyName !== undefined) person.familyName = patch.familyName.trim() || undefined;
+    if (patch.email !== undefined) person.email = patch.email.trim() || undefined;
+    if (patch.phone !== undefined) person.phone = patch.phone.trim() || undefined;
+    if (patch.notes !== undefined) person.notes = patch.notes.trim() || undefined;
+    person.updatedAt = new Date().toISOString();
+    const agent = this.getAgentForPerson(personId);
+    if (agent && patch.displayName !== undefined) agent.name = person.displayName;
+    this.saveCurrentState();
+    this.notify();
+    return true;
+  }
+
+  // --- D4: vendors ---------------------------------------------------------
+
+  public createVendor(input: {
+    companyName: string;
+    category: Vendor['category'];
+    contactName?: string;
+    phone?: string;
+    email?: string;
+    websiteUrl?: string;
+    notes?: string;
+    placeIds?: string[];
+  }): Vendor | null {
+    const name = input.companyName?.trim();
+    if (!name) return null;
+    const places = (input.placeIds ?? []).filter((id) => this.places.some((p) => p.id === id));
+    if ((input.placeIds ?? []).length !== places.length) return null;
+
+    this.beginMutation('Créer un prestataire');
+    const at = new Date().toISOString();
+
+    // A named contact becomes a real Person, not a duplicated string.
+    let contactPersonId: string | undefined;
+    if (input.contactName?.trim()) {
+      const contact = this.createPersonSilently(input.contactName.trim(), input.phone, input.email);
+      contactPersonId = contact.id;
+    }
+
+    const vendor: Vendor = {
+      id: freshId('vendor'),
+      projectId: this.currentProject.id,
+      companyName: name,
+      category: input.category,
+      status: 'prospect',
+      contactPersonId,
+      documentIds: [],
+      taskIds: [],
+      placeIds: places,
+      phone: input.phone?.trim() || undefined,
+      email: input.email?.trim() || undefined,
+      websiteUrl: input.websiteUrl?.trim() || undefined,
+      notes: input.notes?.trim() || undefined,
+      origin: 'manual',
+      createdAt: at,
+      updatedAt: at,
+    };
+    this.vendors.push(vendor);
+    this.saveCurrentState();
+    this.notify();
+    return vendor;
+  }
+
+  /** Internal: a Person with no Guest facet and no extra history entry. */
+  private createPersonSilently(displayName: string, phone?: string, email?: string): Person {
+    const at = new Date().toISOString();
+    const person: Person = {
+      id: freshId('person'), displayName,
+      phone: phone?.trim() || undefined, email: email?.trim() || undefined,
+      origin: 'manual', createdAt: at, updatedAt: at,
+    };
+    this.persons.push(person);
+    return person;
+  }
+
+  public updateVendor(vendorId: string, patch: {
+    companyName?: string; category?: Vendor['category']; status?: Vendor['status'];
+    phone?: string; email?: string; websiteUrl?: string; notes?: string;
+  }): boolean {
+    const vendor = this.vendors.find((v) => v.id === vendorId);
+    if (!vendor) return false;
+    if (patch.companyName !== undefined && !patch.companyName.trim()) return false;
+    this.beginMutation('Modifier un prestataire');
+    if (patch.companyName !== undefined) vendor.companyName = patch.companyName.trim();
+    if (patch.category !== undefined) vendor.category = patch.category;
+    if (patch.status !== undefined) vendor.status = patch.status;
+    if (patch.phone !== undefined) vendor.phone = patch.phone.trim() || undefined;
+    if (patch.email !== undefined) vendor.email = patch.email.trim() || undefined;
+    if (patch.websiteUrl !== undefined) vendor.websiteUrl = patch.websiteUrl.trim() || undefined;
+    if (patch.notes !== undefined) vendor.notes = patch.notes.trim() || undefined;
+    vendor.updatedAt = new Date().toISOString();
+    this.saveCurrentState();
+    this.notify();
+    return true;
+  }
+
+  // --- D5: places ----------------------------------------------------------
+
+  public createPlace(input: {
+    name: string; code?: string; kind?: PlaceKind; address?: string;
+    gpsCoordinates?: string; capacity?: number; description?: string;
+  }): Place | null {
+    const name = input.name?.trim();
+    if (!name) return null;
+    this.beginMutation('Créer un lieu');
+    // Position derived from the existing ring so the place really exists in
+    // the 3D world instead of sitting at the origin.
+    const index = this.places.length;
+    const angle = (index / 12) * Math.PI * 2;
+    const place: Place = {
+      id: freshId('place'),
+      name,
+      code: (input.code?.trim() || name.slice(0, 12)).toUpperCase(),
+      kind: input.kind,
+      address: input.address?.trim() || undefined,
+      zone: 'manoir',
+      pos: [Math.cos(angle) * 34, 0, Math.sin(angle) * 34],
+      gpsCoordinates: input.gpsCoordinates?.trim() || '',
+      capacity: input.capacity ?? 0,
+      currentPax: 0,
+      description: input.description?.trim() || '',
+      icon: 'manoir',
+      themeColor: BRAND_ACCENT,
+      activeFromHour: 10,
+      activeToHour: 24,
+      connectedAgentIds: [],
+      connectedDocIds: [],
+      connectedTaskIds: [],
+    };
+    this.places.push(place);
+    this.saveCurrentState();
+    this.notify();
+    return place;
+  }
+
+  public updatePlace(placeId: string, patch: {
+    name?: string; address?: string; gpsCoordinates?: string;
+    capacity?: number; description?: string; kind?: PlaceKind;
+  }): boolean {
+    const place = this.places.find((p) => p.id === placeId);
+    if (!place) return false;
+    if (patch.name !== undefined && !patch.name.trim()) return false;
+    this.beginMutation('Modifier un lieu');
+    if (patch.name !== undefined) place.name = patch.name.trim();
+    if (patch.address !== undefined) place.address = patch.address.trim() || undefined;
+    if (patch.gpsCoordinates !== undefined) place.gpsCoordinates = patch.gpsCoordinates.trim();
+    if (patch.capacity !== undefined && patch.capacity >= 0) place.capacity = patch.capacity;
+    if (patch.description !== undefined) place.description = patch.description.trim();
+    if (patch.kind !== undefined) place.kind = patch.kind;
+    this.saveCurrentState();
+    this.notify();
+    return true;
+  }
+
+  // --- D6: music -----------------------------------------------------------
+
+  public createTrack(input: {
+    title: string; artist: string; duration?: string;
+    moment?: WeddingMoment; phaseId?: string | null;
+  }): TrackEntity | null {
+    const title = input.title?.trim();
+    const artist = input.artist?.trim();
+    if (!title || !artist) return null;
+    if (input.phaseId && !this.phases.some((p) => p.id === input.phaseId)) return null;
+
+    this.beginMutation('Ajouter un morceau');
+    const track: TrackEntity = {
+      id: freshId('trk'),
+      title,
+      artist,
+      moment: input.moment ?? 'soiree',
+      status: 'pending',
+      bpm: 0,
+      energy: 3,
+      duration: input.duration?.trim() || '',
+      suggestedBy: this.getCurrentPerson()?.displayName ?? 'Canvas',
+      votes: 0,
+      linkedPhaseId: input.phaseId ?? undefined,
+    };
+    this.tracks.unshift(track);
+    this.saveCurrentState();
+    this.notify();
+    return track;
+  }
+
+  // -------------------------------------------------------------------------
+  // MEDIA
+  //
+  // Attached to a real entity, by stable id. No seeding, no placeholder.
+  // -------------------------------------------------------------------------
+
+  public addMedia(input: {
+    kind: MediaKind;
+    source: string;
+    ownerKind: MediaOwnerKind;
+    ownerId: string;
+    title?: string;
+    caption?: string;
+    fileName?: string;
+    byteSize?: number;
+    /**
+     * Defaults to 'manual' — an upload. Enrichment passes 'research' at
+     * creation time (Phase F.3) rather than patching the asset afterwards, so
+     * an asset is never briefly mislabelled as manual.
+     */
+    origin?: EntityOrigin;
+    /** Required in practice for non-manual assets: where it came from. */
+    provenance?: MediaProvenance;
+  }): MediaAsset | null {
+    // A media must belong to something that exists.
+    if (!this.mediaOwnerExists(input.ownerKind, input.ownerId)) return null;
+    const at = new Date().toISOString();
+    const asset: MediaAsset = {
+      id: freshId('media'),
+      kind: input.kind,
+      source: input.source,
+      title: input.title,
+      caption: input.caption,
+      ownerKind: input.ownerKind,
+      ownerId: input.ownerId,
+      fileName: input.fileName,
+      byteSize: input.byteSize,
+      origin: input.origin ?? 'manual',
+      provenance: input.provenance,
+      createdAt: at,
+      updatedAt: at,
+    };
+    this.media.push(asset);
+    this.saveCurrentState();
+    this.notify();
+    return asset;
+  }
+
+  public removeMedia(mediaId: string): boolean {
+    const idx = this.media.findIndex((m) => m.id === mediaId);
+    if (idx < 0) return false;
+    this.media.splice(idx, 1);
+    for (const p of this.persons) {
+      if (p.portraitMediaId === mediaId) p.portraitMediaId = undefined;
+    }
+    this.saveCurrentState();
+    this.notify();
+    return true;
+  }
+
+  public mediaOwnerExists(kind: MediaOwnerKind, id: string): boolean {
+    switch (kind) {
+      case 'person': return this.persons.some((p) => p.id === id);
+      case 'place': return this.places.some((p) => p.id === id);
+      case 'vendor': return this.vendors.some((v) => v.id === id);
+      case 'event': return this.phases.some((p) => p.id === id);
+      case 'song': return this.tracks.some((t) => t.id === id);
+      case 'wedding': return this.currentProject.id === id;
+      default: return false;
+    }
+  }
+
+  /**
+   * Media attached to an entity, MANUAL FIRST.
+   *
+   * A file the user uploaded always precedes one obtained by enrichment, so
+   * automatic data can never visually override a deliberate choice.
+   */
+  public getMediaFor(kind: MediaOwnerKind, id: string): MediaAsset[] {
+    const rank = (m: MediaAsset) => (m.origin === 'manual' ? 0 : m.origin === 'research' ? 1 : 2);
+    return this.media
+      .filter((m) => m.ownerKind === kind && m.ownerId === id)
+      .sort((a, b) => rank(a) - rank(b));
+  }
+
+  /**
+   * Deterministic portrait resolution:
+   *   1. `portraitMediaId` when it points at a VALID image;
+   *   2. otherwise the first image attached to that person.
+   *
+   * The validity check matters: a dangling or non-image portraitMediaId used
+   * to return null, which hid a perfectly good photo behind a stale pointer.
+   */
+  public getPortraitFor(personId: string): MediaAsset | null {
+    const person = this.getPerson(personId);
+    const images = this.media.filter(
+      (m) => m.ownerKind === 'person' && m.ownerId === personId && m.kind === 'image',
+    );
+    if (person?.portraitMediaId) {
+      const explicit = images.find((m) => m.id === person.portraitMediaId);
+      if (explicit) return explicit;
+    }
+    return images[0] ?? null;
+  }
+
+  // -------------------------------------------------------------------------
+  // RELATIONSHIPS between people
+  // -------------------------------------------------------------------------
+
+  public linkPersons(fromPersonId: string, toPersonId: string, kind: RelationshipKind, note?: string): PersonRelationship | null {
+    if (fromPersonId === toPersonId) return null;
+    if (!this.getPerson(fromPersonId) || !this.getPerson(toPersonId)) return null;
+    const existing = this.relationships.find(
+      (r) => r.fromPersonId === fromPersonId && r.toPersonId === toPersonId && r.kind === kind,
+    );
+    if (existing) return existing;
+    const rel: PersonRelationship = {
+      id: freshId('rel'), fromPersonId, toPersonId, kind, note,
+      createdAt: new Date().toISOString(),
+    };
+    this.relationships.push(rel);
+    this.saveCurrentState();
+    this.notify();
+    return rel;
+  }
+
+  public unlinkPersons(relationshipId: string): boolean {
+    const idx = this.relationships.findIndex((r) => r.id === relationshipId);
+    if (idx < 0) return false;
+    this.relationships.splice(idx, 1);
+    this.saveCurrentState();
+    this.notify();
+    return true;
+  }
+
+  /** Both directions: a relationship is readable from either end. */
+  public getRelationshipsFor(personId: string): { relationship: PersonRelationship; otherPersonId: string }[] {
+    return this.relationships
+      .filter((r) => r.fromPersonId === personId || r.toPersonId === personId)
+      .map((r) => ({
+        relationship: r,
+        otherPersonId: r.fromPersonId === personId ? r.toPersonId : r.fromPersonId,
+      }));
+  }
+
+  public setPersonNotes(personId: string, notes: string): boolean {
+    const person = this.persons.find((p) => p.id === personId);
+    if (!person) return false;
+    person.notes = notes.trim() || undefined;
+    person.updatedAt = new Date().toISOString();
+    this.saveCurrentState();
+    this.notify();
+    return true;
+  }
+
+  public setVendorNotes(vendorId: string, notes: string): boolean {
+    const vendor = this.vendors.find((v) => v.id === vendorId);
+    if (!vendor) return false;
+    vendor.notes = notes.trim() || undefined;
+    vendor.updatedAt = new Date().toISOString();
+    this.saveCurrentState();
+    this.notify();
+    return true;
+  }
+
+  // -------------------------------------------------------------------------
+  // MUSIC ↔ TIMELINE
+  //
+  // A track is a temporal component of the world, not just a playlist row.
+  // -------------------------------------------------------------------------
+
+  /** Deterministic mapping from a musical moment to a real timeline phase. */
+  public getPhaseForTrack(trackId: string): TimelinePhase | null {
+    const track = this.tracks.find((t) => t.id === trackId);
+    if (!track) return null;
+    if (track.linkedPhaseId) {
+      return this.phases.find((p) => p.id === track.linkedPhaseId) ?? null;
+    }
+    // Fall back to the moment, matched against real phase ids.
+    const byMoment = this.phases.find((p) => p.id === `phase_${track.moment}`);
+    if (byMoment) return byMoment;
+    const MOMENT_TO_AMBIENT: Record<string, string> = {
+      ceremonie: 'ceremony', cocktail: 'jazz', repas: 'dinner',
+      premiere_danse: 'party', soiree: 'party',
+    };
+    const ambient = MOMENT_TO_AMBIENT[track.moment];
+    return ambient ? this.phases.find((p) => p.ambientTrack === ambient) ?? null : null;
+  }
+
+  public linkTrackToPhase(trackId: string, phaseId: string | null): boolean {
+    const track = this.tracks.find((t) => t.id === trackId);
+    if (!track) return false;
+    if (phaseId !== null && !this.phases.some((p) => p.id === phaseId)) return false;
+    track.linkedPhaseId = phaseId ?? undefined;
+    this.saveCurrentState();
+    this.notify();
+    return true;
+  }
+
+  public getTracksForPhase(phaseId: string): TrackEntity[] {
+    return this.tracks.filter((t) => this.getPhaseForTrack(t.id)?.id === phaseId);
+  }
+
+  // -------------------------------------------------------------------------
+  // PLACES
+  // -------------------------------------------------------------------------
+
+  /** Functional classification, derived from the zone when not explicitly set. */
+  public getPlaceKind(placeId: string): PlaceKind {
+    const place = this.places.find((p) => p.id === placeId);
+    if (!place) return 'other';
+    if (place.kind) return place.kind;
+    const ZONE_TO_KIND: Record<string, PlaceKind> = {
+      mairie: 'civil',
+      ceremonie: 'ceremony',
+      cocktail: 'cocktail',
+      reception: 'dinner',
+      dancefloor: 'dancefloor',
+      manoir: 'main_venue',
+      parking: 'parking',
+      hotel: 'accommodation',
+    };
+    return ZONE_TO_KIND[place.zone] ?? 'other';
+  }
+
+  /** Vendors that declared this place among their zones of intervention. */
+  public getVendorsForPlace(placeId: string): Vendor[] {
+    return this.vendors.filter((v) => v.placeIds.includes(placeId));
+  }
+
+  public getPhasesForPlace(placeId: string): TimelinePhase[] {
+    return this.phases.filter((p) => p.primaryPlaceId === placeId);
+  }
+
+  // -------------------------------------------------------------------------
+  // CROSS-PROJECTION NAVIGATION
+  //
+  // Every hop travels by STABLE ENTITY ID (personId), never by visual index.
+  // That is what guarantees "click Paul in Mirror → find exactly Paul in
+  // World", and back, without duplicating anything.
+  // -------------------------------------------------------------------------
+
+  public setProjection(projection: 'world' | 'mirror'): void {
+    if (this.projection === projection) return;
+    this.projection = projection;
+    weddingAudio.playClick();
+    this.notify();
+  }
+
+  /**
+   * Mirror → World. Focuses the 3D camera on the agent that projects this
+   * person, and selects it so the inspector and neural links follow.
+   * Returns false when the person has no spatial projection, so the UI can
+   * say so instead of silently doing nothing.
+   */
+  public showPersonInWorld(personId: string): boolean {
+    const agent = this.getAgentForPerson(personId);
+    if (!agent) return false;
+
+    this.projection = 'world';
+    this.constellationOpen = false;
+    this.showIdentityModal = false;
+    this.interiorMode = false;
+    this.selectEntity('agent', agent.id);
+    this.cameraTargetPos = [agent.currentPos[0], agent.currentPos[1] + 1.5, agent.currentPos[2]];
+    this.spawnGridWave(agent.currentPos, BRAND_ACCENT);
+    this.notify();
+    return true;
+  }
+
+  /** World → Mirror, landing on that person's editorial representation. */
+  public showPersonInMirror(personId: string): boolean {
+    if (!this.getPerson(personId)) return false;
+    this.projection = 'mirror';
+    this.mirrorFocusPersonId = personId;
+    this.notify();
+    return true;
+  }
+
+  /** Mirror → World for a place. Only succeeds if the place really exists. */
+  public showPlaceInWorld(placeId: string): boolean {
+    if (!this.places.some((p) => p.id === placeId)) return false;
+    this.projection = 'world';
+    this.constellationOpen = false;
+    this.showIdentityModal = false;
+    this.focusPlace(placeId);
+    return true;
+  }
+
+  /** Mirror → World for a vendor, via its spatial projection. */
+  public showVendorInWorld(vendorId: string): boolean {
+    const vendor = this.vendors.find((v) => v.id === vendorId);
+    if (!vendor) return false;
+    if (vendor.agentId && this.agents.some((a) => a.id === vendor.agentId)) {
+      const person = this.getPersonForAgent(vendor.agentId);
+      if (person) return this.showPersonInWorld(person.id);
+    }
+    // No agent: fall back to its first real zone rather than doing nothing.
+    const zone = vendor.placeIds.find((id) => this.places.some((p) => p.id === id));
+    return zone ? this.showPlaceInWorld(zone) : false;
+  }
+
+  /** Mirror → World for a timeline moment: move the clock AND the camera. */
+  public showEventInWorld(phaseId: string): boolean {
+    const phase = this.phases.find((p) => p.id === phaseId);
+    if (!phase) return false;
+    this.projection = 'world';
+    this.constellationOpen = false;
+    this.showIdentityModal = false;
+    this.setTime(phase.startHour + 0.05);
+    if (phase.primaryPlaceId && this.places.some((p) => p.id === phase.primaryPlaceId)) {
+      this.focusPlace(phase.primaryPlaceId);
+    } else {
+      this.notify();
+    }
+    return true;
+  }
+
+  public clearMirrorFocus(): void {
+    if (this.mirrorFocusPersonId === null) return;
+    this.mirrorFocusPersonId = null;
+    this.notify();
+  }
+
+  // -------------------------------------------------------------------------
+  // IDENTITY MODEL
+  // -------------------------------------------------------------------------
+
+  /**
+   * Derive the identity entities from legacy state when they are missing.
+   *
+   * Idempotent (ids are deterministic) and additive: agents are never deleted,
+   * only given a `personId` back-reference. Safe to call after every restore.
+   */
+  public ensureIdentityModel(): MigrationReport {
+    const needsMigration = this.persons.length === 0;
+
+    const { state, report, agentPatches } = migrateIdentityModel({
+      project: this.currentProject,
+      agents: this.agents,
+      tracks: this.tracks.map((t) => ({ id: t.id, hasVoted: t.hasVoted, votes: t.votes })),
+      legacyAccount: this.activeAccount
+        ? {
+            id: this.activeAccount.id,
+            email: this.activeAccount.email,
+            name: this.activeAccount.name,
+            role: this.activeAccount.role,
+          }
+        : null,
+      legacyUserIdentity: { role: this.userIdentity.role, name: this.userIdentity.name },
+      legacyDmc: this.userDmcIdentity,
+      existing: {
+        ...emptyIdentityState(),
+        persons: this.persons, accounts: this.accounts, dmcIdentities: this.dmcIdentities,
+        guests: this.guests, vendors: this.vendors, seatingTables: this.seatingTables,
+        memberships: this.memberships, invitations: this.invitations,
+        trackVotes: this.trackVotes, media: this.media,
+        relationships: this.relationships, currentPersonId: this.currentPersonId,
+      },
+    });
+
+    this.persons = state.persons;
+    this.accounts = state.accounts;
+    this.dmcIdentities = state.dmcIdentities;
+    this.guests = state.guests;
+    this.vendors = state.vendors;
+    this.seatingTables = state.seatingTables;
+    this.memberships = state.memberships;
+    this.invitations = state.invitations;
+    this.trackVotes = state.trackVotes;
+    this.media = state.media ?? this.media;
+    this.relationships = state.relationships ?? this.relationships;
+    this.currentPersonId = state.currentPersonId;
+
+    // Link agents back to their person, without touching anything else.
+    for (const patch of agentPatches) {
+      const agent = this.agents.find((a) => a.id === patch.agentId);
+      if (agent) agent.personId = patch.personId;
+    }
+
+    this.lastMigrationReport = report;
+    if (needsMigration) this.saveCurrentState();
+    return report;
+  }
+
+  // --- Lookups (by id, always) ---------------------------------------------
+
+  public getPerson(personId: string | null | undefined): Person | null {
+    if (!personId) return null;
+    return this.persons.find((p) => p.id === personId) ?? null;
+  }
+
+  public getCurrentPerson(): Person | null {
+    return this.getPerson(this.currentPersonId);
+  }
+
+  public getPersonForAgent(agentId: string): Person | null {
+    const agent = this.agents.find((a) => a.id === agentId);
+    if (agent?.personId) return this.getPerson(agent.personId);
+    return this.persons.find((p) => p.agentId === agentId) ?? null;
+  }
+
+  public getAgentForPerson(personId: string): Agent | null {
+    const person = this.getPerson(personId);
+    if (person?.agentId) return this.agents.find((a) => a.id === person.agentId) ?? null;
+    return this.agents.find((a) => a.personId === personId) ?? null;
+  }
+
+  /**
+   * Is this agent the connected user?
+   *
+   * Replaces `agent.role === userIdentity.role`, which made every person
+   * sharing a role look like the user.
+   */
+  public isCurrentUserAgent(agentId: string): boolean {
+    if (!this.currentPersonId) return false;
+    const agent = this.agents.find((a) => a.id === agentId);
+    return agent?.personId === this.currentPersonId;
+  }
+
+  public getGuestForPerson(personId: string): Guest | null {
+    return this.guests.find((g) => g.personId === personId) ?? null;
+  }
+
+  public getVendorForAgent(agentId: string): Vendor | null {
+    return this.vendors.find((v) => v.agentId === agentId) ?? null;
+  }
+
+  public getDmcForPerson(personId: string): DmcIdentityRecord | null {
+    return this.dmcIdentities.find((d) => d.ownerPersonId === personId) ?? null;
+  }
+
+  // --- Guests: RSVP and seating --------------------------------------------
+
+  public setGuestRsvp(guestId: string, status: RsvpStatus, note?: string): boolean {
+    const guest = this.guests.find((g) => g.id === guestId);
+    if (!guest) return false;
+    // An RSVP is a real decision: it belongs to the same undo history as every
+    // other mutation, and the aggregates re-derive from it automatically.
+    this.beginMutation('Modifier une réponse');
+    guest.rsvp = { ...guest.rsvp, status, note, respondedAt: new Date().toISOString() };
+    guest.updatedAt = new Date().toISOString();
+    this.saveCurrentState();
+    this.notify();
+    return true;
+  }
+
+  public setGuestPlusOnes(guestId: string, plusOnes: number): boolean {
+    const guest = this.guests.find((g) => g.id === guestId);
+    if (!guest) return false;
+    guest.rsvp = { ...guest.rsvp, plusOnes: Math.max(0, Math.floor(plusOnes)) };
+    guest.updatedAt = new Date().toISOString();
+    this.saveCurrentState();
+    this.notify();
+    return true;
+  }
+
+  /** Seat a guest. Returns false when the table is unknown or already full. */
+  public assignGuestToTable(guestId: string, tableId: string | null): boolean {
+    const guest = this.guests.find((g) => g.id === guestId);
+    if (!guest) return false;
+
+    if (tableId === null) {
+      guest.seating = { tableId: undefined, seatIndex: undefined };
+      guest.updatedAt = new Date().toISOString();
+      this.saveCurrentState();
+      this.notify();
+      return true;
+    }
+
+    const table = this.seatingTables.find((t) => t.id === tableId);
+    if (!table) return false;
+
+    const seated = this.guests.filter((g) => g.seating.tableId === tableId && g.id !== guestId);
+    const occupancy = seated.reduce((n, g) => n + 1 + g.rsvp.plusOnes, 0);
+    if (occupancy + 1 + guest.rsvp.plusOnes > table.capacity) return false;
+
+    guest.seating = { tableId, seatIndex: occupancy };
+    guest.updatedAt = new Date().toISOString();
+    // Keep the legacy agent field in sync so the 3D view keeps working.
+    const agent = this.getAgentForPerson(guest.personId);
+    if (agent) agent.assignedTable = table.number;
+    this.saveCurrentState();
+    this.notify();
+    return true;
+  }
+
+  public getTableOccupancy(tableId: string): { seated: number; capacity: number } {
+    const table = this.seatingTables.find((t) => t.id === tableId);
+    const seated = this.guests
+      .filter((g) => g.seating.tableId === tableId)
+      .reduce((n, g) => n + 1 + g.rsvp.plusOnes, 0);
+    return { seated, capacity: table?.capacity ?? 0 };
+  }
+
+  public addSeatingTable(capacity = 8, placeId?: string): SeatingTable {
+    const next = this.seatingTables.reduce((m, t) => Math.max(m, t.number), 0) + 1;
+    const table = createSeatingTable(this.currentProject.id, next, capacity, placeId);
+    this.seatingTables.push(table);
+    this.saveCurrentState();
+    this.notify();
+    return table;
+  }
+
+  public setGuestDietary(guestId: string, dietary: string): boolean {
+    const guest = this.guests.find((g) => g.id === guestId);
+    if (!guest) return false;
+    guest.dietary = dietary.trim() || undefined;
+    guest.updatedAt = new Date().toISOString();
+    // Keep the legacy agent field in sync so existing views stay correct.
+    const agent = this.getAgentForPerson(guest.personId);
+    if (agent) agent.dietary = guest.dietary;
+    this.saveCurrentState();
+    this.notify();
+    return true;
+  }
+
+  public setGuestSide(guestId: string, side: Guest['side']): boolean {
+    const guest = this.guests.find((g) => g.id === guestId);
+    if (!guest) return false;
+    guest.side = side;
+    guest.updatedAt = new Date().toISOString();
+    this.saveCurrentState();
+    this.notify();
+    return true;
+  }
+
+  public setVendorStatus(vendorId: string, status: Vendor['status']): boolean {
+    const vendor = this.vendors.find((v) => v.id === vendorId);
+    if (!vendor) return false;
+    vendor.status = status;
+    vendor.updatedAt = new Date().toISOString();
+    this.saveCurrentState();
+    this.notify();
+    return true;
+  }
+
+  public setPersonContact(personId: string, patch: { email?: string; phone?: string }): boolean {
+    const person = this.persons.find((p) => p.id === personId);
+    if (!person) return false;
+    if (patch.email !== undefined) person.email = patch.email.trim() || undefined;
+    if (patch.phone !== undefined) person.phone = patch.phone.trim() || undefined;
+    person.updatedAt = new Date().toISOString();
+    const agent = this.getAgentForPerson(personId);
+    if (agent && patch.phone !== undefined) agent.phone = person.phone;
+    this.saveCurrentState();
+    this.notify();
+    return true;
+  }
+
+  /** Timeline phases this agent is explicitly mobilised by. */
+  public getPhasesForAgent(agentId: string): TimelinePhase[] {
+    return this.phases.filter((p) => (p.keyAgentIds ?? []).includes(agentId));
+  }
+
+  /** The place whose activity window currently contains the simulated hour. */
+  public getCurrentPlaceForAgent(agentId: string): Place | null {
+    const agent = this.agents.find((a) => a.id === agentId);
+    if (!agent) return null;
+    // Nearest place to the agent's live position: this is the zone it is
+    // actually standing in, not the one it was statically assigned to.
+    let best: Place | null = null;
+    let bestDist = Infinity;
+    for (const place of this.places) {
+      const dx = place.pos[0] - agent.currentPos[0];
+      const dz = place.pos[2] - agent.currentPos[2];
+      const d = dx * dx + dz * dz;
+      if (d < bestDist) { bestDist = d; best = place; }
+    }
+    return best;
+  }
+
+  /** Documents attached to a vendor OR to its agent projection. */
+  public getDocumentsForVendor(vendorId: string): DocumentEntity[] {
+    const vendor = this.vendors.find((v) => v.id === vendorId);
+    if (!vendor) return [];
+    const ids = new Set(vendor.documentIds);
+    return this.docs.filter((d) => ids.has(d.id));
+  }
+
+  public getRsvpSummary(): Record<RsvpStatus, number> & { total: number; expectedHeads: number } {
+    const summary = { pending: 0, accepted: 0, declined: 0, tentative: 0, total: 0, expectedHeads: 0 };
+    for (const g of this.guests) {
+      summary[g.rsvp.status]++;
+      summary.total++;
+      if (g.rsvp.status === 'accepted') summary.expectedHeads += 1 + g.rsvp.plusOnes;
+    }
+    return summary;
+  }
+
+  // --- Permissions (model in place; not yet enforced on mutations) ----------
+
+  public getCurrentMembership(): ProjectMembership | null {
+    if (!this.activeAccount) return null;
+    return this.memberships.find(
+      (m) => m.projectId === this.currentProject.id && m.accountId === this.activeAccount!.id,
+    ) ?? null;
+  }
+
+  /**
+   * Capability check for the current session.
+   *
+   * Deliberately permissive today: with no server, refusing actions locally
+   * would be security theatre. It gives the UI a single, honest place to ask
+   * the question, so enforcement can be switched on with the backend.
+   */
+  public can(capability: Capability): boolean {
+    const membership = this.getCurrentMembership();
+    if (!membership) return true; // no account yet: single-user local mode
+    return membership.capabilities.includes(capability);
+  }
+
+  public getCurrentCapabilities(): Capability[] {
+    const membership = this.getCurrentMembership();
+    if (membership) return membership.capabilities;
+    return capabilitiesForRole('owner');
+  }
+
+  // --- Invitations ----------------------------------------------------------
+
+  public createInvitationForProject(role: MembershipRole = 'guest', guestId?: string): Invitation {
+    const code = `WC-${Date.now().toString(36).toUpperCase()}`;
+    const invitation = createInvitation(
+      this.currentProject.id, code, role, this.activeAccount?.id, guestId,
+    );
+    this.invitations.push(invitation);
+    this.saveCurrentState();
+    this.notify();
+    return invitation;
+  }
+
+  public getInvitationByCode(code: string): Invitation | null {
+    const id = invitationIdForCode(code);
+    return this.invitations.find((i) => i.id === id) ?? null;
+  }
+
+  /** Mark an invitation as accepted and create the matching membership. */
+  public acceptInvitation(code: string): { ok: boolean; reason?: string } {
+    const invitation = this.getInvitationByCode(code);
+    if (!invitation) return { ok: false, reason: 'unknown' };
+    if (invitation.status === 'revoked') return { ok: false, reason: 'revoked' };
+
+    invitation.status = 'accepted';
+    invitation.acceptedAt = new Date().toISOString();
+    invitation.acceptedByAccountId = this.activeAccount?.id;
+    invitation.updatedAt = invitation.acceptedAt;
+
+    if (this.activeAccount && this.currentPersonId) {
+      const existing = this.memberships.find(
+        (m) => m.projectId === invitation.projectId && m.accountId === this.activeAccount!.id,
+      );
+      if (!existing) {
+        this.memberships.push(createMembership(
+          invitation.projectId, this.activeAccount.id, this.currentPersonId,
+          invitation.role, invitation.id,
+        ));
+      }
+    }
+    this.saveCurrentState();
+    this.notify();
+    return { ok: true };
+  }
+
+  /**
+   * Persist the current state and REPORT THE REAL OUTCOME.
+   *
+   * `saveState` is driven by whether the write actually reached storage, so
+   * the Canvas can never display "Enregistré" for a mutation that was lost
+   * (Phase D §20).
+   */
+  public saveCurrentState(): boolean {
+    this.saveState = 'saving';
     try {
-      savePersistedState(this.currentProject.id, {
+      const ok = savePersistedState(this.currentProject.id, {
         project: this.currentProject,
-        time: this.time,
-        userIdentity: this.userIdentity,
-        places: this.places,
-        agents: this.agents,
-        docs: this.docs,
-        tasks: this.tasks,
-        conflicts: this.conflicts,
-        phases: this.phases,
-        tracks: this.tracks,
-        reconstructedVenues: this.reconstructedVenues,
-        placedObjects: this.placedObjects,
+        // Single serializer — driven by PERSISTED_FIELDS, so this can never
+        // fall out of sync with the restore path again.
+        ...serializeDomain(this),
       });
       saveWeddingProject(this.currentProject);
-    } catch {
-      // safe fallback
+      this.saveState = ok ? 'saved' : 'error';
+      this.lastSavedAt = ok ? new Date().toISOString() : this.lastSavedAt;
+      return ok;
+    } catch (error) {
+      reportDiagnostic({ source: 'store', severity: 'error', code: 'store_persist_failed', error });
+      this.saveState = 'error';
+      return false;
     }
+  }
+
+  // -------------------------------------------------------------------------
+  // MUTATION HISTORY (undo / redo at World Model level)
+  //
+  // History is kept on the DOMAIN SNAPSHOT, not per projection: one timeline
+  // of truth, exactly like the data itself. Snapshots reuse serializeDomain(),
+  // so a new persisted field is covered automatically.
+  // -------------------------------------------------------------------------
+
+  private undoStack: { label: string; snapshot: PersistedDomainState }[] = [];
+  private redoStack: { label: string; snapshot: PersistedDomainState }[] = [];
+  private readonly historyLimit = 40;
+
+  /** Capture the state BEFORE a mutation. Call at the start of a Canvas edit. */
+  public beginMutation(label: string): void {
+    this.undoStack.push({ label, snapshot: clone(serializeDomain(this)) });
+    if (this.undoStack.length > this.historyLimit) this.undoStack.shift();
+    // A new branch invalidates the redo path.
+    this.redoStack = [];
+  }
+
+  public canUndo(): boolean { return this.undoStack.length > 0; }
+  public canRedo(): boolean { return this.redoStack.length > 0; }
+  public undoLabel(): string | null { return this.undoStack[this.undoStack.length - 1]?.label ?? null; }
+  public redoLabel(): string | null { return this.redoStack[this.redoStack.length - 1]?.label ?? null; }
+
+  public undo(): boolean {
+    const entry = this.undoStack.pop();
+    if (!entry) return false;
+    this.redoStack.push({ label: entry.label, snapshot: clone(serializeDomain(this)) });
+    applyDomain(this, entry.snapshot, createDefaultDomainState());
+    this.saveCurrentState();
+    this.notify();
+    return true;
+  }
+
+  public redo(): boolean {
+    const entry = this.redoStack.pop();
+    if (!entry) return false;
+    this.undoStack.push({ label: entry.label, snapshot: clone(serializeDomain(this)) });
+    applyDomain(this, entry.snapshot, createDefaultDomainState());
+    this.saveCurrentState();
+    this.notify();
+    return true;
   }
 
   public subscribe(fn: () => void) {
@@ -1539,6 +5413,24 @@ class WeddingStore {
     this.userIdentity.outfitColor = dmc.dmcColor;
     this.userIdentity.accessory = dmc.symbolGlyph;
     this.userIdentity.avatarIcon = dmc.symbolGlyph;
+
+    // Write through to the OWNED DMCIdentity record so the signature is
+    // coherent everywhere: avatar colour, chest badge, inspector card and
+    // neural graph all read the same entity instead of a loose global field.
+    if (this.currentPersonId) {
+      const existing = this.dmcIdentities.find((d) => d.ownerPersonId === this.currentPersonId);
+      if (existing) {
+        Object.assign(existing, dmc, { updatedAt: new Date().toISOString() });
+      } else {
+        this.dmcIdentities.push(createDmcRecord(this.currentPersonId, dmc));
+      }
+      const person = this.persons.find((p) => p.id === this.currentPersonId);
+      if (person) {
+        person.dmcIdentityId = dmcIdForPerson(this.currentPersonId);
+        person.updatedAt = new Date().toISOString();
+      }
+    }
+
     weddingAudio.playResolveSuccess();
     this.saveCurrentState();
     this.notify();
@@ -1587,9 +5479,17 @@ class WeddingStore {
     this.notify();
   }
 
-  public getActivePhase(): TimelinePhase {
+  /**
+   * The phase the simulated clock is inside, or the first one.
+   *
+   * MEASURED IN THE BROWSER: this used to be typed as always returning a
+   * phase, but an empty programme made it return `undefined`, and the HUD
+   * crashed on `currentPhase.name` the moment a brand-new wedding was created.
+   * The type now tells the truth and every caller handles the empty day.
+   */
+  public getActivePhase(): TimelinePhase | null {
     const current = this.phases.find((p) => this.time >= p.startHour && this.time < p.endHour);
-    return current || this.phases[0];
+    return current ?? this.phases[0] ?? null;
   }
 
   public getActiveTrack(): TrackEntity {
@@ -1805,18 +5705,30 @@ class WeddingStore {
     userName: string;
     budgetTarget?: number;
     guestCountTarget?: number;
+    /** The kind of day chosen in the hero. Decides the whole vocabulary. */
+    eventTypeId?: string;
   }) {
     weddingAudio.playWeddingChimes();
     const newId = `proj_${Date.now()}`;
-    const code = `WC-${new Date(params.weddingDate).getFullYear() || 2025}-${params.coupleNames.split('&')[0].trim().toUpperCase()}`;
+    const code = `WC-${new Date(params.weddingDate).getFullYear() || new Date().getFullYear()}-${params.coupleNames.split('&')[0].trim().toUpperCase()}`;
 
+    const schema = eventType(params.eventTypeId);
     const newProject: WeddingProject = {
       id: newId,
-      title: `Mariage de ${params.coupleNames}`,
+      // A festival is not « le mariage de » someone. The title uses the words
+      // of the kind of day that was actually chosen.
+      title: schema.id === 'mariage'
+        ? `Mariage de ${params.coupleNames}`
+        : `${schema.label} — ${params.coupleNames}`,
       worldType: 'wedding',
       coupleNames: params.coupleNames,
-      weddingDate: params.weddingDate || '2025-09-20',
-      locationName: params.locationName || 'Domaine d’Exception',
+      // Nothing is invented here. The creation surface explicitly lets the
+      // couple answer "je ne sais pas encore" / "le lieu n’est pas encore
+      // choisi"; filling those blanks with a fake date and a fake estate name
+      // made the World and the Mirror state something untrue. Empty stays
+      // empty, and every projection already knows how to say so.
+      weddingDate: params.weddingDate || '',
+      locationName: params.locationName || '',
       budgetTarget: params.budgetTarget || 25000,
       guestCountTarget: params.guestCountTarget || 100,
       ownerId: this.activeAccount?.id || 'account_user',
@@ -1824,11 +5736,17 @@ class WeddingStore {
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
       inviteCode: code,
+      eventTypeId: schema.id,
     };
 
     saveWeddingProject(newProject);
     setActiveProjectId(newId);
     this.currentProject = newProject;
+    this.markProjectChosen();
+    // PRODUCT DECISION (Jour J pass): a new wedding lands on ITS DAY — the
+    // empty timeline — not inside a 3D world. The World stays in the code and
+    // keeps working; it is simply no longer the door.
+    this.projection = 'mirror';
 
     this.userIdentity = {
       role: params.userRole,
@@ -1840,26 +5758,26 @@ class WeddingStore {
       isCreated: true,
     };
 
-    this.time = 14.0;
-    this.places = [...INITIAL_PLACES];
-    this.agents = [...INITIAL_AGENTS];
-    this.docs = [...INITIAL_DOCS];
-    this.tasks = [...INITIAL_TASKS];
-    this.conflicts = [...INITIAL_CONFLICTS];
-    this.tracks = [...INITIAL_TRACKS];
-    this.reconstructedVenues = [...INITIAL_RECONSTRUCTED_VENUES];
-    this.placedObjects = [...INITIAL_RECONSTRUCTED_VENUES[0].objects];
+    // The new world starts EMPTY — see createEmptyDomainState. Copying the demo
+    // here also shared its objects between projects (`[...INITIAL_X]` is a
+    // shallow copy), so editing one wedding could reach into another.
+    applyDomain(this, null, createEmptyDomainState());
 
-    const names = params.coupleNames.split('&');
-    if (names.length >= 2) {
-      const bride = this.agents.find((a) => a.role === 'bride');
-      if (bride) bride.name = names[0].trim();
-      const groom = this.agents.find((a) => a.role === 'groom');
-      if (groom) groom.name = names[1].trim();
+    // The only people who exist at this point are the ones the creator typed.
+    // They are real data, so they become real Persons — but they get NO
+    // spatial projection: inventing a position in the 3D world would be
+    // fabricating. The World says so explicitly instead.
+    // The badge belongs to THIS wedding, not to the constant it came from.
+    this.userDmcIdentity = { ...this.userDmcIdentity, customBadgeText: params.coupleNames };
+
+    const names = params.coupleNames.split('&').map((n) => n.trim()).filter(Boolean);
+    for (const displayName of names.slice(0, 2)) {
+      this.createPerson({ displayName, asGuest: false });
     }
 
     this.saveCurrentState();
     this.createWeddingModalOpen = false;
+    this.weddingCreationOpen = false;
     this.brandMenuOpen = false;
     this.focusPlace('place_ceremonie');
     this.spawnGridWave([0, 0, 0], BRAND_ACCENT);
@@ -1900,8 +5818,20 @@ class WeddingStore {
     saveWeddingProject(newProject);
     setActiveProjectId(newId);
     this.currentProject = newProject;
+    this.markProjectChosen();
+    this.projection = 'world';
 
-    // Load generated entities
+    // MEASURED IN THE BROWSER (World Lab acceptance): this used to overwrite
+    // only places/agents/docs/tasks/phases/tracks and leave EVERYTHING ELSE
+    // from the previously open project in place. A two-week roadtrip in Japan
+    // was therefore created carrying the wedding demo's 35 people, 27 guests,
+    // 8 vendors and 6 seating tables — and a second generated world inherited
+    // whatever had just been edited in the first one.
+    //
+    // The world is now built on an EMPTY domain, exactly like a new wedding,
+    // and only the generated entities are placed into it.
+    applyDomain(this, null, createEmptyDomainState());
+
     this.time = 12.0;
     this.places = generated.places;
     this.agents = generated.agents;
@@ -1909,9 +5839,15 @@ class WeddingStore {
     this.tasks = generated.tasks;
     this.phases = generated.phases;
     this.tracks = generated.tracks;
-    this.conflicts = [];
-    this.reconstructedVenues = [...INITIAL_RECONSTRUCTED_VENUES];
-    this.placedObjects = [...INITIAL_RECONSTRUCTED_VENUES[0].objects];
+    // `[...INITIAL_RECONSTRUCTED_VENUES]` was a shallow copy of a demo
+    // constant: two projects ended up sharing the very same objects. A
+    // generated world has no reconstructed venue until one is really built.
+    this.reconstructedVenues = [];
+    this.placedObjects = [];
+
+    // The generated agents are real entities of THIS world, so they get their
+    // identity projection (Person/Guest/DMC) derived here, from them alone.
+    this.ensureIdentityModel();
 
     this.userIdentity = {
       role: 'wedding_planner',
@@ -1939,34 +5875,118 @@ class WeddingStore {
 
     setActiveProjectId(projectId);
     this.currentProject = proj;
+    this.markProjectChosen();
+    // Opening a wedding means opening its day.
+    this.projection = 'mirror';
     const saved = loadPersistedState(projectId);
-    if (saved) {
-      this.time = saved.time || 15.4;
-      this.userIdentity = saved.userIdentity || this.userIdentity;
-      this.places = saved.places || [...INITIAL_PLACES];
-      this.agents = saved.agents || [...INITIAL_AGENTS];
-      this.docs = saved.docs || [...INITIAL_DOCS];
-      this.tasks = saved.tasks || [...INITIAL_TASKS];
-      this.conflicts = saved.conflicts || [...INITIAL_CONFLICTS];
-      this.tracks = saved.tracks || [...INITIAL_TRACKS];
-      this.reconstructedVenues = saved.reconstructedVenues || [...INITIAL_RECONSTRUCTED_VENUES];
-      this.placedObjects = saved.placedObjects || [...INITIAL_RECONSTRUCTED_VENUES[0].objects];
-    } else {
-      this.places = [...INITIAL_PLACES];
-      this.agents = [...INITIAL_AGENTS];
-      this.docs = [...INITIAL_DOCS];
-      this.tasks = [...INITIAL_TASKS];
-      this.conflicts = [...INITIAL_CONFLICTS];
-      this.tracks = [...INITIAL_TRACKS];
-      this.reconstructedVenues = [...INITIAL_RECONSTRUCTED_VENUES];
-      this.placedObjects = [...INITIAL_RECONSTRUCTED_VENUES[0].objects];
-    }
+    // Same single restore path as boot. With no snapshot, the fallback depends
+    // on WHICH project this is: the demo falls back to the demo, any real
+    // wedding falls back to an empty world — never to somebody else's data.
+    const fallback = proj.isDemo ? createDefaultDomainState() : createEmptyDomainState();
+    this.lastRestoreReport = applyDomain(this, saved, fallback);
+    this.ensureIdentityModel();
+
+    // Nothing from the previous project may stay selected: those ids do not
+    // exist here. Measured risk from the acceptance pass.
+    this.canvasFocus = null;
+    this.canvasSection = null;
+    this.selectedEntity = null;
+    this.mirrorFocusPersonId = null;
+    this.interiorMode = false;
 
     weddingAudio.playNeuralWave();
     this.brandMenuOpen = false;
     this.focusPlace('place_ceremonie');
     this.notify();
   }
+
+  // -------------------------------------------------------------------------
+  // Invitations — real local resolution.
+  //
+  // Previously the invite link (`/?code=...&role=...`) was generated and
+  // copied, but NOTHING in the app ever read it, and the "Rejoindre" form kept
+  // its code in component state and threw it away. Both paths are now real.
+  //
+  // HONEST SCOPE: resolution is local to this browser's stored projects. There
+  // is no server, so a code created on another device cannot resolve here —
+  // that requires the backend (roadmap P3) and is reported as such instead of
+  // being faked.
+  // -------------------------------------------------------------------------
+
+  /** Find a stored project by invite code (case/whitespace tolerant). */
+  public resolveInviteCode(code: string): WeddingProject | null {
+    const normalized = (code || '').trim().toUpperCase();
+    if (!normalized) return null;
+    const projects = getStoredProjects();
+    return projects.find((p) => (p.inviteCode || '').trim().toUpperCase() === normalized) || null;
+  }
+
+  /**
+   * Join a project from an invite code, optionally applying a role.
+   * Returns a structured outcome so the UI can explain failures truthfully.
+   */
+  public joinProjectByCode(
+    code: string,
+    role?: string,
+  ): { ok: boolean; reason?: 'empty' | 'unknown'; project?: WeddingProject } {
+    const normalized = (code || '').trim();
+    if (!normalized) return { ok: false, reason: 'empty' };
+
+    const project = this.resolveInviteCode(normalized);
+    if (!project) return { ok: false, reason: 'unknown' };
+
+    this.loadProject(project.id);
+    if (role) this.applyInviteRole(role);
+    this.saveCurrentState();
+    this.notify();
+    return { ok: true, project };
+  }
+
+  /** Map an invite role onto the local identity, when it is a role we know. */
+  public applyInviteRole(role: string): void {
+    const known: Record<string, AgentRole> = {
+      guest: 'guest',
+      vendor: 'caterer',
+      planner: 'wedding_planner',
+      bride: 'bride',
+      groom: 'groom',
+      photographer: 'photographer',
+      dj: 'dj',
+    };
+    const mapped = known[(role || '').toLowerCase()];
+    if (!mapped) return;
+    this.userIdentity = { ...this.userIdentity, role: mapped, isCreated: true };
+  }
+
+  /**
+   * Consume `?code=...&role=...` from the current URL, if present.
+   * Called once at startup. Returns the outcome so the UI can surface it.
+   */
+  public consumeInviteFromUrl(search?: string): { ok: boolean; reason?: string; code?: string } | null {
+    if (typeof window === 'undefined' && search === undefined) return null;
+    const raw = search ?? window.location.search;
+    if (!raw) return null;
+
+    let params: URLSearchParams;
+    try {
+      params = new URLSearchParams(raw);
+    } catch {
+      return null;
+    }
+
+    const code = params.get('code');
+    if (!code) return null;
+    const role = params.get('role') || undefined;
+
+    const result = this.joinProjectByCode(code, role);
+    this.lastInviteResult = result.ok
+      ? { ok: true, code }
+      : { ok: false, code, reason: result.reason };
+    return this.lastInviteResult;
+  }
+
+  /** Outcome of the last invite consumption, for honest UI feedback. */
+  public lastInviteResult: { ok: boolean; code?: string; reason?: string } | null = null;
 
   public switchToDemoWedding() {
     this.loadProject('proj_demo_clara_alexandre');
@@ -2044,13 +6064,37 @@ class WeddingStore {
     this.notify();
   }
 
+  /** Has THIS person already voted for the track? */
+  public hasPersonVoted(trackId: string, personId?: string | null): boolean {
+    const pid = personId ?? this.currentPersonId;
+    if (!pid) return false;
+    return this.trackVotes.some((v) => v.trackId === trackId && v.personId === pid);
+  }
+
+  public getTrackVoters(trackId: string): Person[] {
+    return this.trackVotes
+      .filter((v) => v.trackId === trackId)
+      .map((v) => this.getPerson(v.personId))
+      .filter((p): p is Person => p !== null);
+  }
+
   public voteTrack(trackId: string) {
     const track = this.tracks.find((t) => t.id === trackId);
     if (!track) return;
 
-    if (!track.hasVoted) {
+    // Votes are now recorded PER PERSON. `hasVoted` used to be a boolean on
+    // the track itself, so the first vote marked the song as "already voted"
+    // for every single user. It is kept in sync below purely for backward
+    // compatibility with existing UI reads.
+    const personId = this.currentPersonId;
+    const already = personId ? this.hasPersonVoted(trackId, personId) : track.hasVoted;
+
+    if (!already) {
+      if (personId) {
+        this.trackVotes.push({ trackId, personId, votedAt: new Date().toISOString() });
+      }
       track.votes += 1;
-      track.hasVoted = true;
+      track.hasVoted = personId ? this.hasPersonVoted(trackId, personId) : true;
       weddingAudio.playTrackUpvote();
 
       if (track.votes >= 10 && track.status === 'pending') {
@@ -2073,7 +6117,10 @@ class WeddingStore {
   }
 
   public removeTrack(trackId: string) {
+    this.beginMutation('Retirer un morceau');
     this.tracks = this.tracks.filter((t) => t.id !== trackId);
+    // Votes must not outlive their track (would break integrity).
+    this.trackVotes = this.trackVotes.filter((v) => v.trackId !== trackId);
     weddingAudio.playClick();
     this.saveCurrentState();
     this.notify();
@@ -2380,6 +6427,7 @@ class WeddingStore {
 
   private updateAgentsForTime() {
     const currentPhase = this.getActivePhase();
+    if (!currentPhase) return; // an empty programme moves nobody
     const primaryPlace = this.places.find((p) => p.id === currentPhase.primaryPlaceId);
     if (!primaryPlace) return;
 

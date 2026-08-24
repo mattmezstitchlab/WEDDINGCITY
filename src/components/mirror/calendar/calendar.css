@@ -1,0 +1,62 @@
+/* ---------------------------------------------------------------------------
+   CHRONOS — the month rail.
+   A month is NOT a grid of cells here: it is a ruler, the same idea as the
+   film's own scale. Every day is a tick; the occupied ones are lit. It wraps
+   naturally, so a phone reads the same object as a desktop — smaller.
+   All responsive rules live here: an inline style would always beat a media
+   query, and this file must be able to win.
+   --------------------------------------------------------------------------- */
+.wc-cal-rail {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 4px 0 26px;
+}
+
+.wc-cal-tick {
+  appearance: none;
+  cursor: pointer;
+  background: transparent;
+  color: rgba(246, 245, 243, 0.42);
+  border: 1px solid rgba(246, 245, 243, 0.14);
+  border-radius: 2px;
+  width: 34px;
+  height: 34px;
+  font-size: 11px;
+  font-family: inherit;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 160ms ease, color 160ms ease, border-color 160ms ease;
+}
+
+.wc-cal-tick:hover {
+  border-color: rgba(246, 245, 243, 0.5);
+  color: #f6f5f3;
+}
+
+.wc-cal-tick.is-busy {
+  background: rgba(246, 245, 243, 0.9);
+  border-color: rgba(246, 245, 243, 0.9);
+  color: #08090b;
+  font-weight: 700;
+}
+
+.wc-cal-tick.is-today {
+  border-color: #e0736a;
+  color: #e0736a;
+}
+
+.wc-cal-tick.is-busy.is-today {
+  background: #e0736a;
+  border-color: #e0736a;
+  color: #08090b;
+}
+
+@media (max-width: 520px) {
+  .wc-cal-tick {
+    width: 30px;
+    height: 30px;
+    font-size: 10px;
+  }
+}

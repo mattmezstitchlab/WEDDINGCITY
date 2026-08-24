@@ -1,0 +1,146 @@
+import { useEffect, useState } from 'react';
+import { typography, radius, shadowFor } from '../../design/tokens';
+import { M } from './MirrorPrimitives';
+import { weddingStore } from '../../game/weddingStore';
+
+// ---------------------------------------------------------------------------
+// MIRROR NAV — the lowest-cognitive-cost option.
+// ---------------------------------------------------------------------------
+// Two candidates were considered (brief §navigation):
+//
+//   A. vertical icon rail with tooltips — compact, but pictograms for
+//      "Prestataires" vs "Personnes" vs "Lieux" are genuinely ambiguous, so
+//      the label has to be discovered by hovering. That IS cognitive cost.
+//   B. thin horizontal editorial rail with numbers + words — reads like a
+//      magazine contents page, is self-explanatory at a glance, and matches
+//      the numbered sections it points at.
+//
+// B is implemented. Numbers are the same 01..06 used by the sections, so the
+// nav and the page speak one language. No icons, no sub-menus, no dropdowns.
+// On mobile it becomes a single horizontally scrollable line.
+// ---------------------------------------------------------------------------
+
+export interface NavSection {
+  id: string;
+  index: string;
+  label: string;
+  available: boolean;
+}
+
+export function MirrorNav({ sections }: { sections: NavSection[] }) {
+  const visible = sections.filter((s) => s.available);
+  const [active, setActive] = useState<string | null>(visible[0]?.id ?? null);
+
+  // Highlight follows the section actually in view.
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const inView = entries
+          .filter((e) => e.isIntersecting)
+          .sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0];
+        if (inView) setActive(inView.target.id.replace('mirror-', ''));
+      },
+      // The trigger line sits just under the rail (62 + its height), so the
+      // section you are actually reading is the one highlighted. With -20% the
+      // rail still showed 02 while 03 filled the screen.
+      { rootMargin: '-116px 0px -55% 0px', threshold: [0, 0.02, 0.2] },
+    );
+    for (const s of visible) {
+      const el = document.getElementById(`mirror-${s.id}`);
+      if (el) observer.observe(el);
+    }
+    return () => observer.disconnect();
+  }, [visible.map((s) => s.id).join(',')]);
+
+  if (visible.length < 2) return null;
+
+  const go = (id: string) => {
+    const el = document.getElementById(`mirror-${id}`);
+    el?.scrollIntoView({ block: 'start' });
+    // Move the reading position too, so a keyboard user actually lands there.
+    el?.setAttribute('tabindex', '-1');
+    (el as HTMLElement | null)?.focus?.({ preventScroll: true });
+  };
+
+  // ← → walk the rail, exactly like a real contents page.
+  const onKeyDown = (e: React.KeyboardEvent, index: number) => {
+    const delta = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0;
+    if (!delta) return;
+    e.preventDefault();
+    const next = visible[(index + delta + visible.length) % visible.length];
+    go(next.id);
+    const el = document.querySelector<HTMLButtonElement>(`[data-mirror-nav="${next.id}"]`);
+    el?.focus();
+  };
+
+  return (
+    <nav style={barStyle} aria-label="Sections du site">
+      <div style={innerStyle}>
+        {visible.map((s, i) => {
+          const isActive = active === s.id;
+          return (
+            <button
+              key={s.id}
+              data-mirror-nav={s.id}
+              onClick={() => go(s.id)}
+              onKeyDown={(e) => onKeyDown(e, i)}
+              aria-current={isActive ? 'true' : undefined}
+              style={itemStyle(isActive)}
+            >
+              <span style={{ ...idxStyle, color: isActive ? M.textPrimary : M.textMuted }}>{s.index}</span>
+              <span>{s.label}</span>
+            </button>
+          );
+        })}
+
+        <span style={{ flex: 1, minWidth: 8 }} />
+
+        {/* PRODUCT DECISION (Jour J pass): the 3D World is no longer offered
+            as a destination. It stays in the codebase, but nothing in the
+            product sends a couple into it. */}
+      </div>
+    </nav>
+  );
+}
+
+const barStyle: React.CSSProperties = {
+  // The projection capsule used to be pinned to the top and covered this rail.
+  // It now sits at the bottom of the Mirror (ProjectionSwitcher), so the
+  // editorial contents page takes the top of the page, where it belongs.
+  position: 'sticky', top: 0, zIndex: 5,
+  // Opaque: at 92% the content scrolling underneath showed through the rail
+  // and muddied the contents page. No blur — the audit forbids glassmorphism.
+  background: M.bg,
+  borderBottom: `1px solid ${M.line}`,
+};
+
+const innerStyle: React.CSSProperties = {
+  maxWidth: 1080, margin: '0 auto',
+  display: 'flex', gap: 'clamp(10px, 2.4vw, 30px)',
+  padding: '11px clamp(16px, 5vw, 72px)',
+  overflowX: 'auto',
+};
+
+const itemStyle = (active: boolean): React.CSSProperties => ({
+  font: 'inherit', background: 'transparent', border: 'none', cursor: 'pointer',
+  display: 'inline-flex', alignItems: 'baseline', gap: 6,
+  padding: 0, whiteSpace: 'nowrap',
+  fontSize: typography.editorial.caption, letterSpacing: '0.09em', textTransform: 'uppercase',
+  fontWeight: active ? typography.weight.bold : typography.weight.medium,
+  color: active ? M.textPrimary : M.textSecondary,
+  opacity: active ? 1 : 0.75,
+  transition: 'opacity 160ms ease, color 160ms ease',
+});
+
+const idxStyle: React.CSSProperties = {
+  fontFamily: typography.family.mono, fontSize: typography.editorial.micro, letterSpacing: 0,
+};
+
+export const editBtnStyle: React.CSSProperties = {
+  appearance: 'none', cursor: 'pointer',
+  background: 'transparent', color: M.textSecondary,
+  border: `1px solid ${M.line}`, borderRadius: radius.pill,
+  padding: '5px 13px', fontSize: typography.editorial.caption,
+  letterSpacing: '0.06em', textTransform: 'uppercase', fontWeight: 600,
+  boxShadow: shadowFor(0, 'composition'),
+};

@@ -1,3 +1,4 @@
+import { reportDiagnostic } from './diagnostics';
 // Procedural Web Audio Engine for WEDDING CITY (Synthesizes live wedding orchestration & DJ beats)
 
 class WeddingAudioEngine {
@@ -46,8 +47,10 @@ class WeddingAudioEngine {
       gain.connect(this.ctx.destination);
       osc.start();
       osc.stop(this.ctx.currentTime + 0.05);
-    } catch {
-      // safe fallback
+    } catch (error) {
+      // Audio is non-critical, but a permanently blocked AudioContext must be
+      // visible to the System Nerve rather than silently degrading to silence.
+      reportDiagnostic({ source: 'audio', severity: 'warning', code: 'audio_playback_failed', error });
     }
   }
 
@@ -72,8 +75,10 @@ class WeddingAudioEngine {
       gain.connect(this.ctx.destination);
       osc.start();
       osc.stop(this.ctx.currentTime + 0.46);
-    } catch {
-      // safe fallback
+    } catch (error) {
+      // Audio is non-critical, but a permanently blocked AudioContext must be
+      // visible to the System Nerve rather than silently degrading to silence.
+      reportDiagnostic({ source: 'audio', severity: 'warning', code: 'audio_playback_failed', error });
     }
   }
 
@@ -97,8 +102,10 @@ class WeddingAudioEngine {
         osc.start(now + idx * 0.05);
         osc.stop(now + idx * 0.05 + 0.22);
       });
-    } catch {
-      // safe fallback
+    } catch (error) {
+      // Audio is non-critical, but a permanently blocked AudioContext must be
+      // visible to the System Nerve rather than silently degrading to silence.
+      reportDiagnostic({ source: 'audio', severity: 'warning', code: 'audio_playback_failed', error });
     }
   }
 
@@ -123,8 +130,10 @@ class WeddingAudioEngine {
       gain.connect(this.ctx.destination);
       osc.start(now);
       osc.stop(now + 0.4);
-    } catch {
-      // safe fallback
+    } catch (error) {
+      // Audio is non-critical, but a permanently blocked AudioContext must be
+      // visible to the System Nerve rather than silently degrading to silence.
+      reportDiagnostic({ source: 'audio', severity: 'warning', code: 'audio_playback_failed', error });
     }
   }
 
@@ -148,8 +157,10 @@ class WeddingAudioEngine {
         osc.start(now + idx * 0.05);
         osc.stop(now + idx * 0.05 + 0.2);
       });
-    } catch {
-      // safe fallback
+    } catch (error) {
+      // Audio is non-critical, but a permanently blocked AudioContext must be
+      // visible to the System Nerve rather than silently degrading to silence.
+      reportDiagnostic({ source: 'audio', severity: 'warning', code: 'audio_playback_failed', error });
     }
   }
 
@@ -171,8 +182,10 @@ class WeddingAudioEngine {
       gain.connect(this.ctx.destination);
       osc.start(now);
       osc.stop(now + 0.1);
-    } catch {
-      // safe fallback
+    } catch (error) {
+      // Audio is non-critical, but a permanently blocked AudioContext must be
+      // visible to the System Nerve rather than silently degrading to silence.
+      reportDiagnostic({ source: 'audio', severity: 'warning', code: 'audio_playback_failed', error });
     }
   }
 
@@ -194,8 +207,10 @@ class WeddingAudioEngine {
       gain.connect(this.ctx.destination);
       osc.start(now);
       osc.stop(now + 0.5);
-    } catch {
-      // safe fallback
+    } catch (error) {
+      // Audio is non-critical, but a permanently blocked AudioContext must be
+      // visible to the System Nerve rather than silently degrading to silence.
+      reportDiagnostic({ source: 'audio', severity: 'warning', code: 'audio_playback_failed', error });
     }
   }
 
@@ -220,8 +235,10 @@ class WeddingAudioEngine {
         osc.start(now + i * 0.12);
         osc.stop(now + i * 0.12 + 0.55);
       });
-    } catch {
-      // safe fallback
+    } catch (error) {
+      // Audio is non-critical, but a permanently blocked AudioContext must be
+      // visible to the System Nerve rather than silently degrading to silence.
+      reportDiagnostic({ source: 'audio', severity: 'warning', code: 'audio_playback_failed', error });
     }
   }
 
@@ -245,8 +262,10 @@ class WeddingAudioEngine {
         osc.start(now + i * 0.1);
         osc.stop(now + i * 0.1 + 0.15);
       });
-    } catch {
-      // safe fallback
+    } catch (error) {
+      // Audio is non-critical, but a permanently blocked AudioContext must be
+      // visible to the System Nerve rather than silently degrading to silence.
+      reportDiagnostic({ source: 'audio', severity: 'warning', code: 'audio_playback_failed', error });
     }
   }
 
@@ -270,8 +289,10 @@ class WeddingAudioEngine {
         osc.start(now + i * 0.08);
         osc.stop(now + i * 0.08 + 0.4);
       });
-    } catch {
-      // safe fallback
+    } catch (error) {
+      // Audio is non-critical, but a permanently blocked AudioContext must be
+      // visible to the System Nerve rather than silently degrading to silence.
+      reportDiagnostic({ source: 'audio', severity: 'warning', code: 'audio_playback_failed', error });
     }
   }
 }

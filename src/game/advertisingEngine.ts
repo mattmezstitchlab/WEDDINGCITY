@@ -1,5 +1,5 @@
-import { AdDisplaySlot, AdContentCategory } from '../types/wedding';
-import { BRAND_ACCENT } from './weddingStore';
+import { AdDisplaySlot } from '../types/wedding';
+import { BRAND_ACCENT } from './brand';
 
 // Initial 3D Spatial Advertising Slots distributed on the Worldmap
 export const INITIAL_AD_SLOTS: AdDisplaySlot[] = [

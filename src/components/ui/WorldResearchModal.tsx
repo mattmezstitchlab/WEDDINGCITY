@@ -116,7 +116,11 @@ export function WorldResearchModal({
             <span style={{ fontSize: 14, color: BRAND_TEXT_MUTED }}>🔍</span>
             <input
               type="text"
-              placeholder={`Rechercher un prestataire, spécialité ou service autour de ${project.locationName}...`}
+              /* A wedding may legitimately have no venue yet — the sentence
+                 must not read "autour de ." */
+              placeholder={project.locationName
+                ? `Rechercher un prestataire, spécialité ou service autour de ${project.locationName}...`
+                : 'Rechercher un prestataire, une spécialité ou un service...'}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               style={searchInputStyle}
@@ -124,7 +128,7 @@ export function WorldResearchModal({
           </div>
 
           <div style={locationTagStyle}>
-            📍 {project.locationName} & Île-de-France
+            📍 {project.locationName ? `${project.locationName} & Île-de-France` : 'Lieu non renseigné'}
           </div>
         </div>
 

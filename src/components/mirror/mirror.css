@@ -1,0 +1,292 @@
+/* ---------------------------------------------------------------------------
+   MIRROR — the few rules that inline styles genuinely cannot express.
+   ---------------------------------------------------------------------------
+   The Mirror is styled with design tokens and inline styles (Phase B decision,
+   540+ call sites). Three things are impossible that way, so they live here:
+
+     1. media queries          → real mobile/tablet/desktop layout
+     2. :focus-visible         → keyboard accessibility, on every control
+     3. prefers-reduced-motion → one global brake instead of 12 local ones
+
+   Everything is scoped under #wc-mirror / #wc-mirror-canvas so the 3D World
+   and the rest of the app are untouched.
+   --------------------------------------------------------------------------- */
+
+#wc-mirror,
+#wc-mirror-canvas {
+  /* Never let a wide child create a horizontal scrollbar on mobile. */
+  overflow-x: hidden;
+  scroll-behavior: smooth;
+}
+
+#wc-mirror img,
+#wc-mirror-canvas img {
+  max-width: 100%;
+}
+
+/* --- keyboard accessibility ------------------------------------------------
+   Every control gets a visible focus ring — including the ones drawn as bare
+   type, which is exactly where a missing ring is most harmful. */
+#wc-mirror :focus-visible,
+#wc-mirror-canvas :focus-visible {
+  outline: 2px solid #2b2f38;
+  outline-offset: 3px;
+  border-radius: 3px;
+}
+
+/* --- entering the Mirror ---------------------------------------------------
+   The World ↔ Mirror crossing is a change of surface, not a show: a short
+   fade with a barely perceptible lift. */
+@keyframes wcMirrorIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: none; }
+}
+
+#wc-mirror {
+  animation: wcMirrorIn 420ms cubic-bezier(0.22, 0.61, 0.36, 1) both;
+}
+
+/* --- the cover ------------------------------------------------------------- */
+.wc-hero {
+  /* The rail now sits above the hero (see MirrorSite), so the first screen is
+     the rail + a nearly full-height cover. */
+  min-height: min(calc(94vh - 38px), 1000px);
+  justify-content: flex-end;
+}
+
+@media (max-width: 680px) {
+  /* Shorter, and the lockup sits low but not marooned: the first section
+     starts to show, which is what invites the scroll. */
+  .wc-hero {
+    min-height: calc(86vh - 44px);
+    justify-content: center;
+    padding-top: 96px;
+  }
+}
+
+/* MEASURED IN THE BROWSER (journey acceptance) at 390px: a long real name
+   ("ALPHA-ACCEPTATION") was cut off by the right edge of the cover — the page
+   does not scroll horizontally, so the end of the name was simply unreadable.
+   A name is data: it wraps, it is never truncated. */
+.wc-hero-title {
+  overflow-wrap: anywhere;
+}
+
+/* --- the timeline, the spine of the site ---------------------------------- */
+.wc-timeline-row {
+  display: grid;
+  grid-template-columns: minmax(88px, 168px) 26px minmax(0, 1fr);
+  align-items: start;
+}
+
+.wc-timeline-hour {
+  text-align: right;
+}
+
+/* Declared here, never inline: the mobile rule below must be able to win. */
+.wc-timeline-thread {
+  display: flex;
+}
+
+@media (max-width: 680px) {
+  /* On a phone the thread and the right-aligned hour column waste the width
+     that the content needs, so the moment stacks: hour, then everything. */
+  .wc-timeline-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .wc-timeline-hour {
+    text-align: left;
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+    /* Stacked, the hour needs air before the title: without it the moment
+       read as one dense block on a phone. */
+    margin-bottom: 14px;
+    padding-top: 0;
+  }
+  .wc-timeline-thread {
+    display: none;
+  }
+}
+
+/* --- 06 MÉDIAS: an asymmetric editorial gallery --------------------------- */
+.wc-gallery {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: clamp(10px, 1.6vw, 20px);
+}
+
+/* The rhythm is deliberate and repeats every five items: wide, tall, small,
+   small, wide — so a real collection reads as a composition, never as a
+   uniform contact sheet. Nothing is cropped away: object-fit keeps the
+   subject, and the shapes come from the count of REAL assets only. */
+.wc-gallery > * { grid-column: span 2; aspect-ratio: 1 / 1; }
+.wc-gallery > *:nth-child(5n + 1) { grid-column: span 4; aspect-ratio: 3 / 2; }
+.wc-gallery > *:nth-child(5n + 2) { grid-column: span 2; aspect-ratio: 3 / 4; }
+.wc-gallery > *:nth-child(5n + 5) { grid-column: span 4; aspect-ratio: 16 / 9; }
+
+@media (max-width: 880px) {
+  .wc-gallery { grid-template-columns: repeat(4, 1fr); }
+  .wc-gallery > *:nth-child(5n + 1),
+  .wc-gallery > *:nth-child(5n + 5) { grid-column: span 4; }
+}
+
+@media (max-width: 520px) {
+  .wc-gallery { grid-template-columns: repeat(2, 1fr); }
+  .wc-gallery > *,
+  .wc-gallery > *:nth-child(5n + 1),
+  .wc-gallery > *:nth-child(5n + 2),
+  .wc-gallery > *:nth-child(5n + 5) { grid-column: span 2; aspect-ratio: 3 / 2; }
+}
+
+/* --- touch targets ---------------------------------------------------------
+   Scoped to navigation and explicit actions: inline type links keep their
+   editorial size, but anything you are meant to tap is tappable. */
+@media (pointer: coarse) {
+  #wc-mirror nav button,
+  #wc-mirror .wc-action,
+  #wc-mirror-canvas nav button,
+  #wc-mirror-canvas .wc-action {
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+  }
+}
+
+/* --- motion, once, for the whole surface ---------------------------------- */
+@media (prefers-reduced-motion: reduce) {
+  #wc-mirror,
+  #wc-mirror-canvas {
+    scroll-behavior: auto;
+  }
+  #wc-mirror *,
+  #wc-mirror-canvas * {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}
+
+/* --- skip link -------------------------------------------------------------
+   Hidden until a keyboard user tabs into it, then unmissable. */
+.wc-skip {
+  position: absolute;
+  left: -9999px;
+  top: 10px;
+  z-index: 20;
+  background: #fffdfa;
+  color: #16181c;
+  border: 1px solid rgba(22, 24, 28, 0.24);
+  border-radius: 999px;
+  padding: 10px 18px;
+  font-size: 13px;
+  text-decoration: none;
+}
+
+.wc-skip:focus {
+  left: 16px;
+}
+
+/* --- covers ----------------------------------------------------------------
+   92px is a graphic element on a laptop and a battering ram on a phone: the
+   row measured 383px inside a 350px column at 390px wide. The size is set
+   inline (the component needs the number for its own proportions), so the
+   responsive override has to be marked important — deliberately, here only. */
+@media (max-width: 680px) {
+  .wc-cover-lg {
+    width: 68px !important;
+    height: 68px !important;
+  }
+}
+
+/* --- the Canvas masthead ---------------------------------------------------
+   SEEN AT 390px: the fixed projection pill sat on top of the Canvas header,
+   hiding its eyebrow and clipping the title. On a wide screen the header has
+   room to its left, so only the narrow case needs to give way. */
+.wc-canvas-masthead {
+  padding-top: clamp(20px, calc(20px + 10 * ((100vw - 360px) / 920)), 30px);
+}
+
+@media (max-width: 780px) {
+  .wc-canvas-masthead {
+    padding-top: 64px;
+  }
+}
+
+/* --- landing navigation ----------------------------------------------------
+   MEASURED AT 390px: brand + three links + CTA did not fit, and the CTA was
+   cut off at the right edge. On a phone the links step aside — the page is
+   short and scrolling reaches every section — and the CTA stays reachable. */
+.wc-landing-links {
+  display: flex;
+}
+
+@media (max-width: 680px) {
+  .wc-landing-links {
+    display: none;
+  }
+  .wc-landing-nav {
+    gap: 10px;
+  }
+  .wc-landing-cta {
+    padding: 9px 14px;
+  }
+  .wc-landing-brand-suffix {
+    display: none;
+  }
+}
+
+/* --- landing sequence ------------------------------------------------------
+   Text and picture side by side, alternating; stacked on a phone. Declared
+   here (not inline) so the media query can actually win. */
+.wc-landing-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr);
+}
+
+@media (max-width: 780px) {
+  .wc-landing-row {
+    grid-template-columns: minmax(0, 1fr);
+    direction: ltr !important;
+  }
+}
+
+/* --- editorial creation surface --------------------------------------------
+   Wide screen: the questions on the left, the picture holding the right-hand
+   column full height. Phone: one column, picture last. */
+.wc-creation-surface {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 0.82fr);
+  grid-template-rows: auto 1fr;
+}
+
+.wc-creation-top {
+  grid-column: 1 / -1;
+}
+
+@media (max-width: 900px) {
+  .wc-creation-surface {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* --- the two names ---------------------------------------------------------
+   Side by side with the ampersand between them; stacked on a phone, where the
+   ampersand becomes a centred separator. */
+.wc-creation-names {
+  display: flex;
+  align-items: flex-end;
+  flex-wrap: wrap;
+}
+
+@media (max-width: 680px) {
+  .wc-creation-names {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    justify-items: stretch;
+  }
+  .wc-creation-amp {
+    justify-self: center;
+    line-height: 1 !important;
+  }
+}

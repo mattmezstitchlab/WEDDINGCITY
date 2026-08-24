@@ -1,3 +1,16 @@
+/**
+ * SELF-DECLARED CAPABILITIES — read by the System Nerve health probe.
+ *
+ * Vendor listings, ratings, prices and honeymoon destinations below are static
+ * TypeScript arrays. There is no search API, no freshness, no attribution.
+ * Declared here so the Nerve reports 🟡 SIMULÉ truthfully.
+ */
+export const RESEARCH_CAPABILITIES = {
+  network: false,
+  liveSources: false,
+  simulated: true,
+} as const;
+
 import { WebVendorResult, HoneymoonDestination, ChatMessage, VerificationLevel } from '../types/wedding';
 
 // Real-world verified public vendors database

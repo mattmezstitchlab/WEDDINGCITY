@@ -1,0 +1,9 @@
+node_modules
+dist
+dist-raw
+.DS_Store
+*.local
+
+# Local build configuration (see .env.example)
+.env
+.env.local

@@ -4,6 +4,7 @@ import { RoundedBox } from '@react-three/drei';
 import * as THREE from 'three';
 import { Agent } from '../../types/wedding';
 import { weddingStore, BRAND_ACCENT } from '../../game/weddingStore';
+import { materials } from '../../design/tokens';
 
 interface VoxelAgentsProps {
   agents: Agent[];
@@ -153,7 +154,7 @@ function SingleVoxelAgent({
       {/* Torso with DMC Color on upper chest */}
       <RoundedBox args={[0.44, 0.54, 0.26]} radius={0.04} smoothness={2} position={[0, 0.7, 0]} castShadow>
         <meshStandardMaterial
-          color={agent.role === weddingStore.userIdentity.role ? weddingStore.userDmcIdentity.dmcColor : bodyColor}
+          color={weddingStore.isCurrentUserAgent(agent.id) ? weddingStore.userDmcIdentity.dmcColor : bodyColor}
           roughness={0.6}
           emissive={isSelected ? BRAND_ACCENT : '#000000'}
           emissiveIntensity={isSelected ? 0.25 : 0}
@@ -161,12 +162,33 @@ function SingleVoxelAgent({
       </RoundedBox>
 
       {/* Micro Embroidered DMC Badge / Emblem on Chest */}
-      {agent.role === weddingStore.userIdentity.role && (
-        <mesh position={[0.1, 0.8, 0.14]}>
-          <boxGeometry args={[0.08, 0.08, 0.02]} />
-          <meshStandardMaterial color={BRAND_ACCENT} emissive={BRAND_ACCENT} emissiveIntensity={0.6} />
-        </mesh>
+      {/* Identity is bound by PERSON ID, not by role: two people sharing a
+          role used to both render as the connected user. */}
+      {weddingStore.isCurrentUserAgent(agent.id) && (
+        <RoundedBox args={[0.08, 0.08, 0.02]} radius={0.006} smoothness={3} position={[0.1, 0.8, 0.14]}>
+          <meshStandardMaterial color={BRAND_ACCENT} emissive={BRAND_ACCENT} emissiveIntensity={0.42} />
+        </RoundedBox>
       )}
+
+      {/* RSVP state, projected onto the character itself.
+          A guest is no longer just a row in a list: pending and declined
+          answers are visible in the world. Uses the existing voxel vocabulary
+          (a small emissive marker), not a new visual language. */}
+      {(() => {
+        const person = weddingStore.getPersonForAgent(agent.id);
+        const guest = person ? weddingStore.getGuestForPerson(person.id) : null;
+        if (!guest || guest.rsvp.status === 'accepted') return null;
+        const color =
+          guest.rsvp.status === 'declined' ? '#f43f5e'
+            : guest.rsvp.status === 'tentative' ? '#38bdf8'
+              : '#eab308';
+        return (
+          <mesh position={[0, 1.72, 0]}>
+            <octahedronGeometry args={[0.07, 0]} />
+            <meshStandardMaterial color={color} emissive={color} emissiveIntensity={0.42} />
+          </mesh>
+        );
+      })()}
 
       {/* Head & Hair */}
       <group ref={headRef} position={[0, 1.22, 0]}>
@@ -236,33 +258,34 @@ function SingleVoxelAgent({
 
       {agent.role === 'photographer' && (
         <group position={[0, 0.7, 0.22]}>
-          <mesh castShadow>
-            <boxGeometry args={[0.22, 0.14, 0.16]} />
-            <meshStandardMaterial color="#111520" metalness={0.8} />
-          </mesh>
+          <RoundedBox args={[0.22, 0.14, 0.16]} radius={0.039} smoothness={3} castShadow>
+            <meshStandardMaterial color="#111520" metalness={0.08} /*tok:matte*/ />
+          </RoundedBox>
           <mesh position={[0, 0, 0.1]} rotation={[Math.PI / 2, 0, 0]}>
             <cylinderGeometry args={[0.06, 0.06, 0.08, 12]} />
-            <meshStandardMaterial color={BRAND_ACCENT} emissive={BRAND_ACCENT} emissiveIntensity={0.8} />
+            <meshStandardMaterial color={BRAND_ACCENT} emissive={BRAND_ACCENT} emissiveIntensity={0.42} />
           </mesh>
         </group>
       )}
 
+      {/* Pre-existing bug found while bevelling: the geometry and material
+          were direct children of a <group>, which renders NOTHING in R3F.
+          The wedding planner's clipboard has never actually been visible. */}
       {agent.role === 'wedding_planner' && (
         <group position={[0, 0.7, 0.2]} rotation={[0.3, 0, 0]}>
-          <boxGeometry args={[0.18, 0.26, 0.02]} />
-          <meshStandardMaterial color="#e2e8f0" />
+          <RoundedBox args={[0.18, 0.26, 0.02]} radius={0.006} smoothness={3} castShadow>
+            <meshStandardMaterial color="#e2e8f0" roughness={materials.matte.roughness} metalness={materials.matte.metalness} />
+          </RoundedBox>
         </group>
       )}
 
       {/* Legs */}
-      <mesh ref={leftLegRef} position={[-0.11, 0.22, 0]} castShadow>
-        <boxGeometry args={[0.13, 0.42, 0.13]} />
+      <RoundedBox args={[0.13, 0.42, 0.13]} radius={0.036} smoothness={3} ref={leftLegRef} position={[-0.11, 0.22, 0]} castShadow>
         <meshStandardMaterial color="#111520" />
-      </mesh>
-      <mesh ref={rightLegRef} position={[0.11, 0.22, 0]} castShadow>
-        <boxGeometry args={[0.13, 0.42, 0.13]} />
+      </RoundedBox>
+      <RoundedBox args={[0.13, 0.42, 0.13]} radius={0.036} smoothness={3} ref={rightLegRef} position={[0.11, 0.22, 0]} castShadow>
         <meshStandardMaterial color="#111520" />
-      </mesh>
+      </RoundedBox>
     </group>
   );
 }

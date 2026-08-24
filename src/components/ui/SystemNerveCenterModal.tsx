@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   weddingStore,
   BRAND_ACCENT,
@@ -12,6 +12,8 @@ import {
   systemNerveEngine,
 } from '../../game/systemNerveEngine';
 import { SystemModuleHealth, SystemDiagnosticError } from '../../types/systemNerve';
+import { NerveModuleDetail } from './NerveModuleDetail';
+import { NerveGraphPanel } from './NerveGraphPanel';
 import {
   IconCheck,
   IconAlert,
@@ -26,7 +28,7 @@ interface SystemNerveCenterModalProps {
   onClose: () => void;
 }
 
-type NerveViewMode = 'modules' | 'xray' | 'errors' | 'doctor';
+type NerveViewMode = 'modules' | 'graph' | 'xray' | 'errors' | 'doctor';
 
 export function SystemNerveCenterModal({ isOpen, onClose }: SystemNerveCenterModalProps) {
   const store = weddingStore;
@@ -36,6 +38,7 @@ export function SystemNerveCenterModal({ isOpen, onClose }: SystemNerveCenterMod
 
   const [viewMode, setViewMode] = useState<NerveViewMode>('modules');
   const [selectedModule, setSelectedModule] = useState<SystemModuleHealth | null>(null);
+  const [detailTick, setDetailTick] = useState(0);
   const [doctorQuestion, setDoctorQuestion] = useState('');
   const [doctorChat, setDoctorChat] = useState<{ q: string; a: string; time: string }[]>([
     {
@@ -44,6 +47,16 @@ export function SystemNerveCenterModal({ isOpen, onClose }: SystemNerveCenterMod
       time: 'En direct',
     },
   ]);
+
+  // Probe results must exist before the detail panel can show anything real.
+  // Without this, opening the modal would show "no probe" for modules that do
+  // have one — i.e. it would under-report rather than over-report, but it would
+  // still be wrong.
+  useEffect(() => {
+    if (isOpen && systemNerveEngine.getHealthChecks().length === 0) {
+      void systemNerveEngine.runProbes().then(() => setDetailTick((n) => n + 1));
+    }
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
@@ -87,6 +100,10 @@ export function SystemNerveCenterModal({ isOpen, onClose }: SystemNerveCenterMod
         return <span style={statusBadgeStyle(BRAND_ACCENT, 'rgba(226, 180, 72, 0.15)')}>PARTIAL</span>;
       case 'CONFIGURATION_REQUIRED':
         return <span style={statusBadgeStyle('#38bdf8', 'rgba(56, 189, 248, 0.15)')}>CONFIG REQUISE</span>;
+      case 'MOCK':
+        return <span style={statusBadgeStyle('#eab308', 'rgba(234, 179, 8, 0.15)')}>🟡 SIMULÉ</span>;
+      case 'NOT_IMPLEMENTED':
+        return <span style={statusBadgeStyle(BRAND_TEXT_MUTED, 'rgba(255, 255, 255, 0.05)')}>⚪ ABSENT</span>;
       case 'ERROR':
         return <span style={statusBadgeStyle('#f43f5e', 'rgba(244, 63, 94, 0.15)')}>ERROR</span>;
       default:
@@ -157,6 +174,7 @@ export function SystemNerveCenterModal({ isOpen, onClose }: SystemNerveCenterMod
         <div style={{ display: 'flex', gap: 6, margin: '14px 0 10px', borderBottom: `1px solid ${BRAND_BORDER}`, paddingBottom: 8 }}>
           {[
             { id: 'modules', label: `22 Modules Système (${report.totalModules})` },
+            { id: 'graph', label: '🧠 Graphe Nerveux & Propagation' },
             { id: 'xray', label: '🔬 Vue X-Ray (Graphe Spatial)' },
             { id: 'errors', label: `⚠️ Erreurs & Réparation (${errors.filter(e => e.status !== 'RESOLVED').length})` },
             { id: 'doctor', label: '🩺 System Doctor & Maturité' },
@@ -171,7 +189,22 @@ export function SystemNerveCenterModal({ isOpen, onClose }: SystemNerveCenterMod
           ))}
         </div>
 
+        {/* ---------------- VIEW: NERVOUS-SYSTEM GRAPH ---------------- */}
+        {viewMode === 'graph' && <NerveGraphPanel />}
+
         {/* ---------------- VIEW 1: 22 MODULES LIST ---------------- */}
+        {viewMode === 'modules' && selectedModule && (
+          <div style={{ marginBottom: 10 }}>
+            <NerveModuleDetail
+              key={`${selectedModule.id}-${detailTick}`}
+              check={systemNerveEngine.getCheckForModule(selectedModule.id)}
+              moduleName={selectedModule.name}
+              moduleId={selectedModule.id}
+              onRefreshed={() => setDetailTick((n) => n + 1)}
+            />
+          </div>
+        )}
+
         {viewMode === 'modules' && (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 8, maxHeight: 400, overflowY: 'auto' }}>
             {modules.map((mod) => (
@@ -231,8 +264,10 @@ export function SystemNerveCenterModal({ isOpen, onClose }: SystemNerveCenterMod
 
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8 }}>
               {modules.map((mod) => {
+                // MOCK and UNKNOWN are deliberately NOT healthy: a simulated module
+                // must never be displayed as working.
                 const isHealthy = mod.status === 'OK';
-                const isPartial = mod.status === 'PARTIAL' || mod.status === 'CONFIGURATION_REQUIRED';
+                const isPartial = mod.status === 'PARTIAL' || mod.status === 'CONFIGURATION_REQUIRED' || mod.status === 'MOCK';
                 const linkColor = isHealthy ? '#10b981' : isPartial ? BRAND_ACCENT : '#f43f5e';
 
                 return (

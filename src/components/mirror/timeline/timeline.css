@@ -1,0 +1,560 @@
+/* ---------------------------------------------------------------------------
+   JOUR J — the timeline studio.
+   ---------------------------------------------------------------------------
+   Every property that must CHANGE with the viewport lives here, never inline:
+   an inline style always beats a media query, and that lesson was paid for
+   four times on this project.
+   --------------------------------------------------------------------------- */
+
+.wc-jourj {
+  --jourj-bg: #08090b;
+  --jourj-ink: #f6f5f3;
+  --jourj-dim: #a7a49e;
+  --jourj-faint: #6f6c67;
+  --jourj-line: rgba(246, 245, 243, 0.14);
+  --jourj-strip-h: 460px;
+  --jourj-head-pad: 40px;
+  background: var(--jourj-bg);
+  color: var(--jourj-ink);
+}
+
+/* --- the head of the day ---------------------------------------------------- */
+.wc-jourj-head {
+  padding: var(--jourj-head-pad) clamp(18px, 5vw, 64px) 18px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 18px;
+  flex-wrap: wrap;
+}
+
+.wc-jourj-title {
+  /* Size, leading and tracking are set inline (a clamp, not a media query) so
+     any tool that computes styles can read them. Only what does not need to be
+     measured lives here. */
+  margin: 6px 0 0;
+  overflow-wrap: anywhere;
+}
+
+.wc-jourj-tools {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* --- the strip -------------------------------------------------------------- */
+.wc-jourj-strip {
+  position: relative;
+  height: var(--jourj-strip-h);
+  overflow-x: auto;
+  overflow-y: hidden;
+  /* The film is dragged and swiped; the browser must not steal the gesture. */
+  touch-action: pan-x;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(246, 245, 243, 0.28) transparent;
+  border-top: 1px solid var(--jourj-line);
+  border-bottom: 1px solid var(--jourj-line);
+  cursor: grab;
+}
+
+.wc-jourj-strip.is-panning { cursor: grabbing; }
+
+.wc-jourj-strip::-webkit-scrollbar { height: 8px; }
+.wc-jourj-strip::-webkit-scrollbar-thumb {
+  background: rgba(246, 245, 243, 0.22);
+  border-radius: 8px;
+}
+
+/* A moment: the whole card is the drag surface, so nothing can move alone. */
+.wc-jourj-moment {
+  position: absolute;
+  top: 56px;
+  bottom: 18px;
+  border-radius: 4px;
+  overflow: hidden;
+  background: #101114;
+  border: 1px solid var(--jourj-line);
+  cursor: grab;
+  user-select: none;
+  touch-action: none;
+  transition: box-shadow 180ms ease, border-color 180ms ease;
+}
+
+.wc-jourj-moment.is-dragging {
+  cursor: grabbing;
+  z-index: 30;
+  box-shadow: 0 30px 60px rgba(0, 0, 0, 0.65);
+  border-color: rgba(246, 245, 243, 0.5);
+  transition: none;
+}
+
+.wc-jourj-moment.is-ghosted { opacity: 0.5; }
+
+.wc-jourj-moment img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  pointer-events: none;
+}
+
+/* --- responsive ------------------------------------------------------------- */
+@media (max-width: 900px) {
+  .wc-jourj { --jourj-strip-h: 400px; --jourj-head-pad: 28px; }
+}
+
+@media (max-width: 680px) {
+  .wc-jourj { --jourj-strip-h: 340px; --jourj-head-pad: 22px; }
+  .wc-jourj-head { align-items: flex-start; flex-direction: column; }
+  .wc-jourj-tools { width: 100%; }
+}
+
+/* --- the hub ---------------------------------------------------------------- */
+.wc-hub {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: min(560px, 100vw);
+  z-index: 1200;
+  display: flex;
+  flex-direction: column;
+  background: #0b0c0e;
+  border-left: 1px solid var(--jourj-line, rgba(246, 245, 243, 0.14));
+  color: #f6f5f3;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+@media (max-width: 680px) {
+  .wc-hub { width: 100vw; border-left: none; }
+}
+
+.wc-hub-cover {
+  position: relative;
+  height: 210px;
+  flex: none;
+  overflow: hidden;
+}
+
+.wc-hub-cover img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+@media (max-width: 680px) {
+  .wc-hub-cover { height: 160px; }
+}
+
+.wc-hub-dim {
+  border-top: 1px solid rgba(246, 245, 243, 0.1);
+  padding: 18px clamp(16px, 5vw, 28px);
+}
+
+.wc-hub-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+@media (max-width: 520px) {
+  .wc-hub-grid { grid-template-columns: 1fr; }
+}
+
+/* Focus is visible on a dark surface too. */
+.wc-jourj :focus-visible,
+.wc-hub :focus-visible {
+  outline: 2px solid #f6f5f3;
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wc-jourj-moment { transition: none; }
+}
+
+/* --- the product navigation --------------------------------------------------
+   Seven places, one line on a laptop, a scrollable line on a phone. */
+.wc-product-nav-links {
+  display: flex;
+  gap: 2px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.wc-product-nav-links::-webkit-scrollbar { display: none; }
+
+@media (max-width: 900px) {
+  .wc-product-nav-links { order: 3; width: 100%; }
+}
+
+/* ---------------------------------------------------------------------------
+   THE PANEL FOLDS.
+   Twelve always-open sections became six that announce themselves. The head is
+   a real button: a title, the state of the section in words, a chevron that
+   turns. Closed, the panel reads like a control card; open, it is the same
+   forms as before, untouched.
+   --------------------------------------------------------------------------- */
+.wc-hub-expand {
+  padding: 12px clamp(16px, 5vw, 28px) 0;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.wc-hub-section {
+  border-top: 1px solid rgba(246, 245, 243, 0.1);
+}
+
+.wc-hub-section-head {
+  appearance: none;
+  cursor: pointer;
+  width: 100%;
+  background: transparent;
+  border: none;
+  color: #f6f5f3;
+  font: inherit;
+  text-align: left;
+  padding: 16px clamp(16px, 5vw, 28px);
+  display: grid;
+  grid-template-columns: 1fr auto;
+  grid-template-areas: 'title chevron' 'summary chevron';
+  gap: 2px 14px;
+  align-items: center;
+}
+
+.wc-hub-section-head:hover .wc-hub-section-title { opacity: 1; }
+.wc-hub-section-head:focus-visible { outline: 2px solid rgba(246, 245, 243, 0.6); outline-offset: -2px; }
+
+.wc-hub-section-title {
+  grid-area: title;
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  font-weight: 700;
+  opacity: 0.72;
+}
+
+.wc-hub-section-summary {
+  grid-area: summary;
+  font-size: 13px;
+  line-height: 1.45;
+  color: rgba(246, 245, 243, 0.66);
+}
+
+.wc-hub-chevron {
+  grid-area: chevron;
+  font-size: 12px;
+  color: rgba(246, 245, 243, 0.6);
+  transition: transform 180ms ease;
+}
+
+.wc-hub-chevron.is-open { transform: rotate(180deg); }
+
+/* Inside an open section the old blocks keep their own rhythm, without the
+   heavy divider that used to separate twelve equals. */
+.wc-hub-section-body > .wc-hub-dim:first-child { border-top: none; padding-top: 0; }
+.wc-hub-section-body > .wc-hub-dim { border-top-color: rgba(246, 245, 243, 0.06); }
+.wc-hub-section-body { padding-bottom: 8px; }
+
+/* The event panel shares the moment panel's geometry (.wc-hub): one shell. */
+.wc-hub-event-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  padding: clamp(18px, 4vw, 28px) clamp(16px, 5vw, 28px);
+  border-bottom: 1px solid rgba(246, 245, 243, 0.1);
+}
+
+/* MEASURED at 1440px: with « Calendrier » and « Administration » added, the
+   product navigation wrapped onto a second line — which reads like an accident.
+   The places scroll inside their own row; the actions stay on one line. */
+@media (min-width: 1100px) {
+  .wc-product-nav-links { flex: 1 1 auto; min-width: 0; }
+}
+
+/* ---------------------------------------------------------------------------
+   « ET SI… » — the simulation belongs to the film, not to another page.
+   Folded by default: a day that is going well should not be interrogated.
+   When rain is simulated, the block cools down — a colour, never a claim.
+   --------------------------------------------------------------------------- */
+.wc-sim {
+  border-top: 1px solid var(--jourj-line, rgba(246, 245, 243, 0.14));
+  background: #0b0c0e;
+  transition: background 400ms ease;
+}
+
+.wc-sim.is-raining { background: #0a0f14; }
+
+.wc-sim-head {
+  appearance: none;
+  cursor: pointer;
+  width: 100%;
+  background: transparent;
+  border: none;
+  color: #f6f5f3;
+  font: inherit;
+  text-align: left;
+  padding: 18px clamp(18px, 5vw, 64px);
+  display: grid;
+  grid-template-columns: 1fr auto;
+  grid-template-areas: 'title chevron' 'sub chevron';
+  gap: 3px 14px;
+  align-items: center;
+}
+
+.wc-sim-title {
+  grid-area: title;
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  font-weight: 700;
+}
+
+.wc-sim-sub {
+  grid-area: sub;
+  font-size: 13px;
+  color: rgba(246, 245, 243, 0.62);
+}
+
+.wc-sim-body {
+  padding: 0 clamp(18px, 5vw, 64px) 30px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 28px;
+}
+
+.wc-sim-block { display: grid; gap: 12px; align-content: start; }
+
+.wc-sim-block-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: rgba(246, 245, 243, 0.72);
+}
+
+.wc-sim-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.wc-sim-select {
+  appearance: none;
+  cursor: pointer;
+  background: rgba(246, 245, 243, 0.06);
+  color: #f6f5f3;
+  border: 1px solid rgba(246, 245, 243, 0.24);
+  border-radius: 999px;
+  padding: 8px 14px;
+  font: inherit;
+  font-size: 12px;
+  max-width: 100%;
+}
+
+.wc-sim-range {
+  flex: 1 1 120px;
+  min-width: 90px;
+  accent-color: #e0a06a;
+  cursor: pointer;
+}
+
+.wc-sim-value {
+  font-family: var(--jourj-mono, ui-monospace, monospace);
+  font-size: 13px;
+  min-width: 62px;
+}
+
+.wc-sim-out { display: grid; gap: 8px; }
+
+.wc-sim-line {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.55;
+  color: rgba(246, 245, 243, 0.82);
+  display: flex;
+  gap: 7px;
+  align-items: baseline;
+  flex-wrap: wrap;
+}
+
+.wc-sim-ok { color: rgba(169, 198, 162, 0.92); }
+
+.wc-sim-note {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.55;
+  color: rgba(246, 245, 243, 0.5);
+  max-width: 46ch;
+}
+
+.wc-sim-conflicts {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+
+.wc-sim-conflicts li {
+  font-size: 12px;
+  line-height: 1.5;
+  border-left: 2px solid rgba(224, 115, 106, 0.7);
+  padding-left: 10px;
+}
+
+.wc-sim-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 4px; }
+
+.wc-sim-primary {
+  appearance: none;
+  cursor: pointer;
+  border: none;
+  background: #f6f5f3;
+  color: #08090b;
+  border-radius: 999px;
+  padding: 9px 18px;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.wc-sim-ghost {
+  appearance: none;
+  cursor: pointer;
+  background: transparent;
+  color: #f6f5f3;
+  border: 1px solid rgba(246, 245, 243, 0.28);
+  border-radius: 999px;
+  padding: 9px 16px;
+  font: inherit;
+  font-size: 12px;
+}
+
+/* A phone reads one question at a time. */
+@media (max-width: 900px) {
+  .wc-sim-body { grid-template-columns: 1fr; gap: 26px; }
+}
+
+/* ---------------------------------------------------------------------------
+   MON GRAND JOUR — a band of type, never a dashboard.
+   Four facts on one line at a desk, stacked on a phone. The percentage opens
+   the eight markers it is made of: a number one cannot audit is a claim.
+   --------------------------------------------------------------------------- */
+.wc-cockpit {
+  border-bottom: 1px solid var(--jourj-line, rgba(246, 245, 243, 0.14));
+  padding: clamp(16px, 2.4vw, 26px) clamp(18px, 5vw, 64px);
+}
+
+.wc-cockpit-row {
+  display: grid;
+  grid-template-columns: auto repeat(3, minmax(0, 1fr));
+  gap: clamp(16px, 3vw, 44px);
+  align-items: start;
+}
+
+.wc-cockpit-score {
+  appearance: none;
+  cursor: pointer;
+  background: transparent;
+  border: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  padding: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.wc-cockpit-percent {
+  font-size: clamp(30px, 4.4vw, 52px);
+  font-weight: 600;
+  letter-spacing: -0.04em;
+  line-height: 0.95;
+}
+
+.wc-cockpit-unit { font-size: 0.45em; margin-left: 2px; opacity: 0.6; }
+
+.wc-cockpit-legend {
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: rgba(246, 245, 243, 0.6);
+  white-space: nowrap;
+}
+
+.wc-cockpit-more { opacity: 0.7; }
+
+.wc-cockpit-cell { display: grid; gap: 4px; min-width: 0; }
+
+.wc-cockpit-label {
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  font-weight: 700;
+  color: rgba(246, 245, 243, 0.5);
+}
+
+.wc-cockpit-value {
+  font-size: 14px;
+  line-height: 1.4;
+  color: #f6f5f3;
+  display: flex;
+  gap: 6px;
+  align-items: baseline;
+  flex-wrap: wrap;
+}
+
+.wc-cockpit-detail {
+  font-size: 11px;
+  line-height: 1.45;
+  color: rgba(246, 245, 243, 0.55);
+}
+
+.wc-cockpit-markers {
+  list-style: none;
+  margin: 20px 0 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 10px 28px;
+}
+
+.wc-cockpit-markers li {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  grid-template-areas: 'icon label' '. detail';
+  gap: 1px 8px;
+  font-size: 12px;
+  align-items: baseline;
+  color: rgba(246, 245, 243, 0.55);
+}
+
+.wc-cockpit-markers li.is-done { color: #f6f5f3; }
+.wc-cockpit-markers li svg { grid-area: icon; }
+.wc-cockpit-marker-label { grid-area: label; }
+.wc-cockpit-marker-detail { grid-area: detail; font-size: 11px; color: rgba(246, 245, 243, 0.45); }
+
+.wc-cockpit-rule {
+  grid-column: 1 / -1;
+  display: block !important;
+  font-size: 11px;
+  line-height: 1.55;
+  color: rgba(246, 245, 243, 0.42);
+  max-width: 62ch;
+  margin-top: 6px;
+}
+
+@media (max-width: 900px) {
+  .wc-cockpit-row { grid-template-columns: 1fr 1fr; gap: 18px; }
+}
+
+@media (max-width: 520px) {
+  .wc-cockpit-row { grid-template-columns: 1fr; gap: 14px; }
+  .wc-cockpit-legend { white-space: normal; }
+}

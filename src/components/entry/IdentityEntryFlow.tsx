@@ -70,6 +70,7 @@ export function IdentityEntryFlow({ onComplete }: IdentityEntryFlowProps) {
   const [selectedDmc, setSelectedDmc] = useState<DmcColor>(DMC_PALETTE[0]);
   const [selectedSymbol, setSelectedSymbol] = useState<DmcSymbol>(DMC_SYMBOLS[0]);
   const [joinCode, setJoinCode] = useState('');
+  const [joinError, setJoinError] = useState<string | null>(null);
 
   const handleCreateWeddingClick = () => {
     weddingAudio.playClick();
@@ -108,6 +109,27 @@ export function IdentityEntryFlow({ onComplete }: IdentityEntryFlowProps) {
     weddingStore.setUserIdentity(identity);
     weddingStore.startIntroCinematic();
     onComplete();
+  };
+
+  /**
+   * "Accéder" used to call handleQuickEnter() and simply discard the code the
+   * user had just typed. It now really resolves the invite, and says so
+   * truthfully when it cannot.
+   */
+  const handleJoinWithCode = () => {
+    weddingAudio.playClick();
+    const result = weddingStore.joinProjectByCode(joinCode);
+    if (result.ok) {
+      setJoinError(null);
+      weddingStore.startIntroCinematic();
+      onComplete();
+      return;
+    }
+    setJoinError(
+      result.reason === 'empty'
+        ? 'Entrez un code d’invitation.'
+        : 'Code introuvable sur cet appareil. Le partage entre appareils nécessite un compte en ligne (non disponible).',
+    );
   };
 
   const handleQuickEnter = () => {
@@ -370,7 +392,8 @@ export function IdentityEntryFlow({ onComplete }: IdentityEntryFlowProps) {
             type="text"
             placeholder="CODE-JOUR-J"
             value={joinCode}
-            onChange={(e) => setJoinCode(e.target.value)}
+            onChange={(e) => { setJoinCode(e.target.value); setJoinError(null); }}
+            onKeyDown={(e) => { if (e.key === 'Enter') handleJoinWithCode(); }}
             style={{
               ...spatialInputStyle,
               textAlign: 'center',
@@ -380,11 +403,29 @@ export function IdentityEntryFlow({ onComplete }: IdentityEntryFlowProps) {
             }}
           />
 
+          {joinError && (
+            <div
+              role="alert"
+              style={{
+                marginTop: 10,
+                fontSize: 11,
+                lineHeight: 1.5,
+                color: '#f0a5a5',
+                background: 'rgba(220, 90, 90, 0.08)',
+                border: '1px solid rgba(220, 90, 90, 0.25)',
+                borderRadius: 10,
+                padding: '8px 10px',
+              }}
+            >
+              {joinError}
+            </div>
+          )}
+
           <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
             <button onClick={() => setStep('hero')} style={secondaryActionBtnStyle}>
               Annuler
             </button>
-            <button onClick={handleQuickEnter} style={primaryActionBtnStyle}>
+            <button onClick={handleJoinWithCode} style={primaryActionBtnStyle}>
               Accéder
             </button>
           </div>

@@ -8,7 +8,6 @@ import {
   TimelinePhase,
   TrackEntity,
 } from '../types/wedding';
-import { BRAND_ACCENT } from './weddingStore';
 
 // 11 Universal World Archetypes for the World Lab
 export const WORLD_ARCHETYPES: WorldArchetype[] = [
@@ -172,6 +171,12 @@ export function generateWorldFromDescription(params: {
   let places: Place[] = [];
   let agents: Agent[] = [];
   let phases: TimelinePhase[] = [];
+  // World-specific documents and tasks. These used to be missing entirely,
+  // which left places/agents/phases pointing at ids that were never created
+  // (doc_vols_japan, doc_tech_rider, tk_soundcheck, ...). Every id referenced
+  // below is now actually produced — enforced by checkReferentialIntegrity().
+  let extraDocs: DocumentEntity[] = [];
+  let extraTasks: TaskEntity[] = [];
 
   if (params.worldType === 'travel') {
     places = [
@@ -192,6 +197,16 @@ export function generateWorldFromDescription(params: {
       { id: 'ph_j1', startHour: 10, endHour: 14, name: 'Jour 1 — Arrivée Tokyo & Check-in', subtitle: 'Transfert aéroport Narita et installation à Shibuya', icon: 'transport', primaryPlaceId: 'pl_dest_1', highlightAction: 'Récupération des billets & dégustation ramen', bgAtmosphere: 'afternoon', keyAgentIds: ['ag_traveler_1', 'ag_traveler_2'], keyDocIds: ['doc_vols_japan'], keyTaskIds: ['tk_checkin_tokyo'], ambientTrack: 'prep' },
       { id: 'ph_j2', startHour: 14, endHour: 19, name: 'Jour 2 — Shinkansen vers Kyoto', subtitle: 'Traversée à 300 km/h avec vue sur le Mont Fuji', icon: 'chapelle', primaryPlaceId: 'pl_dest_3', highlightAction: 'Arrivée au Ryokan & bain chaud onsen', bgAtmosphere: 'golden', keyAgentIds: ['ag_traveler_1', 'ag_traveler_2'], keyDocIds: ['doc_ryokan_kyoto'], keyTaskIds: ['tk_diner_kaiseki'], ambientTrack: 'ceremony' },
     ];
+
+    extraDocs = [
+      { id: 'doc_vols_japan', title: 'Billets d’avion — Paris ⇄ Tokyo Narita', category: 'planning', fileName: 'Vols_Japon.pdf', amount: Math.round(budget * 0.28), depositAmount: Math.round(budget * 0.28), isPaid: true, rawTextExcerpt: 'Vol aller CDG → NRT, vol retour NRT → CDG. Bagages 23 kg inclus.', extractedDate: '2025', extractedHour: '10:00', connectedAgentIds: ['ag_traveler_1', 'ag_traveler_2'], connectedPlaceIds: ['pl_dest_1'], connectedTaskIds: ['tk_checkin_tokyo'], createdAtHour: 10 },
+      { id: 'doc_ryokan_kyoto', title: 'Réservation Ryokan — Gion, Kyoto', category: 'planning', fileName: 'Ryokan_Kyoto.pdf', amount: Math.round(budget * 0.18), depositAmount: Math.round(budget * 0.05), isPaid: false, rawTextExcerpt: 'Chambre traditionnelle tatami, onsen privatif, dîner kaiseki inclus.', extractedDate: '2025', extractedHour: '15:00', connectedAgentIds: ['ag_traveler_1', 'ag_traveler_2'], connectedPlaceIds: ['pl_dest_3'], connectedTaskIds: ['tk_diner_kaiseki'], createdAtHour: 12 },
+      { id: 'doc_jr_pass', title: 'JR Pass 14 jours — Shinkansen', category: 'planning', fileName: 'JR_Pass.pdf', amount: Math.round(budget * 0.07), depositAmount: Math.round(budget * 0.07), isPaid: true, rawTextExcerpt: 'Pass ferroviaire national, activation à l’arrivée, réservations incluses.', extractedDate: '2025', extractedHour: '09:00', connectedAgentIds: ['ag_traveler_1'], connectedPlaceIds: ['pl_dest_5'], connectedTaskIds: [], createdAtHour: 11 },
+    ];
+
+    extraTasks = [
+      { id: 'tk_diner_kaiseki', title: 'Confirmer le dîner kaiseki au ryokan', category: 'logistique', dueHour: 18, isDone: false, urgent: false, assignedAgentId: 'ag_traveler_2', assignedPlaceId: 'pl_dest_3', connectedDocIds: ['doc_ryokan_kyoto'], connectedAgentIds: ['ag_traveler_1', 'ag_traveler_2'] },
+    ];
   } else if (params.worldType === 'concert') {
     places = [
       { id: 'pl_stage_main', name: 'Main Stage • Scène Festival 10kW', code: 'MAIN STAGE', zone: 'dancefloor', pos: [14, 0, -32], gpsCoordinates: '48.8685° N, 2.3750° E', capacity: 2000, currentPax: 0, description: 'Scène principale, lyres beam DMX et retour son scène.', icon: 'dancefloor', themeColor: '#e2b448', activeFromHour: 16, activeToHour: 27, connectedAgentIds: ['ag_artist_lead'], connectedDocIds: ['doc_tech_rider'], connectedTaskIds: ['tk_soundcheck'] },
@@ -206,6 +221,14 @@ export function generateWorldFromDescription(params: {
     phases = [
       { id: 'ph_tour_prep', startHour: 14, endHour: 18, name: '16:00 — Balances & Soundcheck', subtitle: 'Réglage des niveaux sonores et éclairages DMX', icon: 'dancefloor', primaryPlaceId: 'pl_stage_main', highlightAction: 'Test acoustique L-Acoustics 10kW', bgAtmosphere: 'afternoon', keyAgentIds: ['ag_artist_lead'], keyDocIds: ['doc_tech_rider'], keyTaskIds: ['tk_soundcheck'], ambientTrack: 'prep' },
       { id: 'ph_tour_live', startHour: 20, endHour: 25, name: '21:30 — Show Live & Pyrotechnie', subtitle: 'Concert principal et lasers au pic de la nuit', icon: 'dancefloor', primaryPlaceId: 'pl_stage_main', highlightAction: 'Setlist 14 morceaux & étincelles', bgAtmosphere: 'night', keyAgentIds: ['ag_artist_lead'], keyDocIds: [], keyTaskIds: [], ambientTrack: 'party' },
+    ];
+
+    extraDocs = [
+      { id: 'doc_tech_rider', title: 'Fiche technique & rider artiste', category: 'planning', fileName: 'Tech_Rider.pdf', amount: Math.round(budget * 0.22), depositAmount: Math.round(budget * 0.1), isPaid: false, rawTextExcerpt: 'Diffusion L-Acoustics 10 kW, 24 lyres beam DMX, 2 retours scène, catering loges.', extractedDate: '2025', extractedHour: '16:00', connectedAgentIds: ['ag_artist_lead'], connectedPlaceIds: ['pl_stage_main'], connectedTaskIds: ['tk_soundcheck'], createdAtHour: 12 },
+    ];
+
+    extraTasks = [
+      { id: 'tk_soundcheck', title: 'Réaliser les balances et le soundcheck', category: 'logistique', dueHour: 17, isDone: false, urgent: true, assignedAgentId: 'ag_artist_lead', assignedPlaceId: 'pl_stage_main', connectedDocIds: ['doc_tech_rider'], connectedAgentIds: ['ag_artist_lead'] },
     ];
   } else {
     // Default Modular Generic Places
@@ -229,10 +252,12 @@ export function generateWorldFromDescription(params: {
     { id: 'tk_init', title: `Valider la feuille de route : ${title}`, category: 'logistique', dueHour: 11, isDone: true, urgent: false, assignedAgentId: agents[0]?.id, assignedPlaceId: places[0]?.id, connectedDocIds: ['doc_master_plan'], connectedAgentIds: [agents[0]?.id] },
     { id: 'tk_budget', title: `Vérifier l’allocation du budget (${budget.toLocaleString('fr-FR')} €)`, category: 'paiement', dueHour: 14, isDone: false, urgent: true, cost: Math.round(budget * 0.3), assignedAgentId: agents[0]?.id, assignedPlaceId: places[0]?.id, connectedDocIds: ['doc_master_plan'], connectedAgentIds: [agents[0]?.id] },
     { id: 'tk_checkin_tokyo', title: 'Finaliser les réservations d’hébergement', category: 'logistique', dueHour: 16, isDone: false, urgent: false, assignedAgentId: agents[0]?.id, assignedPlaceId: places[0]?.id, connectedDocIds: ['doc_master_plan'], connectedAgentIds: [agents[0]?.id] },
+    ...extraTasks,
   ];
 
   const docs: DocumentEntity[] = [
     { id: 'doc_master_plan', title: `Plan Directeur — ${title}`, category: 'planning', fileName: 'Master_Plan.pdf', amount: budget, depositAmount: Math.round(budget * 0.3), isPaid: false, rawTextExcerpt: `PROJET : ${title}\nLocalisation : ${loc}\nBudget prévisionnel : ${budget} €\nFeuille de route générée par le World Engine.`, extractedDate: '2025', extractedHour: '10:00 - 24:00', connectedAgentIds: [agents[0]?.id], connectedPlaceIds: [places[0]?.id], connectedTaskIds: ['tk_init', 'tk_budget'], createdAtHour: 10 },
+    ...extraDocs,
   ];
 
   const tracks: TrackEntity[] = [

@@ -14,16 +14,20 @@ export function BottomOrchestrator() {
   const speed = store.speed;
   const currentTime = store.time;
 
-  const milestones = [
-    { hour: 10.0, label: 'Préparatifs', placeId: 'place_manoir' },
-    { hour: 13.5, label: 'Mairie', placeId: 'place_mairie' },
-    { hour: 15.5, label: 'Cérémonie', placeId: 'place_ceremonie' },
-    { hour: 17.0, label: 'Cocktail', placeId: 'place_cocktail' },
-    { hour: 18.5, label: 'Photos', placeId: 'place_photo_spot' },
-    { hour: 19.5, label: 'Banquet', placeId: 'place_reception' },
-    { hour: 22.5, label: 'Ouverture Bal', placeId: 'place_dancefloor' },
-    { hour: 24.0, label: 'Soirée', placeId: 'place_dancefloor' },
-  ];
+  // MEASURED IN THE BROWSER (multi-project acceptance): these were eight
+  // hardcoded milestones and six hardcoded zones — the demo's day and the
+  // demo's venue — displayed under EVERY project, including a brand-new
+  // wedding with no programme at all. They now derive from the active project.
+  const milestones = [...store.phases]
+    .sort((a, b) => a.startHour - b.startHour)
+    .map((phase) => ({
+      hour: phase.startHour,
+      label: phase.name.replace(/^\s*\d{1,2}\s*[:h]\s*\d{0,2}\s*[—–-]\s*/, '').trim() || phase.name,
+      placeId: phase.primaryPlaceId,
+    }));
+
+  // Zones are the real places of this project, in their own order.
+  const zones = store.places.slice(0, 8).map((place) => ({ id: place.id, label: place.name }));
 
   const formatHour = (h: number) => {
     const hours = Math.floor(h) % 24;
@@ -61,14 +65,13 @@ export function BottomOrchestrator() {
           <span>WORLDMAP</span>
         </button>
 
-        {[
-          { id: 'place_mairie', label: 'Mairie' },
-          { id: 'place_manoir', label: 'Manoir' },
-          { id: 'place_ceremonie', label: 'Cérémonie' },
-          { id: 'place_cocktail', label: 'Cocktail' },
-          { id: 'place_reception', label: 'Orangerie' },
-          { id: 'place_dancefloor', label: 'Bal / DJ' },
-        ].map((zone) => {
+        {zones.length === 0 && (
+          <span style={{ fontSize: 10.5, color: BRAND_TEXT_MUTED, padding: '0 6px' }}>
+            Aucun espace dans ce mariage
+          </span>
+        )}
+
+        {zones.map((zone) => {
           const isSelected = store.selectedEntity?.type === 'place' && store.selectedEntity.id === zone.id;
           return (
             <button
@@ -107,7 +110,9 @@ export function BottomOrchestrator() {
           }}
         />
 
-        <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%' }}>
+        {/* Seven moment labels cannot share 300px: on a phone the strip
+            scrolls instead of pushing the dock past the screen. */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%', gap: 6, overflowX: 'auto' }}>
           {milestones.map((m) => {
             const isActive = Math.abs(currentTime - m.hour) < 1.0;
             return (
@@ -154,12 +159,18 @@ export function BottomOrchestrator() {
 
 const dockWrapperStyle: React.CSSProperties = {
   position: 'absolute',
-  bottom: 14,
+  // The bottom lane belongs to the projection capsule (see ProjectionSwitcher);
+  // the dock starts above it so the two never share a pixel.
+  bottom: 68,
   left: 16,
   right: 16,
   display: 'flex',
-  alignItems: 'center',
+  alignItems: 'flex-end',
   justifyContent: 'space-between',
+  // MEASURED IN THE BROWSER (journey acceptance): on one unbreakable line the
+  // dock ran past the right edge below ~1100px — at 768 the whole milestone
+  // strip and the play controls were outside the viewport.
+  flexWrap: 'wrap',
   gap: 12,
   zIndex: 50,
   pointerEvents: 'none',
@@ -169,6 +180,8 @@ const dockWrapperStyle: React.CSSProperties = {
 const dockPillStyle: React.CSSProperties = {
   display: 'flex',
   alignItems: 'center',
+  flexWrap: 'wrap',
+  maxWidth: '100%',
   gap: 5,
   background: 'rgba(18, 21, 30, 0.92)',
   border: `1px solid ${BRAND_BORDER}`,
@@ -191,6 +204,7 @@ const zoneChipBtnStyle = (selected: boolean): React.CSSProperties => ({
 
 const milestoneBtnStyle = (active: boolean): React.CSSProperties => ({
   background: 'transparent',
+  whiteSpace: 'nowrap',
   border: 'none',
   color: active ? BRAND_ACCENT : BRAND_TEXT_MUTED,
   fontSize: 9,

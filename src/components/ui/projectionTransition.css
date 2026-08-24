@@ -1,0 +1,25 @@
+/* ---------------------------------------------------------------------------
+   WORLD ↔ MIRROR — the crossing.
+   ---------------------------------------------------------------------------
+   One short fade out of the destination colour. No parallax, no scale, no
+   spectacle: the point is that the same wedding is being read another way.
+   --------------------------------------------------------------------------- */
+
+@keyframes wcVeilOut {
+  from { opacity: 1; }
+  to   { opacity: 0; }
+}
+
+.wc-projection-veil {
+  position: fixed;
+  inset: 0;
+  z-index: 900;
+  pointer-events: none;
+  animation: wcVeilOut 380ms cubic-bezier(0.22, 0.61, 0.36, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wc-projection-veil {
+    display: none;
+  }
+}

@@ -87,7 +87,9 @@ export function TopNavigation({ onOpenImport, onOpenConflicts }: TopNavigationPr
             {formatHour(store.time)}
           </div>
           <div style={{ fontSize: 11, color: BRAND_TEXT_SECONDARY, fontWeight: 500, whiteSpace: 'nowrap' }}>
-            {currentPhase.name.split('—')[1]?.trim() || currentPhase.name}
+            {currentPhase
+              ? (currentPhase.name.split('—')[1]?.trim() || currentPhase.name)
+              : 'Journée à composer'}
           </div>
         </div>
       </div>
@@ -284,8 +286,15 @@ const navWrapperStyle: React.CSSProperties = {
   left: 16,
   right: 16,
   display: 'flex',
-  alignItems: 'center',
+  alignItems: 'flex-start',
   justifyContent: 'space-between',
+  // MEASURED IN THE BROWSER (journey acceptance): the three groups were laid
+  // out on one unbreakable line, so the tool pills ran past the right edge —
+  // the mute control was already outside the viewport at 1440, and eight
+  // controls were unreachable at 768. The band now wraps instead of
+  // overflowing, and each group wraps inside itself.
+  flexWrap: 'wrap',
+  gap: 8,
   zIndex: 50,
   pointerEvents: 'none',
   fontFamily: "-apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Inter', sans-serif",
@@ -294,6 +303,8 @@ const navWrapperStyle: React.CSSProperties = {
 const pillContainerStyle: React.CSSProperties = {
   display: 'flex',
   alignItems: 'center',
+  flexWrap: 'wrap',
+  maxWidth: '100%',
   gap: 10,
   background: 'rgba(18, 21, 30, 0.92)',
   border: `1px solid ${BRAND_BORDER}`,

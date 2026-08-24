@@ -1,0 +1,341 @@
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { typography } from '../../../design/tokens';
+import { DEMO_DAY, MOMENT_ASSETS } from '../../../design/momentImagery';
+import './timeline.css';
+
+// ---------------------------------------------------------------------------
+// LANDING FILM — the product, shown instead of described.
+// ---------------------------------------------------------------------------
+// The same film as the Jour J, on the public page: an hour scale, moments at
+// their real position, huge hours, full-bleed photographs, real zoom and real
+// horizontal navigation.
+//
+// IT IS A DEMONSTRATION AND IT SAYS SO. It carries no couple, no guest, no
+// vendor, no venue, no price — only the shape of a day. It reads from a
+// constant (DEMO_DAY), never from the store, and it writes nothing: a visitor
+// can drag and zoom it without a single byte reaching any wedding.
+// ---------------------------------------------------------------------------
+
+const DAY_START = 8;
+const DAY_END = 29;
+const MIN_PX = 30;
+const MAX_PX = 260;
+const MIN_CARD_PX = 96;
+
+const fmt = (h: number) => {
+  const t = Math.round(h * 60);
+  return `${String(Math.floor(t / 60) % 24).padStart(2, '0')}:${String(t % 60).padStart(2, '0')}`;
+};
+
+export function LandingFilm({ onOpenMoment, shifted }: {
+  onOpenMoment?: (index: number) => void;
+  /** Index of the moment shown shifted by the propagation demonstration. */
+  shifted?: { from: number; delta: number } | null;
+}) {
+  const [pxPerHour, setPxPerHour] = useState(96);
+  // Two clicks inside one frame would both read the same stale scale, so the
+  // second one did nothing. MEASURED at 768px, where the day never fitted.
+  const pxRef = useRef(96);
+  pxRef.current = pxPerHour;
+  const [cursor, setCursor] = useState<number | null>(null);
+  const stripRef = useRef<HTMLDivElement>(null);
+  const panRef = useRef<{ x: number; scroll: number; lastX: number; lastT: number; v: number } | null>(null);
+  const inertiaRef = useRef<number | null>(null);
+
+  // The real clock, projected on the demonstration day — so the NOW marker is
+  // a real time, not a decorative line.
+  // MEASURED: at 03:00 the marker vanished — an hour before dawn belongs to the
+  // night of the day being shown, so it is read as 27:00, not 03:00.
+  const readClock = () => {
+    const d = new Date();
+    const h = d.getHours() + d.getMinutes() / 60;
+    return h < DAY_START ? h + 24 : h;
+  };
+  const [clock, setClock] = useState(readClock);
+  useEffect(() => {
+    const id = setInterval(() => setClock(readClock()), 30000);
+    return () => clearInterval(id);
+  }, []);
+
+  const moments = useMemo(() => DEMO_DAY.map((m, i) => {
+    const delta = shifted && i >= shifted.from ? shifted.delta : 0;
+    return { ...m, hour: m.hour + delta, endHour: m.endHour + delta, index: i, shifted: delta !== 0 };
+  }), [shifted]);
+
+  const width = (DAY_END - DAY_START) * pxPerHour + MIN_CARD_PX;
+  const x = (h: number) => (h - DAY_START) * pxPerHour;
+
+  const zoom = (factorOrValue: number, clientX?: number, absolute = false) => {
+    const strip = stripRef.current;
+    const current = pxRef.current;
+    const next = absolute ? factorOrValue : current * factorOrValue;
+    const floor = Math.min(
+      MIN_PX,
+      strip ? (Math.min(strip.clientWidth, window.innerWidth) - MIN_CARD_PX) / (DAY_END - DAY_START) : MIN_PX,
+    );
+    const clamped = Math.max(floor, Math.min(MAX_PX, next));
+    pxRef.current = clamped;
+    if (!strip) { setPxPerHour(clamped); return; }
+    const rect = strip.getBoundingClientRect();
+    const anchor = (clientX ?? rect.left + rect.width / 2) - rect.left;
+    const hour = DAY_START + (strip.scrollLeft + anchor) / current;
+    setPxPerHour(clamped);
+    requestAnimationFrame(() => {
+      if (stripRef.current) stripRef.current.scrollLeft = (hour - DAY_START) * clamped - anchor;
+    });
+  };
+
+  useEffect(() => {
+    const strip = stripRef.current;
+    if (!strip) return;
+    const onWheel = (e: WheelEvent) => {
+      if (!(e.ctrlKey || e.metaKey)) return;
+      e.preventDefault();
+      zoom(e.deltaY < 0 ? 1.12 : 1 / 1.12, e.clientX);
+    };
+    strip.addEventListener('wheel', onWheel, { passive: false });
+    return () => strip.removeEventListener('wheel', onWheel);
+  }, [pxPerHour]);
+
+  const ticks: number[] = [];
+  const step = pxPerHour > 160 ? 0.5 : pxPerHour > 70 ? 1 : 2;
+  for (let h = DAY_START; h <= DAY_END; h += step) ticks.push(Number(h.toFixed(3)));
+
+  return (
+    <div className="wc-jourj" style={{ background: 'transparent' }}>
+      <div className="wc-jourj-tools" style={{ padding: '0 clamp(18px, 5vw, 64px) 16px', justifyContent: 'flex-end' }}>
+        <span style={{ marginRight: 'auto', fontSize: typography.editorial.micro, letterSpacing: '0.18em', textTransform: 'uppercase', color: 'rgba(246,245,243,0.62)' }}>
+          Démonstration · aucune donnée réelle
+        </span>
+        <div style={zoomGroup} role="group" aria-label="Zoom de la démonstration">
+          <button onClick={() => zoom(1 / 1.5)} style={zoomBtn} aria-label="Dézoomer" data-landing="zoom-out">−</button>
+          <span style={zoomLabel} data-landing="zoom-level">{pxPerHour >= 170 ? 'détail' : pxPerHour >= 70 ? 'moments' : 'journée'}</span>
+          <button onClick={() => zoom(1.5)} style={zoomBtn} aria-label="Zoomer" data-landing="zoom-in">+</button>
+        </div>
+        <button
+          onClick={() => {
+            const strip = stripRef.current;
+            // MEASURED at 390px: the strip reported a clientWidth of 431 at the
+            // instant of the click — wider than the phone itself — so « toute la
+            // journée » computed a scale for a width the screen does not have,
+            // and the day still overflowed by 41px. The scale is now computed
+            // against the narrower of the two: whatever the strip claims, the
+            // day must fit the screen.
+            const room = strip ? Math.min(strip.clientWidth, window.innerWidth) : 0;
+            const full = strip ? (room - MIN_CARD_PX) / (DAY_END - DAY_START) : MIN_PX;
+            zoom(full, undefined, true);
+            requestAnimationFrame(() => { if (stripRef.current) stripRef.current.scrollLeft = 0; });
+          }}
+          style={dayBtn}
+          data-landing="zoom-day"
+        >
+          Toute la journée
+        </button>
+      </div>
+
+      <div
+        ref={stripRef}
+        className="wc-jourj-strip"
+        data-landing="film"
+        data-px-per-hour={pxPerHour}
+        onPointerDown={(e) => {
+          const strip = stripRef.current;
+          if (!strip) return;
+          if (inertiaRef.current) { cancelAnimationFrame(inertiaRef.current); inertiaRef.current = null; }
+          // Capture keeps a finger that leaves the strip in control of the
+          // gesture. It can legitimately fail (a pointer id that is not
+          // active), and a failed capture must never abort the drag.
+          try { strip.setPointerCapture?.(e.pointerId); } catch { /* keep dragging */ }
+          panRef.current = { x: e.clientX, scroll: strip.scrollLeft, lastX: e.clientX, lastT: performance.now(), v: 0 };
+          strip.classList.add('is-panning');
+        }}
+        onPointerMove={(e) => {
+          const strip = stripRef.current;
+          if (!strip) return;
+          const rect = strip.getBoundingClientRect();
+          setCursor(DAY_START + (e.clientX - rect.left + strip.scrollLeft) / pxPerHour);
+          const pan = panRef.current;
+          if (!pan) return;
+          // Both directions, by construction: the delta is signed.
+          strip.scrollLeft = pan.scroll - (e.clientX - pan.x);
+          const now = performance.now();
+          const dt = Math.max(1, now - pan.lastT);
+          pan.v = (pan.lastX - e.clientX) / dt;   // px per ms, signed
+          pan.lastX = e.clientX;
+          pan.lastT = now;
+        }}
+        onPointerUp={() => {
+          const strip = stripRef.current;
+          const pan = panRef.current;
+          panRef.current = null;
+          strip?.classList.remove('is-panning');
+          if (!strip || !pan || Math.abs(pan.v) < 0.05) return;
+          // A light inertia, in the direction the finger was going.
+          let velocity = pan.v * 16;
+          const step = () => {
+            velocity *= 0.94;
+            strip.scrollLeft += velocity;
+            if (Math.abs(velocity) > 0.4) inertiaRef.current = requestAnimationFrame(step);
+            else inertiaRef.current = null;
+          };
+          inertiaRef.current = requestAnimationFrame(step);
+        }}
+        onPointerLeave={() => { panRef.current = null; setCursor(null); stripRef.current?.classList.remove('is-panning'); }}
+      >
+        <div style={{ position: 'relative', width, height: '100%' }}>
+          {ticks.map((h) => {
+            const isHour = Math.abs(h - Math.round(h)) < 1e-6;
+            const isLast = h >= DAY_END - 1e-6;
+            return (
+              <div key={h} style={{ position: 'absolute', left: x(h), top: 0, bottom: 0, width: 1 }}>
+                <div style={{ position: 'absolute', inset: 0, background: isHour ? 'rgba(246,245,243,0.13)' : 'rgba(246,245,243,0.05)' }} />
+                {isHour && <div style={{ ...tickLabel, ...(isLast ? { left: 'auto', right: 8 } : null) }}>{fmt(h)}</div>}
+              </div>
+            );
+          })}
+
+          {moments.map((m) => {
+            const w = Math.max((m.endHour - m.hour) * pxPerHour, MIN_CARD_PX);
+            const asset = MOMENT_ASSETS[m.key];
+            // Under ~150px there is room for the hour and nothing else; the
+            // label and the duration come back as soon as one zooms in.
+            const dense = w < 150;
+            return (
+              <article
+                key={m.label}
+                className="wc-jourj-moment"
+                style={{ left: x(m.hour), width: w, transition: 'left 700ms cubic-bezier(.2,.7,.2,1)' }}
+                data-landing="film-moment"
+                data-hour={m.hour}
+                onClick={() => onOpenMoment?.(m.index)}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onOpenMoment?.(m.index); } }}
+              >
+                <img src={asset.src} alt={asset.alt} width={asset.width} height={asset.height} loading="lazy" decoding="async" />
+                <div style={scrim} />
+                <div style={{ position: 'absolute', left: 16, right: 16, bottom: 16, pointerEvents: 'none' }}>
+                  {/* The hour is the biggest thing on a moment. It is the film. */}
+                  <div style={{ ...bigHour, fontSize: dense ? 'clamp(20px, 3vw, 30px)' : 'clamp(28px, 4.4vw, 56px)' }}>
+                    {fmt(m.hour)}
+                  </div>
+                  {!dense && <div style={momentLabel}>{m.label}</div>}
+                  {!dense && (
+                    <div style={durationLabel}>
+                      {(() => {
+                        const total = Math.round((m.endHour - m.hour) * 60);
+                        return total >= 60
+                          ? `${Math.floor(total / 60)} h${total % 60 ? ` ${String(total % 60).padStart(2, '0')}` : ''}`
+                          : `${total} min`;
+                      })()}
+                    </div>
+                  )}
+                  {m.shifted && <div style={shiftedTag}>recalculé</div>}
+                </div>
+              </article>
+            );
+          })}
+
+          {/* NOW — the real time of day.
+              MEASURED between 05:00 and 08:00: the demonstration day runs from
+              08:00 to 05:00 the next morning, so at 05:10 the real hour fell
+              just outside it and the marker simply VANISHED — the film stopped
+              situating the visitor in time, without a word. A missing marker is
+              not an answer: outside the day shown, the film now says so, at the
+              edge it belongs to. */}
+          {(clock < DAY_START || clock > DAY_END) && (
+            <div
+              style={{
+                position: 'absolute', top: 0, bottom: 0, width: 2,
+                left: clock < DAY_START ? 0 : Math.max(0, width - 2),
+                background: 'rgba(224,115,106,0.5)', zIndex: 6, pointerEvents: 'none',
+              }}
+              data-landing="now"
+              data-outside="yes"
+            >
+              <div style={clock < DAY_START ? nowBadge : nowBadgeLeft}>
+                {fmt(clock)} · hors de la journée montrée
+              </div>
+            </div>
+          )}
+          {clock >= DAY_START && clock <= DAY_END && (
+            <div style={{ position: 'absolute', left: x(clock), top: 0, bottom: 0, width: 2, background: '#e0736a', zIndex: 6, pointerEvents: 'none' }} data-landing="now">
+              {/* MEASURED at 390px, late in the evening: the badge is nowrap and
+                  was pinned to the RIGHT of the marker, so when « maintenant »
+                  falls near the end of the day it stuck 42px past the film and
+                  « toute la journée » no longer fitted the screen. Near the end,
+                  the badge now hangs on the other side of its own marker. */}
+              <div style={x(clock) > width - 150 ? nowBadgeLeft : nowBadge}>{fmt(clock)} · maintenant</div>
+            </div>
+          )}
+
+          {cursor !== null && (
+            <div style={{ position: 'absolute', left: x(cursor), top: 0, bottom: 0, width: 1, background: 'rgba(246,245,243,0.32)', pointerEvents: 'none' }}>
+              <div style={cursorBadge}>{fmt(cursor)}</div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+const zoomGroup: React.CSSProperties = {
+  display: 'flex', alignItems: 'center', gap: 4,
+  border: '1px solid rgba(246,245,243,0.16)', borderRadius: 999, padding: 3,
+};
+const zoomBtn: React.CSSProperties = {
+  appearance: 'none', cursor: 'pointer', background: 'transparent', color: '#f6f5f3',
+  border: 'none', width: 30, height: 28, fontSize: 16, lineHeight: 1, fontFamily: typography.family.sans,
+};
+const zoomLabel: React.CSSProperties = {
+  fontSize: typography.editorial.micro, color: 'rgba(246,245,243,0.72)',
+  letterSpacing: '0.08em', textTransform: 'uppercase', padding: '0 6px', minWidth: 78, textAlign: 'center',
+};
+const dayBtn: React.CSSProperties = {
+  appearance: 'none', cursor: 'pointer', background: 'transparent', color: '#f6f5f3',
+  border: '1px solid rgba(246,245,243,0.16)', borderRadius: 999,
+  padding: '9px 16px', fontSize: typography.editorial.caption, fontFamily: typography.family.sans,
+};
+
+const tickLabel: React.CSSProperties = {
+  position: 'absolute', top: 14, left: 8, whiteSpace: 'nowrap',
+  fontFamily: typography.family.mono, fontSize: 11, color: 'rgba(246,245,243,0.62)', letterSpacing: '0.04em',
+};
+const scrim: React.CSSProperties = {
+  position: 'absolute', inset: 0, pointerEvents: 'none',
+  background: 'linear-gradient(180deg, rgba(8,9,11,0.1) 0%, rgba(8,9,11,0.7) 60%, rgba(8,9,11,0.94) 100%)',
+};
+const bigHour: React.CSSProperties = {
+  fontFamily: typography.family.mono, fontWeight: 700, letterSpacing: '-0.02em',
+  lineHeight: 1, color: '#f6f5f3',
+};
+const momentLabel: React.CSSProperties = {
+  marginTop: 8, fontSize: 'clamp(13px, 1.3vw, 17px)', letterSpacing: '0.16em',
+  textTransform: 'uppercase', color: 'rgba(246,245,243,0.9)', fontWeight: 600,
+};
+const shiftedTag: React.CSSProperties = {
+  marginTop: 8, display: 'inline-block', background: '#f6f5f3', color: '#08090b',
+  borderRadius: 999, padding: '3px 9px', fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase',
+};
+const durationLabel: React.CSSProperties = {
+  marginTop: 4, fontSize: 11, letterSpacing: '0.08em',
+  color: 'rgba(246,245,243,0.72)', fontFamily: typography.family.mono,
+};
+
+const nowBadgeLeft: React.CSSProperties = {
+  position: 'absolute', top: 12, right: 8, whiteSpace: 'nowrap',
+  background: '#e0736a', color: '#08090b', borderRadius: 999,
+  padding: '4px 10px', fontFamily: typography.family.mono, fontSize: 11, fontWeight: 700,
+};
+
+const nowBadge: React.CSSProperties = {
+  position: 'absolute', top: 12, left: 8, whiteSpace: 'nowrap',
+  background: '#e0736a', color: '#08090b', borderRadius: 999,
+  padding: '4px 10px', fontFamily: typography.family.mono, fontSize: 11, fontWeight: 700,
+};
+
+const cursorBadge: React.CSSProperties = {
+  position: 'absolute', top: 12, left: 6, fontFamily: typography.family.mono,
+  fontSize: 11, color: 'rgba(246,245,243,0.75)', whiteSpace: 'nowrap',
+};

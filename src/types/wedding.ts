@@ -21,18 +21,26 @@ export type WeddingMoment = 'ceremonie' | 'cocktail' | 'repas' | 'premiere_danse
 export type TrackStatus = 'bride_groom' | 'verified' | 'pending';
 export type VerificationLevel = 'verified_public' | 'claimed_vendor' | 'ai_estimated' | 'wedding_internal';
 
-export type WorldType =
-  | 'wedding'
-  | 'travel'
-  | 'event'
-  | 'concert'
-  | 'production'
-  | 'business'
-  | 'personal'
-  | 'family'
-  | 'ngo'
-  | 'group_trip'
-  | 'custom';
+/**
+ * Runtime list of every world archetype. Declared as a const array (with the
+ * type derived from it) so the World Engine health probe can iterate ALL of
+ * them: a new archetype cannot ship without being validated.
+ */
+export const ALL_WORLD_TYPES = [
+  'wedding',
+  'travel',
+  'event',
+  'concert',
+  'production',
+  'business',
+  'personal',
+  'family',
+  'ngo',
+  'group_trip',
+  'custom',
+] as const;
+
+export type WorldType = (typeof ALL_WORLD_TYPES)[number];
 
 export type ConnectorServiceId =
   | 'google_calendar'
@@ -170,6 +178,11 @@ export interface WeddingProject {
   updatedAt: string;
   inviteCode: string;
   themeColor?: string;
+  /**
+   * Which kind of day this is. Decides the vocabulary of the whole product
+   * after creation, not only during the intake.
+   */
+  eventTypeId?: string;
 }
 
 export interface WebVendorResult {
@@ -228,6 +241,14 @@ export interface TrackEntity {
   note?: string;
   votes: number;
   hasVoted?: boolean;
+  /**
+   * Explicit link to a timeline phase. When absent, the phase is derived
+   * deterministically from `moment` — a song is a temporal component of the
+   * world, not just a playlist row.
+   */
+  linkedPhaseId?: string;
+  /** Exact minute this track is meant to play, when decided. */
+  scheduledHour?: number;
   sourceOrigin?: DataSourceOrigin;
 }
 
@@ -244,6 +265,12 @@ export interface UserIdentity {
 
 export interface Agent {
   id: string;
+  /**
+   * Back-reference to the Person this agent is the spatial projection of.
+   * Added by the identity migration; optional so legacy snapshots stay valid.
+   * Relations must use this id, never `role` or `name`.
+   */
+  personId?: string;
   name: string;
   role: AgentRole;
   title: string;
@@ -317,8 +344,20 @@ export interface ReconstructedVenue {
   createdAt: string;
 }
 
+/**
+ * Functional classification of a place, derived from its zone when not set.
+ * Lets Mirror group venues editorially without a second model.
+ */
+export type PlaceKind =
+  | 'main_venue' | 'ceremony' | 'civil' | 'cocktail' | 'dinner'
+  | 'dancefloor' | 'accommodation' | 'parking' | 'vendor_space' | 'other';
+
 export interface Place {
   id: string;
+  /** Optional override; otherwise derived from `zone`. */
+  kind?: PlaceKind;
+  /** Postal address, when it has really been entered. */
+  address?: string;
   name: string;
   code: string;
   zone: 'mairie' | 'manoir' | 'ceremonie' | 'cocktail' | 'reception' | 'dancefloor' | 'parking';
@@ -372,11 +411,19 @@ export interface DocumentEntity {
 export interface TaskEntity {
   id: string;
   title: string;
+  /** The moment this task belongs to, when it was created from one. */
+  phaseId?: string;
   category: 'logistique' | 'paiement' | 'prestataire' | 'ceremonie' | 'animation';
   dueHour: number;
   isDone: boolean;
   urgent: boolean;
   cost?: number;
+  /**
+   * DELEGATION — who was asked to do this, and where it stands.
+   * A « mission » is not a new entity: it is a task with a person on it.
+   */
+  assignedPersonId?: string;
+  status?: 'todo' | 'doing' | 'to_confirm' | 'done' | 'blocked';
   assignedAgentId?: string;
   assignedPlaceId?: string;
   sourceOrigin?: DataSourceOrigin;
@@ -410,6 +457,81 @@ export interface TimelinePhase {
   keyDocIds: string[];
   keyTaskIds: string[];
   ambientTrack: 'prep' | 'ceremony' | 'jazz' | 'dinner' | 'party';
+  /**
+   * Vendors explicitly attached to this moment by the user in the Canvas.
+   * Optional and additive: vendors are still ALSO derived from the moment's
+   * place, so existing data keeps working without migration.
+   */
+  vendorIds?: string[];
+  /** Free note written on the moment. */
+  notes?: string;
+
+  // -------------------------------------------------------------------------
+  // A moment is a HUB: everything the day needs at that hour hangs here.
+  // Every field below is optional and additive — an existing programme keeps
+  // working untouched, and nothing is ever populated automatically.
+  // -------------------------------------------------------------------------
+  /** People explicitly expected at this moment (Person ids, never names). */
+  personIds?: string[];
+  /** Music attached to this moment (Track ids). */
+  trackIds?: string[];
+  /** Tasks attached to this moment (Task ids). */
+  taskIds?: string[];
+  /** Shots the couple asks for — photo/video. Free lines written by a human. */
+  shots?: string[];
+  /** Catering, as typed. No default menu, no invented headcount. */
+  meal?: { menu?: string; allergies?: string; headcount?: number };
+  /** Setup, delivery, transport — a written paragraph, not a schema. */
+  logistics?: string;
+  /** What this moment costs, as entered. Absent until someone types it. */
+  budget?: { amount?: number; deposit?: number; paid?: boolean };
+
+  /**
+   * Does this moment happen OUTSIDE? Declared by a human, never deduced from a
+   * name: « Photos » can be a studio and « Cocktail » can be a winter garden.
+   * Absent means « not declared », which is not the same as « indoors ».
+   */
+  outdoor?: boolean;
+
+  /**
+   * HOW SURE ARE WE OF THIS HOUR?
+   *
+   * Absent means « confirmed »: someone typed it. The intake writes the level
+   * it really reached, and the timeline shows it, so a proposed hour never
+   * passes for a decided one.
+   */
+  confidence?: Certainty;
+  /** The fragment or the rule that produced the hour. Shown, never guessed. */
+  confidenceNote?: string;
+}
+
+/**
+ * FIVE LEVELS OF CERTAINTY — the product never states more than it knows.
+ *
+ *  confirmed  — written by a human, or read literally in a document
+ *  inferred   — deduced from another certain fact (an end from the next start)
+ *  estimated  — a starting point proposed by the product, always modifiable
+ *  to_confirm — read somewhere, but contradicted or ambiguous
+ *  missing    — nothing was found, and nothing was invented
+ */
+export type Certainty = 'confirmed' | 'inferred' | 'estimated' | 'to_confirm' | 'missing';
+
+/**
+ * A SCENARIO — a temporary branch of the day.
+ *
+ * It carries a full copy of the moments, with the SAME ids as the real ones, so
+ * a difference can be read moment by moment. It never carries the people, the
+ * documents or the money: those stay attached to the real moments, and a
+ * scenario only asks « et si les heures changeaient ? ».
+ *
+ * The main timeline stays the source of truth until the couple applies the
+ * scenario — entirely, or line by line.
+ */
+export interface TimelineScenario {
+  id: string;
+  name: string;
+  createdAt: string;
+  phases: TimelinePhase[];
 }
 
 export interface NeuralPulse {
