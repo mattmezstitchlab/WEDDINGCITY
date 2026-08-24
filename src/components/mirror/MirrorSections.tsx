@@ -68,8 +68,9 @@ export function MirrorVendors({ vendors }: { vendors: VendorsProjection }) {
                           {v.places.map((pl) => (
                             <button
                               key={pl.placeId}
-                              onClick={() => store.showPlaceInWorld(pl.placeId)}
+                              onClick={() => store.openCanvas({ kind: 'place', id: pl.placeId })}
                               style={momentLinkStyle}
+                              title="Ouvrir la fiche du lieu"
                             >
                               {pl.name}
                               <span style={{ opacity: 0.5 }}> ↗</span>
@@ -83,8 +84,9 @@ export function MirrorVendors({ vendors }: { vendors: VendorsProjection }) {
                           {v.moments.map((mo) => (
                             <button
                               key={mo.phaseId}
-                              onClick={() => store.showEventInWorld(mo.phaseId)}
+                              onClick={() => store.openMoment(mo.phaseId)}
                               style={momentLinkStyle}
+                              title="Ouvrir ce moment dans la Timeline"
                             >
                               <span style={momentTimeStyle}>{mo.time}</span> {mo.title}
                             </button>
@@ -101,17 +103,12 @@ export function MirrorVendors({ vendors }: { vendors: VendorsProjection }) {
                       )}
 
                       <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: fluid(14, 18) }}>
-                        {v.canShowInWorld && (
-                          <button className="wc-action" onClick={() => store.showVendorInWorld(v.vendorId)} style={ghostBtnStyle}>
-                            Voir dans le Monde
-                          </button>
-                        )}
                         <button
                           className="wc-action"
                           onClick={() => store.openCanvas({ kind: 'vendor', id: v.vendorId })}
                           style={{ ...ghostBtnStyle, borderColor: M.lineStrong, color: M.textPrimary }}
                         >
-                          Modifier
+                          Ouvrir la fiche
                         </button>
                       </div>
                     </div>
@@ -162,7 +159,12 @@ export function MirrorPlaces({ places }: { places: PlacesProjection }) {
                 {p.moments.length > 0 && (
                   <div style={placeMomentsStyle}>
                     {p.moments.map((mo) => (
-                      <button key={mo.phaseId} onClick={() => store.showEventInWorld(mo.phaseId)} style={momentLinkStyle}>
+                      <button
+                        key={mo.phaseId}
+                        onClick={() => store.openMoment(mo.phaseId)}
+                        style={momentLinkStyle}
+                        title="Ouvrir ce moment dans la Timeline"
+                      >
                         <span style={momentTimeStyle}>{mo.time}</span> {mo.title}
                       </button>
                     ))}
@@ -193,15 +195,12 @@ export function MirrorPlaces({ places }: { places: PlacesProjection }) {
                 )}
 
                 <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: fluid(16, 22) }}>
-                  <button className="wc-action" onClick={() => store.showPlaceInWorld(p.placeId)} style={ghostBtnStyle}>
-                    Explorer dans le Monde
-                  </button>
                   <button
                     className="wc-action"
                     onClick={() => store.openCanvas({ kind: 'place', id: p.placeId })}
                     style={{ ...ghostBtnStyle, borderColor: M.lineStrong, color: M.textPrimary }}
                   >
-                    Modifier
+                    Ouvrir la fiche
                   </button>
                 </div>
               </article>
@@ -217,7 +216,7 @@ export function MirrorPlaces({ places }: { places: PlacesProjection }) {
             <Rule label={`Autres espaces · ${secondary.length}`} />
             <div style={secondaryGridStyle}>
               {secondary.map((p) => (
-                <button key={p.placeId} onClick={() => store.showPlaceInWorld(p.placeId)} style={secondaryItemStyle}>
+                <button key={p.placeId} onClick={() => store.openCanvas({ kind: 'place', id: p.placeId })} style={secondaryItemStyle}>
                   <span style={{ color: M.textPrimary }}>{p.name}</span>
                   <span style={{ color: M.textMuted, fontSize: typography.editorial.caption }}>
                     {PLACE_KIND_LABEL[p.kind] ?? p.kind}
@@ -257,7 +256,7 @@ export function MirrorMusic({ music }: { music: MusicProjection }) {
               <span style={musicMomentStyle}>{group.phaseTitle}</span>
               <span style={{ flex: 1, height: 1, background: M.line }} />
               {group.phaseId && (
-                <button onClick={() => store.showEventInWorld(group.phaseId!)} style={miniLinkStyle}>
+                <button onClick={() => store.openMoment(group.phaseId!)} style={miniLinkStyle} title="Ouvrir ce moment dans la Timeline">
                   le moment ↗
                 </button>
               )}

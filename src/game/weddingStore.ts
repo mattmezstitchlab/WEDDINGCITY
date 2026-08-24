@@ -51,7 +51,7 @@ import {
 import { BRAND_ACCENT } from './brand';
 
 /** The six editorial sections, shared by the Mirror and the Canvas. */
-export type CanvasSection = 'programme' | 'people' | 'vendors' | 'places' | 'music' | 'media';
+export type CanvasSection = 'people' | 'vendors' | 'places' | 'music' | 'media';
 import { PlaceKind } from '../types/wedding';
 import {
   Person,
@@ -1642,6 +1642,12 @@ class WeddingStore {
   /** Section the Canvas should open on when no single entity is focused. */
   public canvasSection: CanvasSection | null = null;
   /**
+   * Transient context for a transverse fiche opened from a moment. It is not
+   * persisted: closing that fiche returns to the same MomentHub, not to an
+   * unrelated page. The phase remains the sole owner of its relations.
+   */
+  public canvasReturnPhaseId: string | null = null;
+  /**
    * Incremented every time a surface asks the Canvas to open somewhere.
    * The shells compare it to what they last honoured, so clicking "Composer"
    * in 04 LIEUX always lands on 04 — even if the user had wandered to 05 and
@@ -1865,6 +1871,7 @@ class WeddingStore {
     this.canvasOpen = false;
     this.canvasFocus = null;
     this.canvasSection = null;
+    this.canvasReturnPhaseId = null;
     this.selectedEntity = null;
     this.mirrorFocusPersonId = null;
     this.interiorMode = false;
@@ -1877,13 +1884,15 @@ class WeddingStore {
   public openCanvas(
     focus?: { kind: 'event' | 'person' | 'vendor' | 'place' | 'song'; id: string },
     section?: CanvasSection,
+    returnToPhaseId?: string,
   ): void {
     this.canvasOpen = true;
     this.showIdentityModal = false;
+    this.canvasReturnPhaseId = returnToPhaseId ?? null;
     if (focus) this.canvasFocus = focus;
-    // A section hint lets the Mirror open the Canvas ALREADY on the matching
-    // surface ("Composer" in 04 LIEUX opens 04 Lieux), with no extra
-    // navigation. An entity focus still wins, since it is more specific.
+    // A section hint lets a transverse fiche open on its matching surface. An
+    // entity focus still wins, since it is more specific. A moment return is a
+    // transient navigation context, not a second source of truth.
     if (section) { this.canvasSection = section; this.canvasIntent++; }
     else if (focus) { this.canvasSection = null; this.canvasIntent++; }
     this.notify();
@@ -1895,8 +1904,15 @@ class WeddingStore {
   }
 
   public closeCanvas(): void {
+    const returnToPhaseId = this.canvasReturnPhaseId;
     this.canvasOpen = false;
+    this.canvasReturnPhaseId = null;
+    this.canvasFocus = null;
+    this.canvasSection = null;
     this.notify();
+    // A fiche opened from a moment returns to that exact MomentHub. The
+    // timeline consumes the request once, just like every other entry point.
+    if (returnToPhaseId) this.openMoment(returnToPhaseId);
   }
 
   public setCanvasFocus(focus: { kind: 'event' | 'person' | 'vendor' | 'place' | 'song'; id: string } | null): void {

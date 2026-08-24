@@ -164,8 +164,9 @@ function PersonName({ guest, open, onToggle, showRsvp }: {
               {guest.moments.map((mo) => (
                 <button
                   key={mo.phaseId}
-                  onClick={() => store.showEventInWorld(mo.phaseId)}
+                  onClick={() => store.openMoment(mo.phaseId)}
                   style={inlineLinkStyle}
+                  title="Ouvrir ce moment dans la Timeline"
                 >
                   <span style={{ fontFamily: typography.family.mono, color: M.textMuted }}>{mo.time}</span>
                   {' '}{mo.title}
@@ -187,17 +188,12 @@ function PersonName({ guest, open, onToggle, showRsvp }: {
           )}
 
           <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 10 }}>
-            {guest.canShowInWorld && (
-              <button className="wc-action" onClick={() => store.showPersonInWorld(guest.personId)} style={actionStyle}>
-                Voir dans le Monde
-              </button>
-            )}
             <button
               className="wc-action"
               onClick={() => store.openCanvas({ kind: 'person', id: guest.personId })}
               style={{ ...actionStyle, borderColor: M.lineStrong, color: M.textPrimary }}
             >
-              Modifier
+              Ouvrir la fiche
             </button>
           </div>
         </div>

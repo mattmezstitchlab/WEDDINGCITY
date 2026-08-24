@@ -72,6 +72,18 @@ const clickScale = (scale) => p.evaluate((scale) => {
   if (!el) return false; el.click(); return true;
 }, scale);
 
+// LOCATOR ADAPTED (Passe A): Calendrier is an event-level navigation action,
+// not a permanent top-level button. It is opened through the existing EventPanel
+// shell, then its own closed section.
+const openCalendar = async () => {
+  const opened = await click('jourj', 'open-event');
+  if (!opened) return false;
+  await wait(350);
+  await click('jourj', 'hub-section-calendar');
+  await wait(200);
+  return click('jourj', 'event-calendar');
+};
+
 const state = () => p.evaluate(() => {
   const keys = Object.keys(localStorage);
   const id = localStorage.getItem('wedding_city_active_project_id_v1');
@@ -168,7 +180,7 @@ check('une seule famille de clés de stockage — aucun second store',
 say('\n=== 2. LE CALENDRIER, QUATRE ÉCHELLES ===');
 await p.evaluate(() => document.getElementById('wc-mirror')?.scrollTo({ top: 0 }));
 await wait(400);
-check('l’entrée « Calendrier » existe dans la navigation', await click('jourj', 'nav-calendar'));
+check('le Calendrier est accessible depuis le contexte événement', await openCalendar());
 await wait(1400);
 const opened = await p.evaluate(() => ({
   studio: !!document.querySelector('[data-cal="studio"]'),
@@ -283,7 +295,7 @@ check('l’horaire a bien changé sur la pellicule', after && Math.abs(after.sta
 
 await p.evaluate(() => document.getElementById('wc-mirror')?.scrollTo({ top: 0 }));
 await wait(400);
-await click('jourj', 'nav-calendar');
+await openCalendar();
 await wait(1400);
 await clickScale('month'); await wait(800);
 const propagated = await p.evaluate(() => {
@@ -367,7 +379,7 @@ check('aucune clé de stockage n’a été ajoutée par le calendrier',
 
 await p.evaluate(() => document.getElementById('wc-mirror')?.scrollTo({ top: 0 }));
 await wait(400);
-await click('jourj', 'nav-calendar');
+await openCalendar();
 await wait(1400);
 const persisted = await p.evaluate(() => ({
   strips: document.querySelectorAll('[data-jourj="strip"]').length,

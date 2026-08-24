@@ -17,6 +17,8 @@ import { AdminConsole } from './admin/AdminConsole';
 import { CalendarStudio } from './calendar/CalendarStudio';
 import './mirror.css';
 
+type MirrorSection = CanvasSection | 'programme';
+
 // ---------------------------------------------------------------------------
 // MIRROR — the editorial projection of the World Model.
 // ---------------------------------------------------------------------------
@@ -75,6 +77,11 @@ function ProductNav() {
   const [searchOpen, setSearchOpen] = useState(false);
   const [adminOpen, setAdminOpen] = useState(false);
   const [calendarOpen, setCalendarOpen] = useState(false);
+  useEffect(() => {
+    const openCalendar = () => setCalendarOpen(true);
+    window.addEventListener('wc-open-calendar', openCalendar);
+    return () => window.removeEventListener('wc-open-calendar', openCalendar);
+  }, []);
   const go = (id: string) => {
     const el = document.getElementById(id);
     el?.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -126,13 +133,6 @@ function ProductNav() {
               {e.label}
             </button>
           ))}
-          {/* The calendar is a PLACE of the product, like the timeline or the
-              people — not an action. Putting it back with the other places also
-              keeps the action group short enough to hold one line at 1440px,
-              where it had started to wrap. */}
-          <button onClick={() => setCalendarOpen(true)} style={productNavBtn} data-jourj="nav-calendar">
-            Calendrier
-          </button>
         </div>
         <span style={{ flex: 1 }} />
         <button onClick={() => setSearchOpen(true)} style={productNavBtn} data-jourj="nav-search" aria-label="Recherche">
@@ -185,26 +185,29 @@ function MirrorProjection({ embedded }: { embedded?: boolean }) {
 
   // "Composer" opens the Canvas ALREADY on the matching surface: 04 LIEUX →
   // Canvas 04 Lieux. No intermediate navigation, no lost context.
-  const SECTION_LABEL: Record<CanvasSection, string> = {
-    programme: 'le programme', people: 'les personnes', vendors: 'les prestataires',
+  const SECTION_LABEL: Record<MirrorSection, string> = {
+    programme: 'la journée', people: 'les personnes', vendors: 'les prestataires',
     places: 'les lieux', music: 'la musique', media: 'les médias',
   };
 
   // AUDITED: fourteen « Composer » buttons opened a second editing surface from
   // a reading page. A moment is now opened on the film; an object opens its own
   // file. Same functions, one door each.
-  const ComposeBtn = ({ section, label = 'Ouvrir les fiches' }: { section: CanvasSection; label?: string }) => (
-    <button
-      className="wc-action"
-      style={editBtnStyle}
-      onClick={() => (section === 'programme'
-        ? document.getElementById('jour-j')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-        : store.openCanvas(undefined, section))}
-      aria-label={`${label} ${SECTION_LABEL[section]}`}
-    >
-      {label}
-    </button>
-  );
+  const ComposeBtn = ({ section, label }: { section: MirrorSection; label?: string }) => {
+    const actionLabel = label ?? (section === 'programme' ? 'Retourner à la journée' : 'Ouvrir la fiche');
+    return (
+      <button
+        className="wc-action"
+        style={editBtnStyle}
+        onClick={() => (section === 'programme'
+          ? document.getElementById('jour-j')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+          : store.openCanvas(undefined, section))}
+        aria-label={`${actionLabel} ${SECTION_LABEL[section]}`}
+      >
+        {actionLabel}
+      </button>
+    );
+  };
 
   return (
     <div id={embedded ? 'wc-mirror-story' : 'wc-mirror'} style={embedded ? storyPageStyle : pageStyle}>

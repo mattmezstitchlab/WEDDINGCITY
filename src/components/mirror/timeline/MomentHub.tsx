@@ -51,6 +51,14 @@ export function MomentHub({ phaseId, onClose }: { phaseId: string; onClose: () =
   const image = momentImage(phase.name, ownImage?.source);
   const duration = phase.endHour - phase.startHour;
 
+  // A transverse entity opens in the existing fiche shell, with this moment
+  // remembered as the return context. The Hub remains the sole writer of the
+  // relation; the fiche edits only the entity itself.
+  const openTransverse = (kind: 'person' | 'vendor' | 'place' | 'song', id: string) => {
+    onClose();
+    store.openCanvas({ kind, id }, undefined, phase.id);
+  };
+
   return (
     <div ref={surfaceRef} className="wc-hub" role="dialog" aria-modal="true" aria-label={`Moment ${phase.name}`} data-jourj="hub">
       {/* ---- cover ---- */}
@@ -136,7 +144,11 @@ export function MomentHub({ phaseId, onClose }: { phaseId: string; onClose: () =
         </Dimension>
         {/* ---- where ---- */}
         <Dimension title="Lieu" hint={place ? undefined : 'Aucun lieu rattaché à ce moment.'}>
-          <PlacePicker phaseId={phase.id} currentPlaceId={phase.primaryPlaceId} />
+          <PlacePicker
+            phaseId={phase.id}
+            currentPlaceId={phase.primaryPlaceId}
+            onOpen={(id) => openTransverse('place', id)}
+          />
           {place && (
             <div style={{ ...muted, marginTop: 8 }}>
               {place.address || 'Adresse non renseignée'}
@@ -210,6 +222,7 @@ export function MomentHub({ phaseId, onClose }: { phaseId: string; onClose: () =
           <PeopleRow
             persons={persons as { id: string; displayName: string; portraitMediaId?: string; craft?: { role: string } }[]}
             onRemove={(id) => store.detachPersonFromPhase(phase.id, id)}
+            onOpen={(id) => openTransverse('person', id)}
           />
           <AddExisting
             placeholder="Ajouter une personne déjà connue"
@@ -234,6 +247,7 @@ export function MomentHub({ phaseId, onClose }: { phaseId: string; onClose: () =
           <VendorRow
             vendors={vendors as { id: string; companyName: string; category: string }[]}
             onRemove={(id) => store.detachVendorFromPhase(phase.id, id)}
+            onOpen={(id) => openTransverse('vendor', id)}
           />
           <AddExisting
             placeholder="Ajouter un prestataire du mariage"
@@ -266,7 +280,10 @@ export function MomentHub({ phaseId, onClose }: { phaseId: string; onClose: () =
         forceOpen={expandAll}
         testId="life"
       >
-        <MusicDimension phaseId={phase.id} />
+        <MusicDimension
+          phaseId={phase.id}
+          onOpen={(id) => openTransverse('song', id)}
+        />
 
         {/* ---- shots ---- */}
         <Dimension title="Photo / Vidéo" hint={(phase.shots ?? []).length === 0 ? 'Aucun plan demandé pour l’instant.' : undefined}>
@@ -462,7 +479,7 @@ export function MomentHub({ phaseId, onClose }: { phaseId: string; onClose: () =
 // real audio file exists (see TrackArt), and a real duration: if the music
 // asked for exceeds the moment itself, the hub says so and offers to lengthen
 // the moment — which then proposes to carry the rest of the day.
-function MusicDimension({ phaseId }: { phaseId: string }) {
+function MusicDimension({ phaseId, onOpen }: { phaseId: string; onOpen: (id: string) => void }) {
   const store = weddingStore;
   const hub = store.getPhaseHub(phaseId);
   if (!hub) return null;
@@ -511,6 +528,7 @@ function MusicDimension({ phaseId }: { phaseId: string }) {
                 testId="hub-track-duration"
               />
             </div>
+            <button onClick={() => onOpen(t.id)} style={linkBtn} data-jourj="hub-track-open">Ouvrir la fiche</button>
             <button onClick={() => store.detachTrackFromPhase(phase.id, t.id)} style={linkBtn}>retirer</button>
           </div>
         ))}
@@ -549,9 +567,10 @@ function MusicDimension({ phaseId }: { phaseId: string }) {
 // A person is never an isolated card: opening one shows where they are in the
 // day, who they work with and what is attached to them — all read from the
 // same store, nothing invented.
-function PeopleRow({ persons, onRemove }: {
+function PeopleRow({ persons, onRemove, onOpen }: {
   persons: { id: string; displayName: string; portraitMediaId?: string; craft?: { role: string } }[];
   onRemove: (id: string) => void;
+  onOpen: (id: string) => void;
 }) {
   const store = weddingStore;
   const [open, setOpen] = useState<string | null>(null);
@@ -629,6 +648,13 @@ function PeopleRow({ persons, onRemove }: {
               ? `${connections.relationships.length} relation${connections.relationships.length > 1 ? 's' : ''} déclarée${connections.relationships.length > 1 ? 's' : ''}.`
               : 'Aucune relation déclarée.'}
           </div>
+          <button
+            onClick={() => onOpen(openPerson.id)}
+            style={{ ...smallBtn, marginTop: 10 }}
+            data-jourj="hub-person-open"
+          >
+            Ouvrir la fiche
+          </button>
         </div>
       )}
     </>
@@ -636,9 +662,10 @@ function PeopleRow({ persons, onRemove }: {
 }
 
 /** A vendor shows the moments they really cover, so they are never a card. */
-function VendorRow({ vendors, onRemove }: {
+function VendorRow({ vendors, onRemove, onOpen }: {
   vendors: { id: string; companyName: string; category: string }[];
   onRemove: (id: string) => void;
+  onOpen: (id: string) => void;
 }) {
   const store = weddingStore;
   if (vendors.length === 0) return null;
@@ -662,6 +689,7 @@ function VendorRow({ vendors, onRemove }: {
                   : 'Aucun moment couvert.'}
               </div>
             </div>
+            <button onClick={() => onOpen(v.id)} style={linkBtn} data-jourj="hub-vendor-open">Ouvrir la fiche</button>
             <button onClick={() => onRemove(v.id)} style={linkBtn}>retirer</button>
           </div>
         );
@@ -1080,7 +1108,11 @@ function AddNew({ placeholder, onSubmit, testId }: {
   );
 }
 
-function PlacePicker({ phaseId, currentPlaceId }: { phaseId: string; currentPlaceId: string }) {
+function PlacePicker({ phaseId, currentPlaceId, onOpen }: {
+  phaseId: string;
+  currentPlaceId: string;
+  onOpen: (id: string) => void;
+}) {
   const store = weddingStore;
   const [draft, setDraft] = useState('');
   return (
@@ -1094,6 +1126,15 @@ function PlacePicker({ phaseId, currentPlaceId }: { phaseId: string; currentPlac
         <option value="">Aucun lieu</option>
         {store.places.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
       </select>
+      {currentPlaceId && (
+        <button
+          onClick={() => onOpen(currentPlaceId)}
+          style={{ ...linkBtn, marginTop: 8 }}
+          data-jourj="hub-place-open"
+        >
+          Ouvrir la fiche du lieu
+        </button>
+      )}
       <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
         <input
           value={draft}

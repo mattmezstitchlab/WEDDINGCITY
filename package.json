@@ -36,7 +36,8 @@
     "test:worlds": "node scripts/check-worlds.mjs",
     "acceptance:worldlab": "node scripts/acceptance-worldlab.mjs",
     "test:landing": "node scripts/check-landing.mjs",
-    "acceptance:landing": "node scripts/acceptance-landing.mjs"
+    "acceptance:landing": "node scripts/acceptance-landing.mjs",
+    "acceptance:passe-a": "node scripts/acceptance-passe-a.mjs"
   },
   "dependencies": {
     "@react-spring/three": "^9.7.5",

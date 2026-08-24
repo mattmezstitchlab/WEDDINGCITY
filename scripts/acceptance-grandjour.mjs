@@ -541,71 +541,27 @@ check('et le hub dit pourquoi', play.honest);
 await shot('06-hub-music');
 await clickTag('jourj', 'hub-close'); await wait(600);
 
-// --- 9. the Canvas move must be validated ----------------------------------
-say('\n=== 9. CANVAS : LA POIGNÉE SEULE SE DÉPLACE, PUIS ON VALIDE ===');
-await p.keyboard.press('KeyK'); await wait(1400);
-await p.evaluate(() => {
-  const tab = [...document.querySelectorAll('button')].find((b) => /Programme/i.test(b.textContent));
-  tab?.click();
-});
-await wait(800);
-const rows = await p.evaluate(() =>
-  [...document.querySelectorAll('[data-canvas="moment-row"]')].map((el) => {
-    const r = el.getBoundingClientRect();
-    return { id: el.getAttribute('data-phase-id'), top: Math.round(r.top), left: Math.round(r.left), h: Math.round(r.height) };
-  }));
-// Three moments, plus the daytime anchor when the test runs after midnight.
-// The surface kept its rows: it is the ORDER of the day, and it carries the
-// deliberate handle gesture. What it lost is the editing of the fields a moment
-// owns — see check-timeline [15/15].
-check('l’ordre du jour est listé dans le Canvas', rows.length >= 3, String(rows.length));
-const handle = await p.evaluate(() => {
-  const h = document.querySelector('[data-canvas="moment-row"] [data-canvas="drag-handle"]');
-  const r = h.getBoundingClientRect();
-  return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) };
-});
-const firstRowBefore = rows[0];
-await p.mouse.move(handle.x, handle.y);
-await p.mouse.down();
-await p.mouse.move(handle.x + 6, rows[2].top + rows[2].h / 2, { steps: 10 });
-await wait(250);
-const mid = await p.evaluate((id) => {
-  const el = document.querySelector(`[data-canvas="moment-row"][data-phase-id="${id}"]`);
-  const r = el.getBoundingClientRect();
-  const ghost = document.querySelector('[data-canvas="drag-ghost"]');
-  const g = ghost?.getBoundingClientRect();
-  return {
-    rowTop: Math.round(r.top), rowLeft: Math.round(r.left),
-    ghost: g ? { x: Math.round(g.left), y: Math.round(g.top) } : null,
-  };
-}, firstRowBefore.id);
-say('  ' + JSON.stringify(mid));
-check('le bloc NE bouge PAS pendant le déplacement',
-  Math.abs(mid.rowTop - firstRowBefore.top) <= 2 && Math.abs(mid.rowLeft - firstRowBefore.left) <= 2,
-  `${firstRowBefore.top},${firstRowBefore.left} → ${mid.rowTop},${mid.rowLeft}`);
-check('seule la poignée suit le pointeur', !!mid.ghost && Math.abs(mid.ghost.y - (rows[2].top + rows[2].h / 2)) < 40,
-  JSON.stringify(mid.ghost));
-await shot('07-canvas-drag');
-await p.mouse.up();
+// --- 9. transverse fiches, not a second day -------------------------------
+say('\n=== 9. FICHES TRANSVERSES : PAS DE SECOND PROGRAMME ===');
+await p.keyboard.press('KeyK'); await wait(1200);
+const transverse = await p.evaluate(() => ({
+  open: !!document.querySelector('#wc-mirror-canvas'),
+  tabs: [...document.querySelectorAll('#wc-mirror-canvas nav button')].map((b) => b.textContent.replace(/\s+/g, ' ').trim()),
+  momentRows: document.querySelectorAll('#wc-mirror-canvas [data-canvas="moment-row"]').length,
+  programme: /Ordre du jour|Programme/.test(document.querySelector('#wc-mirror-canvas')?.innerText || ''),
+  world: [...document.querySelectorAll('#wc-mirror-canvas button')]
+    .some((b) => /Monde|World|Explorer/.test(b.textContent || '')),
+}));
+say('  ' + JSON.stringify(transverse));
+check('les fiches transverses s’ouvrent dans le Canvas', transverse.open);
+check('le Canvas expose les cinq fiches utiles', transverse.tabs.length === 5, transverse.tabs.join(' | '));
+check('il ne contient plus de second programme', transverse.momentRows === 0 && !transverse.programme);
+check('aucun accès World n’est exposé dans le Canvas produit', !transverse.world);
+await p.evaluate(() => document.querySelector('[data-canvas="close"]')?.click());
 await wait(700);
+await noOverflow('Fiches transverses');
 
-const validation = await p.evaluate(() => {
-  const el = document.querySelector('[data-canvas="move-validation"]');
-  return el ? el.textContent.replace(/\s+/g, ' ').trim() : null;
-});
-say('  ' + (validation || 'aucune validation affichée'));
-check('le déplacement est proposé, pas appliqué', !!validation && /Modifications détectées/i.test(validation));
-const beforeApply = await stateOf();
-check('aucun horaire n’a encore changé',
-  JSON.stringify(beforeApply.phases.map((x) => x.start)) === JSON.stringify(s.phases.map((x) => x.start)),
-  beforeApply.phases.map((x) => fmt(x.start)).join(' '));
-check('les conséquences sont écrites heure par heure', /\d{2}:\d{2} → \d{2}:\d{2}/.test(validation || ''));
-await clickTag('canvas', 'move-apply'); await wait(900);
 const afterApply = await stateOf();
-check('après validation, les horaires sont recalculés',
-  JSON.stringify(afterApply.phases.map((x) => x.start)) !== JSON.stringify(beforeApply.phases.map((x) => x.start)),
-  afterApply.phases.map((x) => `${x.name} ${fmt(x.start)}`).join(' | '));
-await noOverflow('Canvas');
 
 // --- 10. reload -------------------------------------------------------------
 say('\n=== 10. RELOAD ===');

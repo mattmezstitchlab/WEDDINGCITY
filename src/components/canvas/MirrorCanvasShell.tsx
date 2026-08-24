@@ -10,54 +10,51 @@ import { M, fluid, Eyebrow } from '../mirror/MirrorPrimitives';
 import '../mirror/mirror.css';
 
 // ---------------------------------------------------------------------------
-// MIRROR CANVAS SHELL — the editorial site becomes editable.
+// MIRROR CANVAS SHELL — contextual transverse fiches.
 // ---------------------------------------------------------------------------
-// Clicking "Modifier" in Mirror used to throw the user back into the 3D world.
-// It now opens THIS shell instead: the same CanvasCore, wrapped in the Mirror's
-// own visual language — ivory, wide margins, numbered sections, large type.
+// Clicking a person, provider, place, song or media collection opens this shell
+// beside the day. It is deliberately NOT a second programme: the moment's
+// properties and relations are edited in MomentHub, on the timeline.
 //
-// The intent is that the magazine becomes directly editable, rather than the
-// reader being handed an admin panel. Layout only: no business logic here.
+// The shell keeps the existing CanvasCore for transverse entities only. Layout
+// and navigation live here; business mutations remain in the shared core/store.
 // ---------------------------------------------------------------------------
 
 export function MirrorCanvasShell() {
   const store = weddingStore;
   const focusTab = tabForFocus(store.canvasFocus);
-  const [tab, setTab] = useState<CanvasTab>(focusTab);
+  // PRODUCT DECISION (Passe A): Ordre du jour belongs to TimelineStudio. The
+  // World may keep its legacy tab, but the product shell exposes fiches only.
+  const VISIBLE_TABS = CANVAS_TABS;
+  const firstTab = VISIBLE_TABS[0]?.id ?? 'people';
+  const initialTab = VISIBLE_TABS.some((t) => t.id === focusTab) ? focusTab : firstTab;
+  const [tab, setTab] = useState<CanvasTab>(initialTab);
   const [lastFocus, setLastFocus] = useState(store.canvasFocus?.id ?? null);
   const [lastIntent, setLastIntent] = useState(store.canvasIntent);
 
   // Arriving with a new focus switches the surface, without losing context.
   if (store.canvasFocus && store.canvasFocus.id !== lastFocus) {
     setLastFocus(store.canvasFocus.id);
-    setTab(focusTab);
+    setTab(VISIBLE_TABS.some((t) => t.id === focusTab) ? focusTab : firstTab);
   }
-  // A section request from the Mirror ("Composer" in 04 LIEUX) lands directly
-  // on that surface. The intent counter makes a repeated request work too.
+  // A section request from the Mirror lands directly on one transverse sheet.
+  // Programme requests are deliberately reduced to the first sheet: the day
+  // itself is opened by TimelineStudio/MomentHub, never by this shell.
   if (store.canvasIntent !== lastIntent) {
     setLastIntent(store.canvasIntent);
-    if (store.canvasSection) setTab(store.canvasSection);
-    else if (store.canvasFocus) setTab(tabForFocus(store.canvasFocus));
+    if (store.canvasSection && VISIBLE_TABS.some((t) => t.id === store.canvasSection)) setTab(store.canvasSection);
+    else if (store.canvasFocus) {
+      const requestedTab = tabForFocus(store.canvasFocus);
+      setTab(VISIBLE_TABS.some((t) => t.id === requestedTab) ? requestedTab : firstTab);
+    }
   }
 
-  // AUDITED, then CORRECTED BY THE TEST SUITE — and the correction is the
-  // honest part of this pass.
-  //
-  // The audit concluded that the « Programme » surface was a second reading of
-  // the day and had to go. Removing it turned an existing acceptance red, and
-  // that test was right: this surface carries the deliberate handle gesture
-  // that was explicitly asked for — the block stays still, only the handle
-  // travels, then « Modifications détectées » validates. That gesture exists
-  // NOWHERE else, and deleting a function to tidy an interface is exactly what
-  // this pass forbids.
-  //
-  // So it stays, stripped of what really was duplicated: its five field
-  // editors (hour, title, place, notes, vendors) are gone — the moment owns
-  // them. What is left is an ORDER, which is what the rail now calls it.
-  const VISIBLE_TABS = CANVAS_TABS.map((t) => (
-    t.id === 'programme' ? { ...t, label: 'Ordre du jour' } : t
-  ));
-  const effectiveTab: CanvasTab = tab;
+  // The former Programme tab carried a second moment-ordering surface. The
+  // Timeline already owns that gesture and the MomentHub owns moment fields.
+  // It is therefore intentionally absent from this product shell. The shared
+  // core keeps the dormant World implementation until that legacy surface is
+  // retired in its own pass.
+  const effectiveTab: CanvasTab = VISIBLE_TABS.some((t) => t.id === tab) ? tab : firstTab;
   const active = VISIBLE_TABS.find((t) => t.id === effectiveTab);
 
   return (
@@ -74,8 +71,15 @@ export function MirrorCanvasShell() {
               </h1>
               {store.canvasFocus && (
                 <div style={focusLineStyle}>
-                  Focus&nbsp;: <strong style={{ color: M.textPrimary }}>{focusLabel(store.canvasFocus)}</strong>
+                  Fiche&nbsp;: <strong style={{ color: M.textPrimary }}>{focusLabel(store.canvasFocus)}</strong>
                   <button onClick={() => store.setCanvasFocus(null)} style={clearFocusStyle}>tout afficher</button>
+                </div>
+              )}
+              {store.canvasReturnPhaseId && (
+                <div style={{ ...focusLineStyle, marginTop: 6 }} data-canvas="return-context">
+                  Depuis&nbsp;: <strong style={{ color: M.textPrimary }}>
+                    {focusLabel({ kind: 'event', id: store.canvasReturnPhaseId })}
+                  </strong>
                 </div>
               )}
             </div>
@@ -83,8 +87,8 @@ export function MirrorCanvasShell() {
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
               <SaveIndicator />
               <UndoRedo />
-              <button className="wc-action" onClick={() => store.closeCanvas()} style={doneBtnStyle}>
-                Terminer
+              <button className="wc-action" onClick={() => store.closeCanvas()} style={doneBtnStyle} data-canvas="close">
+                {store.canvasReturnPhaseId ? 'Retour au moment' : 'Terminer'}
               </button>
             </div>
           </div>
@@ -117,15 +121,18 @@ export function MirrorCanvasShell() {
       </main>
 
       <footer style={footerStyle}>
-        <span>Toute modification agit sur le World Model — le Monde et le site suivent.</span>
+        <span>Toute modification agit sur la journée — les autres vues suivent.</span>
       </footer>
     </div>
   );
 }
 
 const pageStyle: React.CSSProperties = {
-  position: 'fixed', inset: 0, zIndex: 860, overflowY: 'auto',
+  position: 'fixed', top: 0, right: 0, bottom: 0,
+  width: 'min(720px, 100vw)', zIndex: 860, overflowY: 'auto',
   background: M.bg, color: M.textPrimary,
+  borderLeft: `1px solid ${M.line}`,
+  boxShadow: '-18px 0 50px rgba(8, 9, 11, 0.18)',
   fontFamily: typography.family.sans,
   WebkitFontSmoothing: 'antialiased',
 };

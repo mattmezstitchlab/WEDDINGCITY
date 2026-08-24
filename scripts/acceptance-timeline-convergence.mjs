@@ -98,6 +98,16 @@ const openMomentCard = async (name) => {
   await wait(900);
 };
 
+// LOCATOR ADAPTED (Passe A): the calendar is opened from the event context,
+// not kept in the primary navigation bar.
+const openCalendar = async () => {
+  if (!await click('jourj', 'open-event')) return false;
+  await wait(300);
+  await click('jourj', 'hub-section-calendar');
+  await wait(200);
+  return click('jourj', 'event-calendar');
+};
+
 // ═══════════════════════════════════════════════════════════════════════════
 say(`### CONVERGENCE DE LA TIMELINE — ${WIDTH}px`);
 
@@ -322,7 +332,7 @@ await noOverflow('Simulation');
 say('\n=== 6. LE CALENDRIER NAVIGUE, IL N’ÉDITE PAS ===');
 await p.evaluate(() => document.getElementById('wc-mirror')?.scrollTo({ top: 0 }));
 await wait(400);
-await click('jourj', 'nav-calendar');
+await openCalendar();
 await wait(1300);
 const cal = await p.evaluate(() => ({
   open: !!document.querySelector('[data-cal="studio"]'),

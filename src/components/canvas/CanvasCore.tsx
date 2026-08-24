@@ -30,16 +30,15 @@ import {
 // from projectWorldModel() after each mutation.
 // ---------------------------------------------------------------------------
 
-/** Same six ids as the store's CanvasSection — one vocabulary, not two. */
+/** The five transverse sheets — the day itself is not a Canvas tab. */
 export type CanvasTab = CanvasSection;
 
 export const CANVAS_TABS: { id: CanvasTab; label: string; index: string }[] = [
-  { id: 'programme', label: 'Programme', index: '01' },
-  { id: 'people', label: 'Personnes', index: '02' },
-  { id: 'vendors', label: 'Prestataires', index: '03' },
-  { id: 'places', label: 'Lieux', index: '04' },
-  { id: 'music', label: 'Musique', index: '05' },
-  { id: 'media', label: 'Médias', index: '06' },
+  { id: 'people', label: 'Personnes', index: '01' },
+  { id: 'vendors', label: 'Prestataires', index: '02' },
+  { id: 'places', label: 'Lieux', index: '03' },
+  { id: 'music', label: 'Musique', index: '04' },
+  { id: 'media', label: 'Médias', index: '05' },
 ];
 
 const VENDOR_CATEGORIES = [
@@ -54,7 +53,9 @@ export function tabForFocus(focus: { kind: string } | null): CanvasTab {
     case 'vendor': return 'vendors';
     case 'place': return 'places';
     case 'song': return 'music';
-    default: return 'programme';
+    // A generic Canvas request opens the first transverse sheet. A moment
+    // request must use openMoment(), never fall back to a day editor.
+    default: return 'people';
   }
 }
 
@@ -114,7 +115,6 @@ export function CanvasCore({ tab }: { tab: CanvasTab }) {
 
   return (
     <>
-      {tab === 'programme' && <ProgrammeSurface model={model} />}
       {tab === 'people' && <PeopleSurface model={model} />}
       {tab === 'vendors' && <VendorsSurface model={model} />}
       {tab === 'places' && <PlacesSurface model={model} />}
@@ -125,352 +125,12 @@ export function CanvasCore({ tab }: { tab: CanvasTab }) {
 }
 
 // ===========================================================================
-// D2 — PROGRAMME: the primary composition surface
+// TRANSVERSE SHEETS
+//
+// Moment properties and ordering no longer live in Canvas. TimelineStudio and
+// MomentHub are the only product doors for the day itself; the sheets below
+// handle entities that can belong to several moments.
 // ===========================================================================
-
-function ProgrammeSurface({ model }: { model: ReturnType<typeof projectWorldModel> }) {
-  const store = weddingStore;
-  const places = store.places.map((p) => ({ id: p.id, label: p.name, sub: p.code }));
-
-  // ---- TEMPORAL DRAG & DROP -------------------------------------------------
-  // TWO DIFFERENT GESTURES, ON PURPOSE:
-  //
-  //   • on the JOUR J film, the card itself follows the finger — you are
-  //     placing an object on a time scale, so you must see it land;
-  //   • HERE, in the editing Canvas, the block must NOT move while you drag.
-  //     Only the handle travels with the pointer, the programme stays legible,
-  //     a line shows the target position — and NOTHING is applied until the
-  //     move is validated, with its consequences written out beforehand.
-  //
-  // The same move stays available from the keyboard and from two touch-sized
-  // buttons: it is never reachable by mouse only.
-  const [drag, setDrag] = useState<{ phaseId: string; x: number; y: number } | null>(null);
-  const [overIndex, setOverIndex] = useState<number | null>(null);
-  const [moveNote, setMoveNote] = useState<string | null>(null);
-  const [pending, setPending] = useState<{
-    phaseId: string; title: string; index: number;
-    changes: { id: string; name: string; from: number; to: number }[];
-  } | null>(null);
-
-  const moments = model.programme.moments;
-
-  /** Wall clock, with "(+1)" when the hour belongs to the following morning. */
-  const clock = (h: number) => {
-    const t = Math.round(h * 60);
-    const base = `${String(Math.floor(t / 60) % 24).padStart(2, '0')}:${String(t % 60).padStart(2, '0')}`;
-    return h >= 24 ? `${base} (+1)` : base;
-  };
-
-  const move = (phaseId: string, targetIndex: number) => {
-    const done = store.movePhaseToIndex(phaseId, targetIndex);
-    setMoveNote(done
-      ? 'Programme réordonné — chaque durée est conservée, les heures suivent.'
-      : 'Déplacement impossible : la journée ne peut pas accueillir ce moment ici.');
-  };
-
-  /** Drop = ask. The programme is only rewritten once the user validates. */
-  const proposeMove = (phaseId: string, targetIndex: number, title: string) => {
-    const changes = store.previewMoveToIndex(phaseId, targetIndex);
-    if (!changes || changes.length === 0) {
-      setMoveNote('Ce déplacement ne changerait aucun horaire.');
-      return;
-    }
-    setPending({ phaseId, title, index: targetIndex, changes });
-  };
-
-  return (
-    <div style={{ display: 'grid', gap: 14 }}>
-      <div style={{ display: 'flex', gap: 10, alignItems: 'baseline', flexWrap: 'wrap' }}>
-        <span style={{ fontSize: 10.5, color: K.textMuted }}>
-          Glissez la poignée d’un moment pour le déplacer dans la journée, ou
-          utilisez les flèches. Le bloc reste en place : vous validez le
-          déplacement, puis les horaires se recalculent.
-        </span>
-        {moveNote && <span style={{ fontSize: 10.5, color: K.textSecondary }}>{moveNote}</span>}
-      </div>
-
-      {/* Only the handle travels — a small object under the pointer. */}
-      {drag && (
-        <div
-          aria-hidden
-          data-canvas="drag-ghost"
-          style={{
-            position: 'fixed', left: drag.x - 12, top: drag.y - 12, zIndex: 2000,
-            width: 24, height: 24, borderRadius: 6, pointerEvents: 'none',
-            background: K.textPrimary, color: K.bg,
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontSize: 12, boxShadow: shadowFor(4, 'composition'),
-          }}
-        >
-          ⠿
-        </div>
-      )}
-
-      {/* MODIFICATIONS DÉTECTÉES — written out before anything moves. */}
-      {pending && (
-        <div style={pendingBoxStyle} role="status" data-canvas="move-validation">
-          <div style={{ fontSize: 10.5, letterSpacing: '0.14em', textTransform: 'uppercase', color: K.textMuted }}>
-            Modifications détectées
-          </div>
-          <div style={{ marginTop: 8, fontSize: typography.size.bodyLg, color: K.textPrimary }}>
-            Déplacer « {pending.title} » en position {String(pending.index + 1).padStart(2, '0')}
-          </div>
-          <ul style={{ listStyle: 'none', margin: '10px 0 0', padding: 0, display: 'grid', gap: 6 }}>
-            {pending.changes.map((c) => (
-              <li key={c.id} style={{ fontSize: typography.size.body, color: K.textSecondary, fontFamily: typography.family.mono }}>
-                {c.name} : {clock(c.from)} → {clock(c.to)}
-                {' '}({c.to > c.from ? '+' : '−'}{Math.abs(Math.round((c.to - c.from) * 60))} min)
-              </li>
-            ))}
-          </ul>
-          <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
-            <button
-              onClick={() => { move(pending.phaseId, pending.index); setPending(null); }}
-              style={{ ...addBtnStyle, borderStyle: 'solid' }}
-              data-canvas="move-apply"
-            >
-              Appliquer
-            </button>
-            <button onClick={() => setPending(null)} style={{ ...addBtnStyle, border: 'none' }} data-canvas="move-cancel">
-              Annuler
-            </button>
-          </div>
-        </div>
-      )}
-
-      {moments.length === 0 && (
-        <CanvasEmpty
-          title="Aucun moment dans le programme"
-          body="La journée n’a pas encore de déroulé. Le premier moment créé apparaîtra immédiatement dans la timeline du site et dans le Monde."
-        />
-      )}
-
-      {moments.map((m, index) => {
-        const isFocus = store.canvasFocus?.kind === 'event' && store.canvasFocus.id === m.phaseId;
-        const isDragging = drag?.phaseId === m.phaseId;
-        const isTarget = overIndex === index && drag !== null && !isDragging;
-        return (
-          <article
-            key={m.phaseId}
-            data-canvas="moment-row"
-            data-phase-id={m.phaseId}
-            onPointerEnter={() => { if (drag) setOverIndex(index); }}
-            style={{
-              ...canvasCard,
-              padding: '18px 20px',
-              boxShadow: isFocus ? shadowFor(4, 'composition') : shadowFor(2, 'composition'),
-              // The dragged block stays exactly where it is — it is only
-              // outlined, never displaced (see the note above).
-              borderColor: isDragging ? K.textPrimary : isFocus ? K.lineStrong : K.line,
-              borderTop: isTarget ? `2px solid ${K.textPrimary}` : undefined,
-            }}
-          >
-            {/* ---- move controls: pointer, keyboard and touch ---- */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
-              <span
-                role="button"
-                tabIndex={0}
-                aria-label={`Déplacer ${m.title} dans le programme. Flèches haut et bas pour changer sa position.`}
-                data-canvas="drag-handle"
-                onPointerDown={(e) => {
-                  (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-                  setDrag({ phaseId: m.phaseId, x: e.clientX, y: e.clientY });
-                  setOverIndex(index);
-                  setMoveNote(null);
-                }}
-                onPointerMove={(e) => {
-                  if (!drag) return;
-                  setDrag({ ...drag, x: e.clientX, y: e.clientY });
-                  // The row under the pointer is the target position.
-                  const row = document.elementFromPoint(e.clientX, e.clientY)?.closest('[data-canvas="moment-row"]');
-                  const id = row?.getAttribute('data-phase-id');
-                  const at = moments.findIndex((x) => x.phaseId === id);
-                  if (at >= 0) setOverIndex(at);
-                }}
-                onPointerUp={() => {
-                  if (!drag) return;
-                  const target = overIndex;
-                  const current = drag;
-                  setDrag(null);
-                  setOverIndex(null);
-                  if (target === null || target === index) return;
-                  proposeMove(current.phaseId, target, m.title);
-                }}
-                onPointerCancel={() => { setDrag(null); setOverIndex(null); }}
-                onKeyDown={(e) => {
-                  if (e.key === 'ArrowUp') { e.preventDefault(); move(m.phaseId, index - 1); }
-                  if (e.key === 'ArrowDown') { e.preventDefault(); move(m.phaseId, index + 1); }
-                }}
-                style={{ ...dragHandleStyle, touchAction: 'none' }}
-                title="Glisser pour déplacer — le déplacement est proposé avant d’être appliqué"
-              >
-                ⠿
-              </span>
-              <button
-                onClick={() => move(m.phaseId, index - 1)}
-                disabled={index === 0}
-                aria-label={`Avancer ${m.title} dans la journée`}
-                style={{ ...moveBtnStyle, opacity: index === 0 ? 0.35 : 1 }}
-              >
-                ↑
-              </button>
-              <button
-                onClick={() => move(m.phaseId, index + 1)}
-                disabled={index === moments.length - 1}
-                aria-label={`Retarder ${m.title} dans la journée`}
-                style={{ ...moveBtnStyle, opacity: index === moments.length - 1 ? 0.35 : 1 }}
-              >
-                ↓
-              </button>
-              <span style={{ fontSize: typography.size.caption, color: K.textMuted, fontFamily: typography.family.mono }}>
-                {String(index + 1).padStart(2, '0')} · {m.time} → {m.endTime}
-              </span>
-            </div>
-
-            {/* ONE DOOR PER PIECE OF INFORMATION.
-                AUDITED: the hour, the title, the place, the vendors and the
-                notes of a moment were editable BOTH here and in the moment's
-                own panel — five duplicates, and no way for a user to know
-                which one was « the real » form. They are shown here, because
-                composing a programme means reading it; they are edited where
-                they belong, on the moment itself. Nothing was removed: the
-                same fields are one click away, and they write to the same
-                place they always did. */}
-            <div style={{ display: 'flex', gap: 14, alignItems: 'flex-start', flexWrap: 'wrap' }}>
-              <div style={{ width: 92 }}>
-                <div style={fieldLabelStyle}>Heure</div>
-                <div style={{ fontFamily: typography.family.mono, fontSize: typography.size.bodyLg, fontWeight: 700 }}>
-                  {m.time}
-                </div>
-              </div>
-              <div style={{ flex: 1, minWidth: 200 }}>
-                <div style={fieldLabelStyle}>Moment</div>
-                <div style={{ fontSize: typography.size.bodyLg, fontWeight: 700 }}>{m.title}</div>
-              </div>
-              <button
-                onClick={() => { store.closeCanvas(); store.openMoment(m.phaseId); }}
-                style={{ ...addBtnStyle, borderStyle: 'solid' }}
-                data-canvas="open-moment"
-                title="Régler ce moment sur la pellicule"
-              >
-                Régler ce moment →
-              </button>
-              <button
-                onClick={() => store.showEventInWorld(m.phaseId)}
-                style={{ ...addBtnStyle, borderStyle: 'solid' }}
-                title="Ouvrir ce moment dans le Monde"
-              >
-                Voir dans le Monde →
-              </button>
-            </div>
-
-            <div style={{ borderTop: `1px solid ${K.line}`, marginTop: 12, paddingTop: 6 }}>
-              {/* PLACE */}
-              <FieldRow label="Lieu">
-                <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-                  <span style={{ fontSize: typography.size.body }}>
-                    {places.find((p) => p.id === m.placeId)?.label ?? 'Aucun lieu'}
-                  </span>
-                  {m.placeId && (
-                    <button onClick={() => store.showPlaceInWorld(m.placeId!)} style={linkBtnStyle}>
-                      Explorer →
-                    </button>
-                  )}
-                </div>
-              </FieldRow>
-
-              {/* VENDORS */}
-              <FieldRow label="Prestataires">
-                <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap', alignItems: 'center' }}>
-                  {m.vendors.map((v) => (
-                    <Chip
-                      key={v.vendorId}
-                      label={v.companyName}
-                      sub={v.explicit ? undefined : 'via lieu'}
-                      tone={v.explicit ? 'default' : 'derived'}
-                      onClick={() => store.setCanvasFocus({ kind: 'vendor', id: v.vendorId })}
-                    />
-                  ))}
-                  {m.vendors.length === 0 && (
-                    <span style={{ fontSize: typography.size.caption, color: K.textMuted }}>
-                      Aucun prestataire sur ce moment
-                    </span>
-                  )}
-                  {/* Attaching or detaching happens on the moment — one door. */}
-                  <button
-                    onClick={() => { store.closeCanvas(); store.openMoment(m.phaseId); }}
-                    style={linkBtnStyle}
-                    data-canvas="vendors-on-moment"
-                  >
-                    Régler sur ce moment →
-                  </button>
-                </div>
-              </FieldRow>
-
-              {/* MUSIC */}
-              <FieldRow label="Musique">
-                <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap', alignItems: 'center' }}>
-                  {m.songs.map((sg) => (
-                    <Chip
-                      key={sg.songId}
-                      label={sg.title}
-                      sub={sg.artist}
-                      onClick={() => store.setCanvasFocus({ kind: 'song', id: sg.songId })}
-                      onRemove={() => store.linkTrackToPhase(sg.songId, null)}
-                    />
-                  ))}
-                  <InlinePicker
-                    placeholder="Ajouter un morceau"
-                    items={store.tracks
-                      .filter((t) => !m.songs.some((x) => x.songId === t.id))
-                      .map((t) => ({ id: t.id, label: t.title, sub: t.artist }))}
-                    onPick={(id) => store.linkTrackToPhase(id, m.phaseId)}
-                    onCreate={() => {
-                      const t = store.createTrack({ title: 'Nouveau morceau', artist: '—', phaseId: m.phaseId });
-                      if (t) store.setCanvasFocus({ kind: 'song', id: t.id });
-                    }}
-                    createLabel="+ Créer un morceau"
-                  />
-                </div>
-              </FieldRow>
-
-              {/* PEOPLE — the real people, by stable id */}
-              <FieldRow label="Personnes">
-                {m.persons.length > 0 ? (
-                  <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap', alignItems: 'center' }}>
-                    {m.persons.map((p) => (
-                      <Chip
-                        key={p.personId}
-                        label={p.name}
-                        onClick={() => store.setCanvasFocus({ kind: 'person', id: p.personId })}
-                      />
-                    ))}
-                  </div>
-                ) : (
-                  <span style={{ fontSize: typography.size.body, color: K.textMuted }}>
-                    Aucune personne rattachée à ce moment.
-                  </span>
-                )}
-              </FieldRow>
-
-              {/* MEDIA attached to the moment itself */}
-              <FieldRow label="Médias">
-                <MediaField ownerKind="event" ownerId={m.phaseId} existing={m.media.length} />
-              </FieldRow>
-
-              {/* NOTES */}
-              <FieldRow label="Notes">
-                <div style={{ fontSize: typography.size.body, color: m.notes ? undefined : K.textMuted, whiteSpace: 'pre-wrap' }}>
-                  {m.notes || 'La note de ce moment s’écrit sur le moment.'}
-                </div>
-              </FieldRow>
-            </div>
-          </article>
-        );
-      })}
-    </div>
-  );
-}
 
 // ===========================================================================
 // D3 — PEOPLE
@@ -478,6 +138,7 @@ function ProgrammeSurface({ model }: { model: ReturnType<typeof projectWorldMode
 
 function PeopleSurface({ model }: { model: ReturnType<typeof projectWorldModel> }) {
   const store = weddingStore;
+  const inWorld = store.getCanvasShell() === 'world';
   const [creating, setCreating] = useState(false);
   const [name, setName] = useState('');
 
@@ -535,6 +196,7 @@ function PeopleSurface({ model }: { model: ReturnType<typeof projectWorldModel> 
 
 function PersonCard({ guestId, personId, focused }: { guestId: string; personId: string; focused: boolean }) {
   const store = weddingStore;
+  const inWorld = store.getCanvasShell() === 'world';
   const person = store.getPerson(personId);
   const guest = store.guests.find((g) => g.id === guestId);
   if (!person || !guest) return null;
@@ -557,7 +219,7 @@ function PersonCard({ guestId, personId, focused }: { guestId: string; personId:
             onCommit={(next) => store.updatePerson(personId, { displayName: next })}
           />
         </div>
-        {store.getAgentForPerson(personId) && (
+        {inWorld && store.getAgentForPerson(personId) && (
           <button onClick={() => store.showPersonInWorld(personId)} style={linkBtnStyle}>Voir dans le Monde →</button>
         )}
       </div>
@@ -738,6 +400,7 @@ function MediaField({ ownerKind, ownerId, existing }: {
 
 function VendorsSurface({ model }: { model: ReturnType<typeof projectWorldModel> }) {
   const store = weddingStore;
+  const inWorld = store.getCanvasShell() === 'world';
   const focusId = store.canvasFocus?.kind === 'vendor' ? store.canvasFocus.id : null;
 
   return (
@@ -770,7 +433,7 @@ function VendorsSurface({ model }: { model: ReturnType<typeof projectWorldModel>
             <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
               <InlineText value={vendor.companyName} size={typography.size.bodyLg} bold
                 onCommit={(next) => store.updateVendor(v.vendorId, { companyName: next })} />
-              {v.canShowInWorld && (
+              {inWorld && v.canShowInWorld && (
                 <button onClick={() => store.showVendorInWorld(v.vendorId)} style={linkBtnStyle}>Voir dans le Monde →</button>
               )}
             </div>
@@ -817,6 +480,7 @@ function VendorsSurface({ model }: { model: ReturnType<typeof projectWorldModel>
 
 function PlacesSurface({ model }: { model: ReturnType<typeof projectWorldModel> }) {
   const store = weddingStore;
+  const inWorld = store.getCanvasShell() === 'world';
   const focusId = store.canvasFocus?.kind === 'place' ? store.canvasFocus.id : null;
 
   return (
@@ -834,7 +498,7 @@ function PlacesSurface({ model }: { model: ReturnType<typeof projectWorldModel> 
       {model.places.places.length === 0 && (
         <CanvasEmpty
           title="Aucun lieu"
-          body="Aucun espace n’est référencé. Un lieu créé ici devient un espace du Monde et peut accueillir un moment."
+          body="Aucun espace n’est référencé. Un lieu créé ici peut accueillir un moment de la journée."
         />
       )}
 
@@ -849,7 +513,9 @@ function PlacesSurface({ model }: { model: ReturnType<typeof projectWorldModel> 
             <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
               <InlineText value={place.name} size={typography.size.bodyLg} bold
                 onCommit={(next) => store.updatePlace(p.placeId, { name: next })} />
-              <button onClick={() => store.showPlaceInWorld(p.placeId)} style={linkBtnStyle}>Explorer →</button>
+              {inWorld && (
+                <button onClick={() => store.showPlaceInWorld(p.placeId)} style={linkBtnStyle}>Explorer →</button>
+              )}
             </div>
             <div style={{ marginTop: 8, borderTop: `1px solid ${K.line}`, paddingTop: 4 }}>
               <FieldRow label="Adresse">
@@ -894,7 +560,6 @@ function PlacesSurface({ model }: { model: ReturnType<typeof projectWorldModel> 
 
 function MusicSurface({ model }: { model: ReturnType<typeof projectWorldModel> }) {
   const store = weddingStore;
-  const phases = store.phases.map((p) => ({ value: p.id, label: p.name }));
 
   return (
     <div style={{ display: 'grid', gap: 12 }}>
@@ -913,13 +578,14 @@ function MusicSurface({ model }: { model: ReturnType<typeof projectWorldModel> }
       {model.music.songs.length === 0 && (
         <CanvasEmpty
           title="Aucun morceau"
-          body="La bande-son est vide. Un morceau créé ici peut être rattaché à un moment, puis recevoir une pochette et un extrait."
+          body="La bande-son est vide. Un morceau créé ici reçoit sa fiche, puis se règle depuis le MomentHub du moment concerné."
         />
       )}
 
       {model.music.songs.map((sg) => {
         const track = store.tracks.find((t) => t.id === sg.songId);
         if (!track) return null;
+        const phaseId = sg.phaseId;
         const isFocus = store.canvasFocus?.kind === 'song' && store.canvasFocus.id === sg.songId;
         return (
           <article key={sg.songId} style={{
@@ -941,8 +607,24 @@ function MusicSurface({ model }: { model: ReturnType<typeof projectWorldModel> }
               <InlineText value={track.artist} onCommit={(next) => { track.artist = next.trim() || track.artist; store.saveCurrentState(); store.notify(); }} />
               <InlineText value={track.duration || null} mono placeholder="--:--"
                 onCommit={(next) => { track.duration = next.trim(); store.saveCurrentState(); store.notify(); }} />
-              <InlineSelect value={sg.phaseId} options={phases} placeholder="Hors programme"
-                onCommit={(next) => store.linkTrackToPhase(sg.songId, next)} />
+              {phaseId ? (
+                <button
+                  onClick={() => {
+                    const returnFrom = store.canvasReturnPhaseId;
+                    const target = returnFrom ?? phaseId;
+                    store.closeCanvas();
+                    if (!returnFrom) store.openMoment(target);
+                  }}
+                  style={linkBtnStyle}
+                  title="La relation se règle dans le MomentHub"
+                >
+                  Régler dans le moment →
+                </button>
+              ) : (
+                <span style={{ fontSize: typography.size.caption, color: K.textMuted }}>
+                  Hors moment
+                </span>
+              )}
               <button onClick={() => store.removeTrack(sg.songId)} style={{ ...addBtnStyle, border: 'none', color: '#b4536b', justifySelf: 'end' }}>
                 Retirer
               </button>
@@ -1231,40 +913,12 @@ function EnrichmentField({ songId, title, artist }: { songId: string; title: str
   );
 }
 
-const pendingBoxStyle: React.CSSProperties = {
-  ...canvasCard,
-  padding: '14px 18px',
-  borderColor: K.lineStrong,
-};
-
-const dragHandleStyle: React.CSSProperties = {
-  cursor: 'grab', userSelect: 'none',
-  width: 26, height: 26, borderRadius: radius.xs,
-  display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-  color: K.textMuted, fontSize: 13, border: `1px solid ${K.line}`, background: K.surface,
-};
-
-const moveBtnStyle: React.CSSProperties = {
-  font: 'inherit', fontSize: 12, lineHeight: 1,
-  width: 26, height: 26, borderRadius: radius.xs, cursor: 'pointer',
-  border: `1px solid ${K.line}`, background: K.surface, color: K.textSecondary,
-};
+// --- helpers / styles -------------------------------------------------------
 
 const candidateStyle: React.CSSProperties = {
   display: 'flex', alignItems: 'center', gap: 10,
   border: `1px solid ${K.line}`, borderRadius: radius.xs, padding: '7px 9px',
 };
-
-// --- helpers / styles -------------------------------------------------------
-
-function parseHour(text: string): number | null {
-  const m = text.trim().match(/^(\d{1,2})\s*[:h]?\s*(\d{2})?$/);
-  if (!m) return null;
-  const h = parseInt(m[1], 10);
-  const min = m[2] ? parseInt(m[2], 10) : 0;
-  if (Number.isNaN(h) || min > 59) return null;
-  return h + min / 60;
-}
 
 const linkBtnStyle: React.CSSProperties = {
   font: 'inherit', fontSize: typography.size.caption, color: K.textPrimary,

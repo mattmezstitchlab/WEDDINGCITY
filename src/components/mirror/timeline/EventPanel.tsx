@@ -187,7 +187,10 @@ export function EventPanel({ onClose }: { onClose: () => void }) {
           style={{ ...linkBtn, marginTop: 12 }}
           onClick={() => {
             onClose();
-            document.querySelector<HTMLElement>('[data-jourj="nav-calendar"]')?.click();
+            // Calendar is a navigation action, not a top-level edit surface.
+            // ProductNav owns the existing modal; this event keeps the two
+            // contexts decoupled without adding another store flag.
+            window.dispatchEvent(new Event('wc-open-calendar'));
           }}
           data-jourj="event-calendar"
         >

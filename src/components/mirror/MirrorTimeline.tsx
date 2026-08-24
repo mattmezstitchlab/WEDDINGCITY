@@ -56,7 +56,11 @@ export function MirrorTimeline({ moments }: { moments: ProgrammeMoment[] }) {
 
                 {/* place — secondary, never competing with the title */}
                 {m.placeName && (
-                  <button onClick={() => store.showEventInWorld(m.phaseId)} style={placeStyle}>
+                  <button
+                    onClick={() => store.openCanvas({ kind: 'place', id: m.placeId! }, undefined, m.phaseId)}
+                    style={placeStyle}
+                    title="Ouvrir la fiche du lieu"
+                  >
                     {m.placeName}
                     <span style={{ opacity: 0.5 }}> ↗</span>
                   </button>
@@ -74,11 +78,13 @@ export function MirrorTimeline({ moments }: { moments: ProgrammeMoment[] }) {
                           {m.persons.map((p) => (
                             <button
                               key={p.personId}
-                              onClick={() => (p.canShowInWorld
-                                ? store.showPersonInWorld(p.personId)
-                                : store.openCanvas({ kind: 'person', id: p.personId }))}
+                              onClick={() => store.openCanvas(
+                                { kind: 'person', id: p.personId },
+                                undefined,
+                                m.phaseId,
+                              )}
                               style={personChipStyle}
-                              title={p.canShowInWorld ? 'Voir dans le Monde' : 'Ouvrir la fiche'}
+                              title="Ouvrir la fiche"
                             >
                               {/* Real photo when one exists, initials otherwise. */}
                               <Portrait name={p.name} source={p.portraitSource} dmcColor={p.dmcColor} size={26} />
@@ -96,9 +102,13 @@ export function MirrorTimeline({ moments }: { moments: ProgrammeMoment[] }) {
                           {m.vendors.map((v) => (
                             <button
                               key={v.vendorId}
-                              onClick={() => store.showVendorInWorld(v.vendorId)}
+                              onClick={() => store.openCanvas(
+                                { kind: 'vendor', id: v.vendorId },
+                                undefined,
+                                m.phaseId,
+                              )}
                               style={contextLinkStyle}
-                              title={v.category}
+                              title={`${v.category} · ouvrir la fiche`}
                             >
                               {v.companyName}
                             </button>
@@ -123,7 +133,11 @@ export function MirrorTimeline({ moments }: { moments: ProgrammeMoment[] }) {
                                 size={38}
                               />
                               <button
-                                onClick={() => store.openCanvas({ kind: 'song', id: sg.songId })}
+                                onClick={() => store.openCanvas(
+                                  { kind: 'song', id: sg.songId },
+                                  undefined,
+                                  m.phaseId,
+                                )}
                                 style={contextLinkStyle}
                                 title={`${sg.artist}${sg.duration ? ` · ${sg.duration}` : ''}`}
                               >

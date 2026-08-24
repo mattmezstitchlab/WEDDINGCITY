@@ -271,15 +271,26 @@ try {
     r.check((site.match(/tone="surface"/g) ?? []).length >= 2,
       'sections alternate between background and paper surface');
 
-    // Cross-links still travel by stable id.
+    // Cross-links stay inside the product and travel by stable id. The World
+    // is deliberately absent from all Mirror actions; moments return to the
+    // Timeline and transverse entities open their existing fiche surface.
     const timeline = readFileSync(path.join(dir, 'MirrorTimeline.tsx'), 'utf8');
-    r.check(/showEventInWorld\(m\.phaseId\)/.test(timeline), 'moment → world uses phaseId');
-    r.check(/showVendorInWorld\(v\.vendorId\)/.test(timeline), 'moment → vendor uses vendorId');
-    r.check(/openCanvas\(\{ kind: 'song', id: sg\.songId \}\)/.test(timeline), 'moment → song uses songId');
+    r.check(/openMoment\(m\.phaseId\)/.test(timeline) && !/showEventInWorld/.test(timeline),
+      'a moment relation returns to the Timeline, never to the World');
+    r.check(/openCanvas\(\s*\{ kind: 'vendor', id: v\.vendorId \}/.test(timeline)
+      && !/showVendorInWorld/.test(timeline),
+      'a provider relation opens its transverse fiche, never the World');
+    r.check(/openCanvas\(\s*\{ kind: 'song', id: sg\.songId \}/.test(timeline),
+      'a song relation opens its transverse fiche by songId');
     const sections = readFileSync(path.join(dir, 'MirrorSections.tsx'), 'utf8');
-    r.check(/showPlaceInWorld\(p\.placeId\)/.test(sections), 'place → world uses placeId');
+    r.check(/openCanvas\(\{ kind: 'place', id: p\.placeId \}\)/.test(sections)
+      && !/showPlaceInWorld/.test(sections),
+      'a place relation opens its transverse fiche, never the World');
     const people = readFileSync(path.join(dir, 'MirrorPeople.tsx'), 'utf8');
-    r.check(/showPersonInWorld\(guest\.personId\)/.test(people), 'person → world uses personId');
+    r.check(/openMoment\(mo\.phaseId\)/.test(people)
+      && /openCanvas\(\{ kind: 'person', id: guest\.personId \}\)/.test(people)
+      && !/showPersonInWorld/.test(people),
+      'a person relation opens the Timeline or its transverse fiche, never the World');
     // Phase FINAL: the portrait is resolved by the PROJECTION (one rule for the
     // whole product) and rendered by the shared <Portrait> primitive.
     const model = readFileSync(path.join(SRC, 'projections', 'worldModel.ts'), 'utf8');

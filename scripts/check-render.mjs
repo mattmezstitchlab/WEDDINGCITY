@@ -48,7 +48,7 @@ import { MirrorCanvasShell } from '../../../src/components/canvas/MirrorCanvasSh
 export async function mount() {
   weddingStore.loadProject('proj_demo_clara_alexandre');
   weddingStore.setProjection('mirror');
-  weddingStore.openCanvas({ kind: 'event', id: weddingStore.phases[2].id });
+  weddingStore.openCanvas({ kind: 'person', id: weddingStore.persons[0].id });
   createRoot(document.getElementById('root')).render(<MirrorCanvasShell />);
 }
 `;
@@ -443,28 +443,19 @@ try {
     const canvas = await render(CANVAS_ENTRY, { width: 1440 });
     const doc = canvas.document;
 
-    // PRODUCT DECISION (convergence de la Timeline): the « Programme » surface
-    // was a second, lighter reading of the day, with its own reordering arrows
-    // — the beginning of a Timeline 2. It is no longer offered here. What this
-    // surface alone can still do — a person's file, a vendor, a place — is
-    // untouched, and the day belongs to the film.
-    //
-    // The guarantees the three removed checks protected are preserved, and
-    // moved to where they now live:
-    //   • a moment opens → acceptance-timeline-convergence (clic → MomentHub);
-    //   • reordering without a mouse → MomentHub « Place dans la journée »,
-    //     asserted just below on the source;
-    //   • the surfaces are reachable without a menu → the rail, now five.
-    r.check(/Ordre du jour/.test(doc.querySelector('h1')?.textContent || ''),
-      'the composition surface is now an ORDER, not a second programme',
+    // PRODUCT DECISION (Passe A): the programme/order tab and its moment rows
+    // are no longer Composer responsibilities. The day belongs to the dark
+    // Timeline and the MomentHub; this shell is a transverse fiche surface.
+    r.check(/Personnes/.test(doc.querySelector('h1')?.textContent || '')
+      && !/Ordre du jour|Programme/.test(doc.querySelector('h1')?.textContent || ''),
+      'the composition surface opens on a transverse fiche, not a second programme',
       doc.querySelector('h1')?.textContent);
     const focus = [...doc.querySelectorAll('div')].map((d) => d.textContent)
-      .find((t) => t && t.startsWith('Focus'));
-    r.check(/Cérémonie/.test(focus || ''), 'and the focused moment is still named', focus?.slice(0, 50));
-    const handles = [...doc.querySelectorAll('[role="button"][aria-label^="Déplacer"]')];
-    r.check(handles.length >= 7, `every moment can still be moved (${handles.length} handles)`);
-    r.check(handles.every((h) => /Flèches haut et bas/.test(h.getAttribute('aria-label'))),
-      'and the keyboard alternative is announced, not mouse-only');
+      .find((t) => t && t.startsWith('Fiche'));
+    r.check(/Personne/.test(focus || ''), 'and the focused entity is still named', focus?.slice(0, 50));
+    r.check(doc.querySelectorAll('[data-canvas="moment-row"]').length === 0
+      && doc.querySelectorAll('[data-canvas="drag-handle"]').length === 0,
+      'Composer exposes no moment editor or ordering gesture');
 
     const { readFileSync: readHub } = await import('node:fs');
     const hubSource = readHub(
@@ -475,7 +466,8 @@ try {
       'and those controls are announced, so reordering never became mouse-only');
 
     const rail = [...doc.querySelectorAll('nav button')].map((b) => b.textContent);
-    r.check(rail.length === 6, 'the six surfaces are reachable without a menu', String(rail.length));
+    r.check(rail.length === 5 && !rail.some((t) => /Ordre du jour|Programme/.test(t)),
+      'the five transverse sheets are reachable without a day editor', String(rail.length));
     r.check(doc.querySelectorAll('[role="dialog"]').length === 0, 'no modal is used');
 
     const failures = contrastFailures(doc, 1440);

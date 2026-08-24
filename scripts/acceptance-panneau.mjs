@@ -92,6 +92,16 @@ const openMomentCard = async (name) => {
   await wait(900);
 };
 
+// LOCATOR ADAPTED (Passe A): Calendrier is reached from the EventPanel rather
+// than occupying a permanent top-level navigation slot.
+const openCalendar = async () => {
+  if (!await click('jourj', 'open-event')) return false;
+  await wait(300);
+  await click('jourj', 'hub-section-calendar');
+  await wait(200);
+  return click('jourj', 'event-calendar');
+};
+
 const noOverflow = async (label) => {
   const m = await p.evaluate(() => ({
     sw: document.documentElement.scrollWidth, vw: window.innerWidth,
@@ -256,18 +266,27 @@ await wait(500);
 
 // --- 5. no duplicate editing in the composition surface ---------------------
 say('\n=== 5. PLUS DE DOUBLE PORTE POUR LA MÊME DONNÉE ===');
-// LOCATOR ADAPTED (convergence de la Timeline): the button is no longer called
-// « Composer » — a designer's word — but « Ouvrir les fiches », which says what
-// it opens. Same surface, same functions.
-const canvasDup = await p.evaluate(() => ({ hasCanvas: /fiches/i.test(document.body.innerText) }));
+// PRODUCT DECISION (Passe A): « Composer » no longer opens a programme. The
+// keyboard entry now opens only the five transverse sheets, while a moment is
+// opened by the Timeline and edited by MomentHub.
+await p.keyboard.press('KeyK');
+await wait(900);
+const canvasDup = await p.evaluate(() => ({
+  hasCanvas: Boolean(document.querySelector('#wc-mirror-canvas')),
+  tabs: [...document.querySelectorAll('#wc-mirror-canvas nav button')].map((b) => b.textContent.trim()),
+  momentRows: document.querySelectorAll('#wc-mirror-canvas [data-canvas="moment-row"]').length,
+}));
 check('la surface des fiches existe toujours', canvasDup.hasCanvas);
+check('elle n’expose que cinq fiches transverses', canvasDup.tabs.length === 5, canvasDup.tabs.join(' | '));
+check('elle ne contient plus de programme ni de moment à éditer', canvasDup.momentRows === 0);
 const canvasSrc = await fetch('http://localhost:5173/src/components/canvas/CanvasCore.tsx').then((r) => r.text());
 check('elle n’écrit plus l’heure d’un moment', !/store\.setPhaseTime\(/.test(canvasSrc));
 check('ni son titre', !/store\.setPhaseTitle\(/.test(canvasSrc));
 check('ni son lieu', !/store\.setPhasePlace\(/.test(canvasSrc));
 check('ni ses notes', !/store\.setPhaseNotes\(/.test(canvasSrc));
 check('ni ses prestataires', !/store\.attachVendorToPhase\(/.test(canvasSrc));
-check('mais elle mène au moment concerné', /openMoment\(/.test(canvasSrc));
+await click('canvas', 'close');
+await wait(500);
 
 // --- 6. every entrance reaches the same moment ------------------------------
 say('\n=== 6. TOUTES LES ENTRÉES MÈNENT AU MÊME MOMENT ===');
@@ -294,7 +313,7 @@ await wait(500);
 
 await p.evaluate(() => document.getElementById('wc-mirror')?.scrollTo({ top: 0 }));
 await wait(400);
-await click('jourj', 'nav-calendar');
+await openCalendar();
 await wait(1300);
 await p.evaluate(() => {
   const day = document.querySelector('[data-cal="scale"][data-scale="day"]');

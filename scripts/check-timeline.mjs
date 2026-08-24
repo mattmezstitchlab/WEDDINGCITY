@@ -288,19 +288,19 @@ try {
     'every responsive value of the page lives in the stylesheet');
 
   // -------------------------------------------------------------------------
-  console.log('\n[7/7] Two gestures, on purpose — and the day’s companion');
+  console.log('\n[7/7] The Timeline owns moment ordering — Composer does not');
   // -------------------------------------------------------------------------
   const canvas = read('components', 'canvas', 'CanvasCore.tsx');
-  r.check(/data-canvas="drag-ghost"/.test(canvas),
-    'in the editing Canvas, only the handle travels with the pointer');
-  r.check(!/opacity: isDragging \? 0\.55/.test(canvas)
-    && /borderColor: isDragging \? K\.textPrimary/.test(canvas),
-    'the dragged block stays exactly in place, outlined rather than displaced');
-  r.check(/proposeMove\(/.test(canvas) && /data-canvas="move-validation"/.test(canvas),
-    'a drop PROPOSES the move instead of applying it');
-  r.check(/Modifications détectées/.test(canvas) && /data-canvas="move-apply"/.test(canvas),
-    'with the consequences written out, and an explicit Appliquer');
-  r.check(/previewMoveToIndex/.test(canvas), 'the preview is computed by the store, not re-implemented');
+  const mirrorCanvas = read('components', 'canvas', 'MirrorCanvasShell.tsx');
+  r.check(!/ProgrammeSurface|data-canvas="drag-ghost"/.test(canvas),
+    'Composer has no second programme or moment-ordering editor');
+  const mirrorCanvasUi = mirrorCanvas.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
+  r.check(!/Ordre du jour/.test(mirrorCanvasUi)
+    && (canvas.match(/\{ id: '(people|vendors|places|music|media)'/g) || []).length === 5,
+    'the product Canvas exposes transverse sheets only');
+  r.check(/data-jourj="moment"/.test(studio)
+    && /data-jourj="drop-time"/.test(studio),
+    'the Timeline remains the visible temporal interaction');
 
   // previewMoveToIndex is arithmetic, so it is executed, not just read.
   const p1 = store.phases[0];
@@ -867,9 +867,10 @@ try {
     r.check(!new RegExp(`store\\.${call}\\(`).test(canvasUx),
       `${what} of a moment is no longer edited in the composition surface`);
   }
-  r.check(/openMoment\(/.test(canvasUx), 'it leads to the moment instead');
+  r.check(!/ProgrammeSurface/.test(canvasUx),
+    'Composer has no moment editor or bypass around the MomentHub');
   r.check(/testId="hub-title"/.test(hubUx) && /store\.setPhaseTitle\(/.test(hubUx),
-    'and the title is edited on the moment itself');
+    'the title is edited on the moment itself');
 
   // The event's own fields have exactly one writer.
   r.check((read('game', 'weddingStore.ts').match(/public updateEvent\(/g) || []).length === 1,
