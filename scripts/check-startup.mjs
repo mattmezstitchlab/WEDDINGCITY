@@ -222,7 +222,10 @@ function checkDeadModules() {
     'components/mirror/WeddingCreationModal.tsx', 'design/editorialAssets.ts',
     // The former landing film and its registry were retired when the landing
     // became a lightweight hero. Keep them inventoried until archival.
-    'components/mirror/timeline/LandingFilm.tsx', 'design/editorialRegistry.ts'];
+    'components/mirror/timeline/LandingFilm.tsx', 'design/editorialRegistry.ts',
+    // Search now lives directly in the landing hero; this former product-wide
+    // overlay is intentionally disconnected pending historical archival.
+    'components/mirror/GlobalSearch.tsx'];
   const unexpected = dead.filter((f) => !KNOWN_DEAD.includes(f));
   const revived = KNOWN_DEAD.filter((f) => !dead.includes(f));
 

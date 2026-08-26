@@ -60,3 +60,14 @@
     font-size: 10px;
   }
 }
+/* Same full-screen studio grammar as import: stable header, one workspace,
+   close action in context. The calendar remains a pure projection. */
+.wc-calendar-head {
+  position: sticky;
+  top: 0;
+  z-index: 4;
+  padding: 18px 0;
+  background: rgba(8,9,11,.96);
+  border-bottom: 1px solid rgba(246,245,243,.1);
+  backdrop-filter: blur(12px);
+}

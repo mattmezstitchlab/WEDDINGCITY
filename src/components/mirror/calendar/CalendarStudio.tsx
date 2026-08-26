@@ -90,9 +90,9 @@ export function CalendarStudio({ onClose }: { onClose: () => void }) {
   const zoomTo = (nextScale: Scale, date: string) => { setAnchor(date); setScale(nextScale); };
 
   return (
-    <div style={overlay} role="dialog" aria-modal="true" aria-label="Calendrier" data-cal="studio">
-      <div style={surface}>
-        <div style={{ display: 'flex', alignItems: 'baseline', gap: 14, flexWrap: 'wrap' }}>
+    <div className="wc-calendar-studio" style={overlay} role="dialog" aria-modal="true" aria-label="Calendrier" data-cal="studio">
+      <div className="wc-calendar-surface" style={surface}>
+        <div className="wc-calendar-head" style={{ display: 'flex', alignItems: 'baseline', gap: 14, flexWrap: 'wrap' }}>
           <span style={eyebrow}>Calendrier</span>
           <span style={{ flex: 1 }} />
           <button onClick={onClose} style={ghost} data-cal="close">Fermer</button>

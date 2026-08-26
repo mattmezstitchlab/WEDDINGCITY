@@ -24,7 +24,7 @@ export function MirrorTimeline({ moments }: { moments: ProgrammeMoment[] }) {
             <div className="wc-story-scene-media" aria-hidden="true">
               <img
                 src={image.src}
-                alt=""
+                alt={`Illustration de ${moment.title}`}
                 width={image.width}
                 height={image.height}
                 loading={index < 1 ? 'eager' : 'lazy'}
