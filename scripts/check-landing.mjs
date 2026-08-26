@@ -16,6 +16,7 @@ import { renderComponent, SRC } from './lib/render-harness.mjs';
 import { createReporter } from './lib/esm-harness.mjs';
 
 const r = createReporter();
+const EVENT_TYPES_COUNT = 14;
 console.log('\u001b[1mAIME — Mirror landing & wedding creation\u001b[0m');
 
 const LANDING_ENTRY = `
@@ -131,7 +132,7 @@ try {
   {
     const { document: doc } = await render(LANDING_ENTRY, { width: 1440 });
     const imgs = [...doc.querySelectorAll('img')];
-    r.check(imgs.length === 1, `the simplified landing carries only its hero picture (${imgs.length})`);
+    r.check(imgs.length === EVENT_TYPES_COUNT, `the landing carries one hero visual per offered event type (${imgs.length})`);
     r.check(imgs.every((i) => (i.getAttribute('src') || '').startsWith('/editorial/')),
       'all of them come from the product asset folder',
       imgs.map((i) => i.getAttribute('src')).filter((s) => !s.startsWith('/editorial/')).join(', '));

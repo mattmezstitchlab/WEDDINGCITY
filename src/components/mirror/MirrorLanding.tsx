@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
 import { weddingStore } from '../../game/weddingStore';
 import { getStoredProjects } from '../../game/persistence';
-import { GRAND_JOUR_HERO } from '../../design/momentImagery';
-import { PRODUCT_NAME, PRODUCT_MARK, PRODUCT_TAGLINE } from '../../design/productIdentity';
+import { PRODUCT_NAME, PRODUCT_MARK } from '../../design/productIdentity';
+import { createSiteRequest } from '../../game/siteRequests';
 import { EVENT_TYPES, eventType, type EventTypeId } from '../../design/eventTypes';
 import { IntakeStudio } from './intake/IntakeStudio';
 import { ImportStudio } from './intake/ImportStudio';
@@ -18,6 +18,13 @@ import './landing.css';
 // missing fact at a time. The rest of the page only explains that trajectory.
 // ---------------------------------------------------------------------------
 
+const HERO_IMAGES = [
+  '/editorial/grandjour-hero.jpg', '/editorial/canvas.jpg', '/editorial/spectacle/regie.jpg',
+  '/editorial/spectacle/musicien.jpg', '/editorial/spectacle/danseuse.jpg', '/editorial/spectacle/coulisses.jpg',
+  '/editorial/covers/cover-01.jpg', '/editorial/covers/cover-02.jpg', '/editorial/covers/cover-03.jpg',
+  '/editorial/hero.jpg', '/editorial/mirror.jpg', '/editorial/world.jpg', '/editorial/immersive.jpg', '/editorial/matter.jpg',
+];
+
 export function MirrorLanding() {
   const store = weddingStore;
   const [projects, setProjects] = useState<ReturnType<typeof getStoredProjects>>([]);
@@ -30,8 +37,16 @@ export function MirrorLanding() {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchRadius, setSearchRadius] = useState(50);
   const [searchRequest, setSearchRequest] = useState(0);
+  const [projectMenuOpen, setProjectMenuOpen] = useState(false);
+  const [heroSlide, setHeroSlide] = useState(0);
+  const [quoteSent, setQuoteSent] = useState(false);
+  const [quote, setQuote] = useState({ name: '', email: '', organisation: '', websiteNeed: '', budget: '', message: '' });
 
   useEffect(() => { setProjects(getStoredProjects()); }, []);
+  useEffect(() => {
+    const timer = window.setInterval(() => setHeroSlide((index) => (index + 1) % EVENT_TYPES.length), 5000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   const create = () => setIntakeOpen(true);
   const start = create;
@@ -42,15 +57,18 @@ export function MirrorLanding() {
       <a className="wc-skip" href="#comment-ca-marche">Aller au fonctionnement</a>
 
       <header className="wc-gj-hero is-centered" data-landing="hero">
-        <img
-          src={GRAND_JOUR_HERO.src}
-          alt={GRAND_JOUR_HERO.alt}
-          width={GRAND_JOUR_HERO.width}
-          height={GRAND_JOUR_HERO.height}
-          loading="eager"
-          decoding="async"
-          className="wc-gj-hero-img"
-        />
+        {EVENT_TYPES.map((eventTypeOption, index) => (
+          <img
+            key={eventTypeOption.id}
+            src={HERO_IMAGES[index % HERO_IMAGES.length]}
+            alt={`Univers ${eventTypeOption.label}`}
+            width={1568}
+            height={656}
+            loading={index === 0 ? 'eager' : 'lazy'}
+            decoding="async"
+            className={`wc-gj-hero-img wc-gj-hero-slide${heroSlide === index ? ' is-active' : ''}`}
+          />
+        ))}
         <div className="wc-gj-hero-scrim" aria-hidden />
 
         <nav className="wc-gj-nav" aria-label="Navigation">
@@ -59,12 +77,21 @@ export function MirrorLanding() {
           </span>
           <span style={{ flex: 1 }} />
           {projects.length > 0 && (
-            <button
-              onClick={() => document.getElementById('mes-evenements')?.scrollIntoView({ behavior: 'smooth' })}
-              className="wc-gj-nav-link"
-            >
-              Mes événements
-            </button>
+            <div className="wc-gj-project-menu">
+              <button onClick={() => setProjectMenuOpen((open) => !open)} className="wc-gj-nav-link" aria-expanded={projectMenuOpen}>
+                Mes événements <span aria-hidden>⌄</span>
+              </button>
+              {projectMenuOpen && (
+                <div role="menu" aria-label="Mes événements">
+                  {projects.map((project) => (
+                    <button key={project.id} role="menuitem" onClick={() => store.loadProject(project.id)}>
+                      <strong>{project.coupleNames || project.title}</strong>
+                      <span>{project.locationName || project.weddingDate || 'À compléter'}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
           )}
         </nav>
 
@@ -73,7 +100,7 @@ export function MirrorLanding() {
           <h1 className="wc-gj-title">
             {PRODUCT_NAME}<span className="wc-gj-mark">{PRODUCT_MARK}</span>
           </h1>
-          <p className="wc-gj-signature">{PRODUCT_TAGLINE}</p>
+          <p className="wc-gj-hero-kind" aria-live="polite">{EVENT_TYPES[heroSlide]?.label}</p>
 
           <div className="wc-gj-bar" data-landing="tool">
             <input
@@ -114,7 +141,7 @@ export function MirrorLanding() {
             ) : (
               <select
                 value={type}
-                onChange={(event) => setType(event.target.value as EventTypeId)}
+                onChange={(event) => { const next = event.target.value as EventTypeId; setType(next); setHeroSlide(Math.max(0, EVENT_TYPES.findIndex((item) => item.id === next))); }}
                 aria-label="Type d’événement"
                 className="wc-gj-bar-type"
                 data-landing="type"
@@ -129,12 +156,6 @@ export function MirrorLanding() {
             </button>
           </div>
 
-          {searchMode && (
-            <div className="wc-gj-search-mode" role="status">
-              <strong>Mode recherche</strong>
-              <span>Écrivez votre besoin, choisissez une distance, puis utilisez la flèche. Les résultats présents sur le site et les compléments publics apparaîtront juste sous ce hero.</span>
-            </div>
-          )}
           <p className="wc-gj-bar-hint" data-landing="hint">
             {searchMode
               ? 'Votre position ne sera demandée qu’au lancement de la recherche.'
@@ -169,27 +190,29 @@ export function MirrorLanding() {
           <p className="wc-simple-demo-note">Démonstration du parcours — vos données restent la seule vérité.</p>
         </section>
 
-        {projects.length > 0 && (
-          <section id="mes-evenements" className="wc-simple-projects" aria-label="Mes événements">
-            <div className="wc-simple-proof-head">
-              <span className="wc-simple-kicker">Reprendre</span>
-              <h2>Mes événements</h2>
+        <section id="creation-site" className="wc-site-quote" aria-label="Demander un site internet">
+          <div className="wc-site-quote-copy">
+            <span className="wc-simple-kicker">Création sur mesure</span>
+            <h2>Votre événement mérite aussi son propre site.</h2>
+            <p>Mini-site public, billetterie, RSVP, programme ou plateforme complète : décrivez le besoin. La demande rejoint l’espace de suivi commercial.</p>
+          </div>
+          <form onSubmit={(event) => {
+            event.preventDefault();
+            createSiteRequest({ ...quote, eventType: eventType(type).label });
+            setQuoteSent(true);
+          }} className="wc-site-quote-form">
+            <label>Nom<input required value={quote.name} onChange={(event) => setQuote({ ...quote, name: event.target.value })} /></label>
+            <label>E-mail<input required type="email" value={quote.email} onChange={(event) => setQuote({ ...quote, email: event.target.value })} /></label>
+            <label>Organisation<input value={quote.organisation} onChange={(event) => setQuote({ ...quote, organisation: event.target.value })} /></label>
+            <label>Besoin<select required value={quote.websiteNeed} onChange={(event) => setQuote({ ...quote, websiteNeed: event.target.value })}><option value="">Choisir…</option><option>Mini-site événementiel</option><option>RSVP et invitations</option><option>Billetterie</option><option>Site professionnel</option><option>Plateforme sur mesure</option></select></label>
+            <label>Budget envisagé<select value={quote.budget} onChange={(event) => setQuote({ ...quote, budget: event.target.value })}><option value="">À définir</option><option>Moins de 1 500 €</option><option>1 500–3 000 €</option><option>3 000–6 000 €</option><option>Plus de 6 000 €</option></select></label>
+            <label className="is-wide">Votre projet<textarea required rows={5} value={quote.message} onChange={(event) => setQuote({ ...quote, message: event.target.value })} placeholder="Objectif, date, fonctionnalités, contenu disponible…" /></label>
+            <div className="wc-site-quote-submit is-wide">
+              <span>{quoteSent ? 'Demande enregistrée. Nous revenons vers vous rapidement.' : 'Réponse personnalisée, sans engagement.'}</span>
+              <button type="submit">Demander un devis <span aria-hidden>→</span></button>
             </div>
-            <ul className="wc-gj-list">
-              {projects.map((project) => (
-                <li key={project.id}>
-                  <button onClick={() => store.loadProject(project.id)} className="wc-gj-list-item">
-                    <span className="wc-gj-list-name">{project.coupleNames || project.title}</span>
-                    <span className="wc-gj-list-meta">
-                      {project.isDemo ? 'démonstration' : project.locationName || project.weddingDate || 'à compléter'}
-                      <span aria-hidden style={{ marginLeft: 12 }}>→</span>
-                    </span>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          </section>
-        )}
+          </form>
+        </section>
       </main>
 
       <footer className="wc-simple-footer">

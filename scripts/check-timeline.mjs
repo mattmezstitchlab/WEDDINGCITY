@@ -433,8 +433,8 @@ try {
     'and one sentence every demonstration must show');
 
   const landingSrc2 = read('components', 'mirror', 'MirrorLanding.tsx');
-  r.check(/GRAND_JOUR_HERO/.test(landingSrc2) && !/EDITORIAL_PEOPLE|EDITORIAL_TRACKS/.test(landingSrc2),
-    'the simplified page loads only its declared hero asset');
+  r.check(/HERO_IMAGES/.test(landingSrc2) && /EVENT_TYPES\.map/.test(landingSrc2) && !/EDITORIAL_PEOPLE|EDITORIAL_TRACKS/.test(landingSrc2),
+    'the simplified page loads only its declared event hero sequence');
   r.check(/wc-simple-footer/.test(landingSrc2) && /Créer un événement/.test(landingSrc2),
     'the closing action returns to the one creation flow');
 

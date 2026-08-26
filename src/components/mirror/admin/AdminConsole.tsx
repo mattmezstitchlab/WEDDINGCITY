@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { weddingStore } from '../../../game/weddingStore';
 import { typography } from '../../../design/tokens';
+import { siteRequests, setSiteRequestStatus, type SiteRequestStatus } from '../../../game/siteRequests';
 
 // ---------------------------------------------------------------------------
 // ADMINISTRATION — a control desk, not a dashboard.
@@ -50,6 +51,7 @@ export function AdminConsole({ onClose }: { onClose: () => void }) {
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<Filter>('tout');
   const [openPersonId, setOpenPersonId] = useState<string | null>(null);
+  const [webRequests, setWebRequests] = useState(() => siteRequests());
   // CHRONOS: the same calendar projection, used here as a filter. No second
   // date arithmetic, no second source — store.calendarRange() decides what
   // « cette semaine » means, once, for the whole product.
@@ -91,6 +93,34 @@ export function AdminConsole({ onClose }: { onClose: () => void }) {
           Rien n’est stocké ici : tout est lu dans vos événements, qui restent la
           seule source de vérité.
         </p>
+
+        <section style={block} data-admin="site-requests">
+          <div style={eyebrow}>Demandes de création de site · {webRequests.length}</div>
+          {webRequests.length === 0 ? (
+            <p style={{ ...muted, marginTop: 10 }}>Aucune demande enregistrée sur cette installation.</p>
+          ) : (
+            <ul style={list}>
+              {webRequests.map((request) => (
+                <li key={request.id} style={line}>
+                  <div style={{ display: 'flex', gap: 10, justifyContent: 'space-between', flexWrap: 'wrap' }}>
+                    <strong>{request.name}{request.organisation ? ` · ${request.organisation}` : ''}</strong>
+                    <span style={muted}>{new Date(request.createdAt).toLocaleDateString('fr-FR')}</span>
+                  </div>
+                  <div style={{ ...muted, marginTop: 5 }}>{request.websiteNeed} · {request.eventType} · {request.budget || 'budget à définir'}</div>
+                  <p style={{ ...muted, color: '#f6f5f3', whiteSpace: 'pre-wrap' }}>{request.message}</p>
+                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+                    <a href={`mailto:${request.email}?subject=${encodeURIComponent(`Votre projet de site — ${request.websiteNeed}`)}`} style={linkBtn}>Répondre</a>
+                    <button onClick={() => window.print()} style={linkBtn}>Imprimer le dossier</button>
+                    <select value={request.status} onChange={(event) => { setSiteRequestStatus(request.id, event.target.value as SiteRequestStatus); setWebRequests(siteRequests()); }} style={chip} aria-label={`Statut de ${request.name}`}>
+                      <option value="nouvelle">Nouvelle</option><option value="qualification">Qualification</option><option value="devis">Devis</option><option value="acceptée">Acceptée</option><option value="archivée">Archivée</option>
+                    </select>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+          <p style={{ ...muted, marginTop: 12 }}>Réception locale active. La réception centralisée et privée nécessite le service serveur authentifié prévu pour la mise en production.</p>
+        </section>
 
         {/* ---------------------------------------------------------- SEARCH */}
         <input
