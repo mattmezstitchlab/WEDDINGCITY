@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { weddingStore } from '../../../game/weddingStore';
 import { typography } from '../../../design/tokens';
-import { momentImage, MOMENT_TEMPLATES } from '../../../design/momentImagery';
+import { MOMENT_TEMPLATES } from '../../../design/momentImagery';
 import { PRODUCT_NAME } from '../../../design/productIdentity';
 import { MomentHub } from './MomentHub';
 import { EventPanel } from './EventPanel';
@@ -121,6 +121,7 @@ export function TimelineStudio() {
   pxRef.current = pxPerHour;
   const [drag, setDrag] = useState<DragState | null>(null);
   const [cursorHour, setCursorHour] = useState<number | null>(null);
+  const [pinnedHour, setPinnedHour] = useState<number | null>(null);
   const [openPhaseId, setOpenPhaseId] = useState<string | null>(null);
   const [composing, setComposing] = useState(false);
   const [draftName, setDraftName] = useState('');
@@ -286,9 +287,18 @@ export function TimelineStudio() {
     if (!panRef.current || !strip) return;
     strip.scrollLeft = panRef.current.startScroll - (e.clientX - panRef.current.startX);
   };
-  const endPan = () => {
+  const endPan = (e?: React.PointerEvent) => {
+    const pan = panRef.current;
+    const strip = stripRef.current;
+    // A click on empty time freezes the vertical ruler at that exact snapped
+    // minute. A real drag remains a pan and never creates an accidental mark.
+    if (e && pan && strip && Math.abs(e.clientX - pan.startX) < 4
+      && !(e.target as HTMLElement).closest('[data-jourj="moment"]')) {
+      const rect = strip.getBoundingClientRect();
+      setPinnedHour(snap(hourForX(e.clientX - rect.left + strip.scrollLeft)));
+    }
     panRef.current = null;
-    stripRef.current?.classList.remove('is-panning');
+    strip?.classList.remove('is-panning');
   };
 
   // --- creating a moment -----------------------------------------------------
@@ -335,12 +345,45 @@ export function TimelineStudio() {
   for (let h = DAY_START; h <= DAY_END; h += tickStep) ticks.push(Number(h.toFixed(4)));
 
   const project = store.currentProject;
+  const eventNavigation = (() => {
+    const eventKind = project.eventTypeId ?? 'mariage';
+    const common = [
+      { label: 'Programme', action: 'programme' },
+      { label: 'Infos pratiques', action: 'event' },
+    ];
+    if (eventKind === 'mariage') return [common[0], { label: 'RSVP', action: 'seating' }, common[1]];
+    if (['spectacle', 'concert', 'festival'].includes(eventKind)) return [common[0], { label: 'Billetterie', action: 'event' }, { label: 'Artistes', action: 'crew' }, common[1]];
+    if (['corporate', 'seminaire', 'convention', 'gala', 'associatif', 'culturel'].includes(eventKind)) return [common[0], { label: 'Participants', action: 'seating' }, { label: 'Intervenants', action: 'crew' }, common[1]];
+    if (eventKind === 'voyage') return [{ label: 'Itinéraire', action: 'programme' }, { label: 'Voyageurs', action: 'seating' }, common[1]];
+    return [common[0], { label: 'Participants', action: 'seating' }, common[1]];
+  })();
+  const openEventDestination = (action: string) => {
+    if (action === 'event') { setEventPanelOpen(true); return; }
+    if (action === 'programme') { stripRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }); return; }
+    document.getElementById('organisation')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    window.setTimeout(() => document.querySelector<HTMLButtonElement>(`[data-org-action="${action}"]`)?.click(), 450);
+  };
   const dayLabel = project.weddingDate
     ? new Date(project.weddingDate).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
     : null;
 
   return (
     <section className="wc-jourj" id="jour-j" aria-label="Le Jour J">
+      {/* A public-site vocabulary above the working film. The entries adapt to
+          the event chosen at intake: RSVP for a wedding, ticketing for a show,
+          participants for a professional day. They lead to existing tools;
+          they do not create a second navigation model. */}
+      <nav className="wc-event-nav" aria-label="Navigation de l’événement" data-jourj="event-nav">
+        <span className="wc-event-nav-name">{project.coupleNames || project.title}</span>
+        <div>
+          {eventNavigation.map((entry) => (
+            <button key={`${entry.label}-${entry.action}`} onClick={() => openEventDestination(entry.action)} data-event-action={entry.action}>
+              {entry.label}
+            </button>
+          ))}
+        </div>
+      </nav>
+
       {/* MON GRAND JOUR — where the day stands, above the film it describes.
           Not a page, not a dashboard: four sentences and a ruler one can open.
           Only drawn once there is a day to say something about. */}
@@ -499,10 +542,11 @@ export function TimelineStudio() {
           {phases.map((phase) => {
             const isDragged = drag?.phaseId === phase.id;
             const duration = phase.endHour - phase.startHour;
+            // Legacy imports sometimes stored the hour inside the title. The
+            // scale already owns time, so showing it twice is visual noise.
+            const displayName = phase.name.replace(/^\s*\d{1,2}\s*[:h]\s*\d{2}\s*[—–-]\s*/, '').trim() || phase.name;
             const left = isDragged ? drag!.left : xForHour(phase.startHour);
             const cardWidth = Math.max(duration * pxPerHour, MIN_CARD_PX);
-            const own = store.media.find((m) => m.ownerKind === 'event' && m.ownerId === phase.id && m.kind === 'image');
-            const image = momentImage(phase.name, own?.source);
             const hub = store.getPhaseHub(phase.id);
             const dense = cardWidth < 150;
             // What this scene is still missing, read from the same engine the
@@ -528,8 +572,6 @@ export function TimelineStudio() {
                 data-phase-id={phase.id}
                 data-start={phase.startHour}
               >
-                <img src={image.src} alt={image.alt} width={image.width} height={image.height} loading="lazy" decoding="async" />
-                <div style={momentScrim} />
                 <div style={momentBody}>
                   <div style={momentHour}>
                     {formatHour(phase.startHour)}
@@ -546,7 +588,7 @@ export function TimelineStudio() {
                   </div>
                   {!dense && (
                     <>
-                      <div style={momentName}>{phase.name}</div>
+                      <div style={momentName}>{displayName}</div>
                       <div style={momentMeta}>
                         {formatDuration(duration)}
                         {hub && hub.persons.length > 0 && ` · ${hub.persons.length} pers.`}
@@ -617,8 +659,25 @@ export function TimelineStudio() {
             </div>
           )}
 
-          {/* where you are in the day */}
-          {cursorHour !== null && !drag && (
+          {/* Where you are in the day. Clicking empty time pins the ruler and
+              turns it into an insertion point rather than a fleeting hover. */}
+          {pinnedHour !== null && (
+            <div className="wc-pinned-time" style={{ left: xForHour(pinnedHour) }} data-jourj="pinned-time">
+              <div>{formatHour(pinnedHour)}</div>
+              <button
+                onPointerDown={(event) => event.stopPropagation()}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  setDraftStart(formatHour(pinnedHour));
+                  setComposing(true);
+                }}
+              >
+                + Ajouter ici
+              </button>
+              <button onPointerDown={(event) => event.stopPropagation()} onClick={() => setPinnedHour(null)} aria-label="Retirer le repère">×</button>
+            </div>
+          )}
+          {cursorHour !== null && pinnedHour === null && !drag && (
             <div style={{ position: 'absolute', left: xForHour(cursorHour), top: 0, bottom: 0, width: 1, background: 'rgba(246,245,243,0.35)', pointerEvents: 'none' }}>
               <div style={cursorBadge} data-jourj="cursor-time">{formatHour(cursorHour)}</div>
             </div>
@@ -757,11 +816,12 @@ export function TimelineStudio() {
       <SimulationBar onOpenMoment={(id) => setOpenPhaseId(id)} />
 
       {openPhaseId && (
-        <MomentHub phaseId={openPhaseId} onClose={() => setOpenPhaseId(null)} />
+        <MomentHub phaseId={openPhaseId} inline onClose={() => setOpenPhaseId(null)} />
       )}
 
-      {/* The same panel geometry, the other context: the day as a whole. */}
-      {eventPanelOpen && <EventPanel onClose={() => setEventPanelOpen(false)} />}
+      {/* Event facts are edited in the same timeline flow, never in a lateral
+          panel that hides the hours being changed. */}
+      {eventPanelOpen && <EventPanel inline onClose={() => setEventPanelOpen(false)} />}
     </section>
   );
 }
@@ -908,10 +968,7 @@ const tickLabel: React.CSSProperties = {
   color: 'rgba(246,245,243,0.62)', letterSpacing: '0.04em',
 };
 
-const momentScrim: React.CSSProperties = {
-  position: 'absolute', inset: 0, pointerEvents: 'none',
-  background: 'linear-gradient(180deg, rgba(8,9,11,0.15) 0%, rgba(8,9,11,0.72) 62%, rgba(8,9,11,0.92) 100%)',
-};
+
 
 const momentBody: React.CSSProperties = {
   position: 'absolute', left: 14, right: 14, bottom: 14, pointerEvents: 'none',

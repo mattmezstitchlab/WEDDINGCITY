@@ -215,7 +215,17 @@ function checkDeadModules() {
   // offered as a destination. The component is kept, unreferenced, rather than
   // deleted, because the World tooling still uses that vocabulary.
   const KNOWN_DEAD = ['SceneShell.tsx', 'game/ChaseCamera.tsx', 'game/GameFlow.tsx', 'game/loop.ts', 'game/mouseLook.ts',
-    'components/ui/ProjectionSwitcher.tsx'];
+    'components/ui/ProjectionSwitcher.tsx',
+    // Convergence: the hero intake replaced the second editorial creation
+    // modal. Its illustration registry became dormant with it. Both remain
+    // inventoried until the historical World code is archived as one lot.
+    'components/mirror/WeddingCreationModal.tsx', 'design/editorialAssets.ts',
+    // The former landing film and its registry were retired when the landing
+    // became a lightweight hero. Keep them inventoried until archival.
+    'components/mirror/timeline/LandingFilm.tsx', 'design/editorialRegistry.ts',
+    // Search now lives directly in the landing hero; this former product-wide
+    // overlay is intentionally disconnected pending historical archival.
+    'components/mirror/GlobalSearch.tsx'];
   const unexpected = dead.filter((f) => !KNOWN_DEAD.includes(f));
   const revived = KNOWN_DEAD.filter((f) => !dead.includes(f));
 

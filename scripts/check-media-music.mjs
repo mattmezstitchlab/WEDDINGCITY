@@ -193,8 +193,8 @@ try {
     // One player, used by both sections.
     const timeline = readFileSync(path.join(SRC, 'components', 'mirror', 'MirrorTimeline.tsx'), 'utf8');
     const sections = readFileSync(path.join(SRC, 'components', 'mirror', 'MirrorSections.tsx'), 'utf8');
-    r.check(/<TrackArt/.test(timeline) && /<TrackArt/.test(sections),
-      'Timeline and Music render the same TrackArt component');
+    r.check(!/<TrackArt/.test(timeline) && /<TrackArt/.test(sections),
+      'the operational programme stays media-free while Music owns TrackArt');
     r.check(!/new Audio\(/.test(timeline) && !/new Audio\(/.test(sections),
       'no section creates its own audio element');
   }

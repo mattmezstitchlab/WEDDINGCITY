@@ -271,11 +271,13 @@ try {
     r.check((site.match(/tone="surface"/g) ?? []).length >= 2,
       'sections alternate between background and paper surface');
 
-    // Cross-links still travel by stable id.
+    // The embedded programme is now the public reading projection. It keeps
+    // stable moment ids but deliberately exposes no World/Canvas edit doors;
+    // editing belongs to the horizontal timeline above it.
     const timeline = readFileSync(path.join(dir, 'MirrorTimeline.tsx'), 'utf8');
-    r.check(/showEventInWorld\(m\.phaseId\)/.test(timeline), 'moment → world uses phaseId');
-    r.check(/showVendorInWorld\(v\.vendorId\)/.test(timeline), 'moment → vendor uses vendorId');
-    r.check(/openCanvas\(\{ kind: 'song', id: sg\.songId \}\)/.test(timeline), 'moment → song uses songId');
+    r.check(/data-story-moment=\{moment\.phaseId\}/.test(timeline), 'public moments keep their stable phaseId');
+    r.check(!/showEventInWorld|showVendorInWorld/.test(timeline), 'the public programme does not open the internal World');
+    r.check(!/openCanvas/.test(timeline), 'the public programme does not open a second editor');
     const sections = readFileSync(path.join(dir, 'MirrorSections.tsx'), 'utf8');
     r.check(/showPlaceInWorld\(p\.placeId\)/.test(sections), 'place → world uses placeId');
     const people = readFileSync(path.join(dir, 'MirrorPeople.tsx'), 'utf8');

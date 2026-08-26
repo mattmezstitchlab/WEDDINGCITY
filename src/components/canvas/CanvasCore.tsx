@@ -930,7 +930,7 @@ function MusicSurface({ model }: { model: ReturnType<typeof projectWorldModel> }
             {sg.coverSource && (
               <img
                 src={sg.coverSource}
-                alt=""
+                alt={`Pochette de ${sg.title}`}
                 loading="lazy"
                 decoding="async"
                 style={{ width: 56, height: 56, objectFit: 'cover', borderRadius: radius.xs, display: 'block', marginBottom: 10 }}
@@ -1189,7 +1189,7 @@ function EnrichmentField({ songId, title, artist }: { songId: string; title: str
                 boxShadow: exact ? `inset 0 0 0 1px ${K.lineStrong}` : 'none',
               }}>
                 {c.artworkUrl && (
-                  <img src={c.artworkUrl} alt="" loading="lazy" decoding="async"
+                  <img src={c.artworkUrl} alt={`Pochette de ${c.title}`} loading="lazy" decoding="async"
                     style={{ width: 44, height: 44, objectFit: 'cover', borderRadius: radius.xs }} />
                 )}
                 <span style={{ flex: 1, minWidth: 0 }}>

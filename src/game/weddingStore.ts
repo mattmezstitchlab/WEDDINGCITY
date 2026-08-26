@@ -1821,15 +1821,15 @@ class WeddingStore {
   public startWeddingCreation(): void {
     this.brandMenuOpen = false;
     this.worldLabModalOpen = false;
-    // Two doors, one room. From the public site (or before any wedding is
-    // open) the editorial surface opens; from inside the 3D world the existing
-    // spatial panel stays. Both end on createRealWedding.
+    // The public product has one door: the landing hero. Any « Créer » action
+    // first returns there; the hero intake owns analysis, clarification and
+    // generation. The legacy spatial panel remains private to the retired World.
     if (!this.projectChosen || this.projection === 'mirror') {
-      this.weddingCreationOpen = true;
-      this.createWeddingModalOpen = false;
-    } else {
-      this.createWeddingModalOpen = true;
+      if (this.projectChosen) this.returnToLanding();
+      else this.notify();
+      return;
     }
+    this.createWeddingModalOpen = true;
     this.notify();
   }
 

@@ -1,260 +1,99 @@
 import { useMemo, useState } from 'react';
 import { weddingStore } from '../../../game/weddingStore';
-import { typography } from '../../../design/tokens';
-import { IconAlert, IconCheck, IconClock } from '../../ui/Icons';
 import { formatHour } from './TimelineStudio';
 import './timeline.css';
 
-// ---------------------------------------------------------------------------
-// « ET SI… » — THE SIMULATION LIVES IN THE FILM, NEVER ON ANOTHER PAGE.
-// ---------------------------------------------------------------------------
-// Two questions a day always asks: what if we run late, and what if it rains.
-//
-// WHAT THIS REALLY DOES: it calls the engine that already exists.
-//   • the delay calls store.propagationImpact() — the very function the drag
-//     gesture uses — so the names, the vendors and the conflicts it shows are
-//     the real ones, computed on the real moments;
-//   • the weather reads store.weatherImpact(), which lists only the moments a
-//     HUMAN declared as happening outside.
-//
-// WHAT IT NEVER DOES: change the day. Nothing here writes until one of the
-// explicit actions is clicked. And there is no weather service: the condition
-// is a slider the user moves, the page says so, and no forecast is displayed.
-// ---------------------------------------------------------------------------
+type Mode = 'weather' | 'delay' | 'cancel' | 'budget' | null;
+
+const CloudIcon = () => <svg viewBox="0 0 48 48" aria-hidden><path d="M13 34h23a8 8 0 0 0 1-15.9A13 13 0 0 0 12.7 21 6.5 6.5 0 0 0 13 34Z" fill="none" stroke="currentColor" strokeWidth="2"/></svg>;
+const ClockIcon = () => <svg viewBox="0 0 48 48" aria-hidden><circle cx="24" cy="24" r="17" fill="none" stroke="currentColor" strokeWidth="2"/><path d="M24 14v11l8 5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/></svg>;
+const CancelIcon = () => <svg viewBox="0 0 48 48" aria-hidden><circle cx="24" cy="24" r="17" fill="none" stroke="currentColor" strokeWidth="2"/><path d="m17 17 14 14m0-14L17 31" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/></svg>;
+const BudgetIcon = () => <svg viewBox="0 0 48 48" aria-hidden><path d="M31 14c-2-2-4-3-7-3-5 0-9 5-9 13s4 13 9 13c3 0 5-1 7-3M11 21h16m-16 6h14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/></svg>;
 
 export function SimulationBar({ onOpenMoment }: { onOpenMoment: (phaseId: string) => void }) {
   const store = weddingStore;
-  const phases = useMemo(
-    () => [...store.phases].sort((a, b) => a.startHour - b.startHour),
-    [store.version],
-  );
-
-  const [open, setOpen] = useState(false);
+  const phases = useMemo(() => [...store.phases].sort((a, b) => a.startHour - b.startHour), [store.version]);
+  const [mode, setMode] = useState<Mode>(null);
   const [phaseId, setPhaseId] = useState('');
-  const [minutes, setMinutes] = useState(15);
-  const [rain, setRain] = useState(0);
-  const [hour, setHour] = useState(() => (phases.length ? Math.round(phases[0].startHour) : 15));
+  const [minutes, setMinutes] = useState(30);
+  const target = phases.find((phase) => phase.id === phaseId) ?? phases[0] ?? null;
+  const impact = target ? store.propagationImpact(target.id, minutes / 60) : null;
+  const weather = store.weatherImpact(target?.startHour ?? 12);
+  const budget = phases.reduce((sum, phase) => sum + (phase.budget?.amount ?? 0), 0);
 
-  // MEASURED: this early return used to sit HERE, before the two useMemo below
-  // — a conditional hook. The day starts empty, so the first moment created
-  // changed the number of hooks and React tore the whole timeline down: five
-  // moments were typed, one survived. Every hook now runs on every render, and
-  // the component decides what to draw at the very end.
-  const target = phases.find((p) => p.id === phaseId) ?? phases[0] ?? null;
-  const impact = useMemo(
-    () => (target ? store.propagationImpact(target.id, minutes / 60) : null),
-    [target?.id, minutes, store.version],
-  );
-  const weather = useMemo(() => store.weatherImpact(hour), [hour, store.version]);
-  const raining = rain >= 50;
+  if (!target) return null;
 
-  if (phases.length === 0 || !target) return null;
-
-  const planB = (name: string, shift: boolean) => {
-    const scenario = store.createScenario(name);
+  const createDelayPlan = () => {
+    const scenario = store.createScenario(`Plan B — ${target.name} +${minutes} min`);
     if (!scenario) return;
-    if (shift) store.scenarioShiftPhase(scenario.id, target.id, minutes / 60, true);
+    store.scenarioShiftPhase(scenario.id, target.id, minutes / 60, true);
     store.setActiveScenario(scenario.id);
     document.getElementById('organisation')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
 
   return (
-    <section className={`wc-sim${raining ? ' is-raining' : ''}`} data-jourj="simulation" data-rain={raining ? 'yes' : 'no'}>
-      <button
-        className="wc-sim-head"
-        onClick={() => setOpen(!open)}
-        aria-expanded={open}
-        data-jourj="sim-toggle"
-      >
-        <span className="wc-sim-title">Et si…</span>
-        <span className="wc-sim-sub">
-          {open
-            ? 'Rien n’est appliqué tant que vous ne le demandez pas.'
-            : 'Un retard, une averse : voir les conséquences avant qu’elles arrivent.'}
-        </span>
-        <span className={`wc-hub-chevron${open ? ' is-open' : ''}`} aria-hidden>▾</span>
-      </button>
+    <section className="wc-command" data-jourj="simulation">
+      <header className="wc-command-head">
+        <div><span>Command center</span><h2>Et si quelque chose change&nbsp;?</h2></div>
+        <p>Explorez une conséquence sans modifier la journée.</p>
+      </header>
 
-      {open && (
-        <div className="wc-sim-body">
-          {/* ------------------------------------------------------- RETARD */}
-          <div className="wc-sim-block" data-jourj="sim-delay">
-            <div className="wc-sim-block-head">
-              <IconClock size={15} color="rgba(246,245,243,0.7)" />
-              <span>Un retard</span>
-            </div>
+      <div className="wc-command-menu">
+        <button onClick={() => setMode(mode === 'weather' ? null : 'weather')} className={mode === 'weather' ? 'is-active' : ''} data-jourj="sim-weather">
+          <CloudIcon /><span>Météo</span><strong>{weather.exposed.length} moment{weather.exposed.length > 1 ? 's' : ''} dehors</strong>
+        </button>
+        <button onClick={() => setMode(mode === 'delay' ? null : 'delay')} className={mode === 'delay' ? 'is-active' : ''} data-jourj="sim-delay">
+          <ClockIcon /><span>Retard</span><strong>+15 · +30 · +60 min</strong>
+        </button>
+        <button onClick={() => setMode(mode === 'cancel' ? null : 'cancel')} className={mode === 'cancel' ? 'is-active' : ''}>
+          <CancelIcon /><span>Annulation</span><strong>Préparer une alternative</strong>
+        </button>
+        <button onClick={() => setMode(mode === 'budget' ? null : 'budget')} className={mode === 'budget' ? 'is-active' : ''}>
+          <BudgetIcon /><span>Budget</span><strong>{budget > 0 ? `${budget.toLocaleString('fr-FR')} € déclarés` : 'À renseigner'}</strong>
+        </button>
+      </div>
 
-            <div className="wc-sim-controls">
-              <select
-                value={target.id}
-                onChange={(e) => setPhaseId(e.target.value)}
-                className="wc-sim-select"
-                aria-label="Quel moment prend du retard"
-                data-jourj="sim-phase"
-              >
-                {phases.map((p) => (
-                  <option key={p.id} value={p.id}>{formatHour(p.startHour)} — {p.name}</option>
-                ))}
+      {mode && (
+        <div className="wc-command-detail">
+          <div className="wc-command-context">
+            <label>Moment
+              <select value={target.id} onChange={(event) => setPhaseId(event.target.value)} data-jourj="sim-phase">
+                {phases.map((phase) => <option key={phase.id} value={phase.id}>{formatHour(phase.startHour)} — {phase.name}</option>)}
               </select>
-              <input
-                type="range"
-                min={5}
-                max={90}
-                step={5}
-                value={minutes}
-                onChange={(e) => setMinutes(Number(e.target.value))}
-                className="wc-sim-range"
-                aria-label="Minutes de retard"
-                data-jourj="sim-minutes"
-              />
-              <span className="wc-sim-value" data-jourj="sim-minutes-value">+{minutes} min</span>
-            </div>
+            </label>
+            <button onClick={() => setMode(null)}>Fermer</button>
+          </div>
 
-            {impact && (
-              <div className="wc-sim-out" data-jourj="sim-consequences">
-                <p className="wc-sim-line">
-                  <strong>{impact.moment.name}</strong> passerait de {formatHour(impact.moment.from)} à{' '}
-                  <strong>{formatHour(impact.moment.to)}</strong>.
-                </p>
-
-                {impact.followers.length > 0 && (
-                  <p className="wc-sim-line" data-jourj="sim-followers">
-                    {impact.followers.length} moment{impact.followers.length > 1 ? 's' : ''} suivrai
-                    {impact.followers.length > 1 ? 'ent' : 't'} :{' '}
-                    {impact.followers.map((f) => `${f.name} ${formatHour(f.to)}`).join(', ')}.
-                  </p>
-                )}
-
-                {(impact.people.length > 0 || impact.vendors.length > 0) && (
-                  <p className="wc-sim-line" data-jourj="sim-people">
-                    {[...impact.people.map((p) => (p.role ? `${p.name} (${p.role})` : p.name)),
-                      ...impact.vendors.map((v) => v.name)].join(', ')}
-                    {' '}— {impact.people.length + impact.vendors.length} concerné
-                    {impact.people.length + impact.vendors.length > 1 ? 's' : ''}.
-                  </p>
-                )}
-
-                {impact.conflicts.length === 0 ? (
-                  <p className="wc-sim-line wc-sim-ok" data-jourj="sim-noconflict">
-                    <IconCheck size={13} color="#a9c6a2" /> Aucun conflit créé par ce décalage.
-                  </p>
-                ) : (
-                  <ul className="wc-sim-conflicts" data-jourj="sim-conflicts">
-                    {impact.conflicts.map((c, i) => (
-                      <li key={i} data-jourj="sim-conflict">
-                        <IconAlert size={13} color="#e0736a" /> <strong>{c.title}</strong> — {c.detail}
-                      </li>
-                    ))}
-                  </ul>
-                )}
-
-                <div className="wc-sim-actions">
-                  <button
-                    onClick={() => { store.shiftPhaseAndFollowing(target.id, target.startHour + minutes / 60); }}
-                    className="wc-sim-primary"
-                    data-jourj="sim-apply"
-                  >
-                    Décaler pour de vrai
-                  </button>
-                  <button
-                    onClick={() => planB(`Plan B — ${target.name} +${minutes} min`, true)}
-                    className="wc-sim-ghost"
-                    data-jourj="sim-planb"
-                  >
-                    Créer un plan B
-                  </button>
-                  <button onClick={() => onOpenMoment(target.id)} className="wc-sim-ghost" data-jourj="sim-open">
-                    Ouvrir ce moment
-                  </button>
-                  <button onClick={() => setMinutes(15)} className="wc-sim-ghost" data-jourj="sim-reset">
-                    Ne rien changer
-                  </button>
-                </div>
+          {mode === 'delay' && impact && (
+            <div data-jourj="sim-consequences">
+              <div className="wc-command-presets" aria-label="Durée du retard">
+                {[15, 30, 60].map((value) => <button key={value} onClick={() => setMinutes(value)} className={minutes === value ? 'is-active' : ''} data-jourj="sim-minutes">+{value} min</button>)}
               </div>
-            )}
-          </div>
-
-          {/* ------------------------------------------------------- MÉTÉO */}
-          <div className="wc-sim-block" data-jourj="sim-weather">
-            <div className="wc-sim-block-head">
-              <span aria-hidden>☀</span>
-              <span>Une averse</span>
+              <p><strong>{impact.moment.name}</strong> passerait à {formatHour(impact.moment.to)}. {impact.followers.length} moment{impact.followers.length > 1 ? 's' : ''} suivrai{impact.followers.length > 1 ? 'ent' : 't'}.</p>
+              <p>{impact.conflicts.length ? `${impact.conflicts.length} conflit(s) à examiner.` : 'Aucun conflit détecté avec les informations connues.'}</p>
+              <div className="wc-command-actions">
+                <button onClick={() => store.shiftPhaseAndFollowing(target.id, target.startHour + minutes / 60)} data-jourj="sim-apply">Appliquer le décalage</button>
+                <button onClick={createDelayPlan} data-jourj="sim-planb">Créer un plan B</button>
+                <button onClick={() => onOpenMoment(target.id)} data-jourj="sim-open">Ouvrir le moment</button>
+              </div>
             </div>
+          )}
 
-            <div className="wc-sim-controls">
-              <input
-                type="range"
-                min={0}
-                max={100}
-                step={10}
-                value={rain}
-                onChange={(e) => setRain(Number(e.target.value))}
-                className="wc-sim-range"
-                aria-label="Du beau temps à la pluie"
-                data-jourj="sim-rain"
-              />
-              <span aria-hidden>☔</span>
-              <input
-                type="range"
-                min={Math.floor(phases[0].startHour)}
-                max={Math.ceil(phases[phases.length - 1].endHour)}
-                step={1}
-                value={hour}
-                onChange={(e) => setHour(Number(e.target.value))}
-                className="wc-sim-range"
-                aria-label="À quelle heure"
-                data-jourj="sim-hour"
-              />
-              <span className="wc-sim-value" data-jourj="sim-hour-value">{formatHour(hour)}</span>
+          {mode === 'weather' && (
+            <div data-jourj="sim-weather-out">
+              <div className="wc-command-weather"><CloudIcon /><strong>Averse hypothétique</strong><span>Pas de météo réelle connectée</span></div>
+              {weather.exposed.length ? <p>{weather.exposed.map((moment) => moment.name).join(', ')} {weather.exposed.length > 1 ? 'sont déclarés' : 'est déclaré'} en extérieur autour de cette heure.</p> : <p>Aucun moment n’est déclaré en extérieur autour de {formatHour(target.startHour)}.</p>}
+              <div className="wc-command-actions"><button onClick={() => onOpenMoment(target.id)}>Vérifier l’abri de ce moment</button></div>
             </div>
+          )}
 
-            <div className="wc-sim-out" data-jourj="sim-weather-out">
-              <p className="wc-sim-note" data-jourj="sim-weather-honesty">
-                Aucune météo réelle n’est disponible ici : ce curseur est une hypothèse
-                que vous posez, pas une prévision. Seuls les moments que vous avez
-                déclarés en extérieur sont concernés — le produit ne le devine jamais.
-              </p>
+          {mode === 'cancel' && (
+            <div><p>Une annulation ne doit jamais supprimer silencieusement un moment. Ouvrez-le pour préparer une alternative, déplacer ses personnes ou créer un scénario.</p><div className="wc-command-actions"><button onClick={() => onOpenMoment(target.id)}>Préparer l’alternative</button></div></div>
+          )}
 
-              {!raining ? (
-                <p className="wc-sim-line wc-sim-ok">
-                  <IconCheck size={13} color="#a9c6a2" /> Beau temps à {formatHour(hour)} : rien à prévoir.
-                </p>
-              ) : weather.exposed.length === 0 ? (
-                <p className="wc-sim-line" data-jourj="sim-weather-none">
-                  À {formatHour(hour)}, aucun moment n’est déclaré en extérieur.
-                  {weather.undeclared > 0
-                    && ` ${weather.undeclared} moment${weather.undeclared > 1 ? 's' : ''} n’${weather.undeclared > 1 ? 'ont' : 'a'} rien déclaré : ouvrez-le${weather.undeclared > 1 ? 's' : ''} pour le dire.`}
-                </p>
-              ) : (
-                <>
-                  <ul className="wc-sim-conflicts" data-jourj="sim-exposed">
-                    {weather.exposed.map((m) => (
-                      <li key={m.id} data-jourj="sim-exposed-moment">
-                        <IconAlert size={13} color="#e0a06a" /> <strong>{m.name}</strong>{' '}
-                        {formatHour(m.startHour)} — déclaré en extérieur, sous la pluie simulée.
-                      </li>
-                    ))}
-                  </ul>
-                  <div className="wc-sim-actions">
-                    <button
-                      onClick={() => planB(`Plan B — pluie à ${formatHour(hour)}`, false)}
-                      className="wc-sim-primary"
-                      data-jourj="sim-weather-planb"
-                    >
-                      Créer un plan B pluie
-                    </button>
-                    <button
-                      onClick={() => onOpenMoment(weather.exposed[0].id)}
-                      className="wc-sim-ghost"
-                      data-jourj="sim-weather-open"
-                    >
-                      Ouvrir {weather.exposed[0].name}
-                    </button>
-                  </div>
-                </>
-              )}
-            </div>
-          </div>
+          {mode === 'budget' && (
+            <div><p>{target.budget?.amount ? `${target.budget?.amount.toLocaleString('fr-FR')} € sont déclarés sur ce moment.` : 'Aucun budget n’est encore déclaré sur ce moment.'} Le total connu de la journée est de {budget.toLocaleString('fr-FR')} €.</p><div className="wc-command-actions"><button onClick={() => onOpenMoment(target.id)}>Modifier le budget du moment</button></div></div>
+          )}
         </div>
       )}
     </section>

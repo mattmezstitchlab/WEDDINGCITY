@@ -218,15 +218,13 @@ try {
   // PRODUCT DECISION (convergence pass): the navigation is the definitive one —
   // the places of a wedding day, plus search, my weddings and create. Still one
   // bar, still no sidebar, and still nothing that leads to a 3D world.
-  // PRODUCT DECISION (convergence de la Timeline): eight destinations became
-  // four — « La journée », « Les gens », « L'organisation », « Souvenirs ».
-  // Nothing was removed: the merged doors keep their own hooks in `aliases`,
-  // so every destination that existed still exists and is still named.
-  for (const tag of ['nav-today', 'nav-jourj', 'nav-people', 'nav-organisation',
-    'nav-music', 'nav-documents', 'nav-memories', 'nav-search', 'nav-weddings', 'nav-create']) {
-    r.check(site.includes(`data-jourj="${tag}"`) || site.includes(`tag: '${tag}'`)
-      || site.includes(`'${tag}'`),
-      `the navigation still carries ${tag}`);
+  // The timeline header has one navigation owner (the wordmark menu) and one
+  // immediate temporal tool (the calendar). Search/create/portfolio actions
+  // belong to the landing and must not be duplicated here.
+  r.check(/data-jourj="brand-menu"/.test(site), 'the wordmark owns timeline navigation');
+  r.check(/data-jourj="nav-calendar"/.test(site), 'the calendar remains the single header shortcut');
+  for (const tag of ['nav-search', 'nav-weddings', 'nav-create', 'nav-admin']) {
+    r.check(!site.includes(`data-jourj="${tag}"`), `the timeline header no longer duplicates ${tag}`);
   }
 
   const storeSrc = read('game', 'weddingStore.ts');
@@ -258,10 +256,9 @@ try {
 
   r.check(/PRODUCT_NAME/.test(landing) && /LE GRAND JOUR/.test(identity),
     'the product is named once, and the page imports that name');
-  r.check(/<LandingFilm/.test(landing), 'the public page renders the film itself');
-  r.check(landing.indexOf('<LandingFilm') - landing.indexOf('wc-gj-hero') > 0
-    && !/wc-gj-cols[\s\S]{0,400}<LandingFilm/.test(landing),
-    'and it comes immediately after the hero, before any explanation');
+  r.check(/wc-simple-proof/.test(landing), 'the public page keeps one concise proof section');
+  r.check(landing.indexOf('wc-simple-proof') > landing.indexOf('wc-gj-hero'),
+    'and it comes immediately after the hero');
   // Only the component name still contains "Mirror"; no COPY does.
   const landingCopy = landing.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '')
     .replace(/MirrorLanding/g, '');
@@ -436,12 +433,10 @@ try {
     'and one sentence every demonstration must show');
 
   const landingSrc2 = read('components', 'mirror', 'MirrorLanding.tsx');
-  r.check(/EDITORIAL_PEOPLE/.test(landingSrc2) && /EDITORIAL_TRACKS/.test(landingSrc2),
-    'the public page uses the registry rather than inventing its own assets');
-  r.check(/data-landing="closing-title"/.test(landingSrc2)
-    && /Tout commence par un moment/.test(landingSrc2)
-    && /Un mariage commence par un oui/.test(landingSrc2),
-    'the closing line is universal, with a wedding variant');
+  r.check(/HERO_IMAGES/.test(landingSrc2) && /EVENT_TYPES\.map/.test(landingSrc2) && !/EDITORIAL_PEOPLE|EDITORIAL_TRACKS/.test(landingSrc2),
+    'the simplified page loads only its declared event hero sequence');
+  r.check(/wc-simple-footer/.test(landingSrc2) && /Créer un événement/.test(landingSrc2),
+    'the closing action returns to the one creation flow');
 
   // A scenario is a branch: created, changed, compared, applied, discarded —
   // and the real day never moves on its own. Executed, not read.
@@ -525,14 +520,13 @@ try {
     'and asks the one thing it must not guess');
 
   const page = read('components', 'mirror', 'MirrorLanding.tsx');
-  r.check(/data-landing="demo-head"/.test(page) && /MATT/.test(page) && /démonstration/.test(page),
-    'the film carries a concrete example, labelled as a demonstration');
-  r.check(/data-landing="causality"/.test(page)
-    && page.indexOf('data-landing="causality"') > page.indexOf('<LandingFilm'),
-    'the causality control sits on the film, not in a far section');
-  r.check(/data-landing="rail"/.test(page) && /Plan B/.test(page),
-    'the scenario section compares two rails');
-  r.check(/data-landing="doc-row"/.test(page), 'and documents hang on hours');
+  r.check(/Une phrase suffit pour commencer/.test(page),
+    'the landing explains the path instead of simulating a wedding');
+  r.check(!/data-landing="causality"/.test(page),
+    'causality stays in the real timeline, not on the landing');
+  r.check(!/data-landing="rail"/.test(page),
+    'scenario demonstrations no longer duplicate the real tool');
+  r.check(!/data-landing="doc-row"/.test(page), 'documents are no longer staged as fake examples');
   // PRODUCT DECISION (convergence finale): two sequences were added — IMPORTER
   // LE CHAOS and L'ADMINISTRATION INVISIBLE — both demanded by the brief and
   // both demonstrating a real function. The ceiling moves from 10 to 12; the
@@ -617,10 +611,9 @@ try {
   r.check(/Ma journée/.test(crewUi), 'and it is called « Ma journée »');
 
   const landingCrew = read('components', 'mirror', 'MirrorLanding.tsx');
-  r.check(/data-landing="spectacle"/.test(landingCrew)
-    && /Un moment ne se produit jamais par hasard/.test(landingCrew),
-    'the public page carries the spectacle section');
-  r.check(/SPECTACLE_CRAFTS/.test(landingCrew), 'with the crafts named from the registry');
+  r.check(!/data-landing="spectacle"/.test(landingCrew),
+    'the public page no longer carries a catalogue-like spectacle section');
+  r.check(!/SPECTACLE_CRAFTS/.test(landingCrew), 'crafts stay in the real organisation tool');
 
   // -------------------------------------------------------------------------
   console.log('\n[12/15] ORCHESTRATION — several events, one identity, no second base');
@@ -775,13 +768,10 @@ try {
   r.check(typeof store.currentRole() === 'string' && typeof store.isOrchestrator() === 'boolean',
     'the product can ask who is looking');
   const siteSrc = read('components', 'mirror', 'MirrorSite.tsx');
-  // PRODUCT DECISION (convergence de la Timeline): isOrchestrator() answers
-  // « owner or planner » — and a couple IS the owner of their own wedding, so
-  // the control desk was appearing inside their day. The gate is now
-  // pilotsSeveralEvents(): the planner role, or more than one real event in
-  // this browser. A couple with one wedding never sees it.
-  r.check(/store\.pilotsSeveralEvents\(\)/.test(siteSrc) && /nav-admin/.test(siteSrc),
-    'and the administration is offered only to those who really pilot several events');
+  // Administration is no longer permanent chrome: the wordmark and landing
+  // own portfolio navigation, independently of the current event role.
+  r.check(!/data-jourj="nav-admin"/.test(siteSrc),
+    'administration is not duplicated in the event header');
 
   // -------------------------------------------------------------------------
   console.log('\n[14/15] CHRONOS — the calendar is a projection, not a second agenda');
@@ -850,8 +840,8 @@ try {
   r.check(/export function PanelSection/.test(sectionSrc), 'there is one folding section component');
   r.check(/from '\.\/PanelSection'/.test(hubUx) && /from '\.\/PanelSection'/.test(eventPanel),
     'and both the moment and the event use it — not two mechanics');
-  r.check(/className="wc-hub"/.test(eventPanel),
-    'the event panel reuses the moment panel geometry — one shell');
+  r.check(/className=\{`wc-hub\$\{inline \? ' is-inline' : ''\}`\}/.test(eventPanel),
+    'the event editor reuses the moment shell inline in the timeline');
   // Seven since « Scénarios » joined: a plan B now has an obvious door on the
   // moment it concerns, instead of only living in the propagation bar.
   r.check((hubUx.match(/<PanelSection/g) || []).length === 7,

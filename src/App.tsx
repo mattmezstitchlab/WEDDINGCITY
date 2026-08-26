@@ -19,7 +19,6 @@ const WorldCanvasShell = lazy(() => import('./components/canvas/WorldCanvasShell
 const MirrorCanvasShell = lazy(() => import('./components/canvas/MirrorCanvasShell').then((m) => ({ default: m.MirrorCanvasShell })));
 import { ProjectionVeil } from './components/ui/ProjectionVeil';
 
-const WeddingCreationModal = lazy(() => import('./components/mirror/WeddingCreationModal').then((m) => ({ default: m.WeddingCreationModal })));
 const MirrorSite = lazy(() => import('./components/mirror/MirrorSite').then((m) => ({ default: m.MirrorSite })));
 const GuestConstellation = lazy(() => import('./components/ui/GuestConstellation').then((m) => ({ default: m.GuestConstellation })));
 const SystemNerveCenterModal = lazy(() => import('./components/ui/SystemNerveCenterModal').then((m) => ({ default: m.SystemNerveCenterModal })));
@@ -86,13 +85,8 @@ export default function App() {
         return;
       }
       if (!inWorld) {
-        // The product surface keeps exactly one keyboard affordance: opening
-        // the composition panel on the day currently open.
-        if (e.code === 'KeyK' && !weddingStore.showIdentityModal) {
-          if (!weddingStore.projectChosen) weddingStore.startWeddingCreation();
-          else if (weddingStore.canvasOpen) weddingStore.closeCanvas();
-          else weddingStore.openCanvas();
-        }
+        // The public product has no hidden editor shortcut. Every moment is
+        // edited through its right panel; creation starts in the landing hero.
         return;
       }
 
@@ -140,11 +134,10 @@ export default function App() {
 
   return (
     <div style={{ width: '100vw', height: '100vh', overflow: 'hidden', position: 'relative', background: '#08090d' }}>
-      {/* 1. 3D Architectural Worldmap & Interior Engine.
-             The WORLD projection. It stays mounted when Mirror is on screen so
-             switching back is instant, but its render loop is paused (see
-             WeddingWorld) rather than drawing behind an opaque page. */}
-      <WeddingWorld />
+      {/* The retired 3D World is mounted only when its own projection is
+          explicitly active. Mounting it behind the lazy product surface caused
+          its badges and black scene to flash during every cold start. */}
+      {weddingStore.projection === 'world' && <WeddingWorld />}
 
       {/* PRODUCT DECISION (Jour J pass): there is no dimension selector any
           more. The product is the Mirror — the public site, then the timeline
@@ -194,18 +187,10 @@ export default function App() {
         </Suspense>
       )}
 
-      {/* Creating a wedding from the public site happens on the site, in its
-          own language — not by dropping the visitor into the 3D panel. */}
-      {weddingStore.weddingCreationOpen && (
-        <Suspense fallback={null}>
-          <WeddingCreationModal />
-        </Suspense>
-      )}
-
-      {/* MIRROR — the editorial projection. Covers the world surface while
-          active; the underlying world state is untouched. */}
+      {/* The product owns the first paint. While its lazy chunk is loading we
+          show a neutral brand surface, never the retired World underneath. */}
       {weddingStore.projection === 'mirror' && (
-        <Suspense fallback={null}>
+        <Suspense fallback={<ProductBoot />}>
           <MirrorSite />
         </Suspense>
       )}
@@ -485,6 +470,24 @@ export default function App() {
           weddingStore.notify();
         }} />
       )}
+    </div>
+  );
+}
+
+function ProductBoot() {
+  return (
+    <div
+      role="status"
+      aria-label="Chargement du Grand Jour"
+      style={{
+        position: 'fixed', inset: 0, zIndex: 790, display: 'grid', placeItems: 'center',
+        background: '#08090b', color: '#f6f5f3',
+        fontFamily: 'ui-sans-serif, -apple-system, system-ui, sans-serif',
+      }}
+    >
+      <span style={{ fontSize: 12, fontWeight: 700, letterSpacing: '0.22em' }}>
+        LE GRAND JOUR<span style={{ fontSize: 8, verticalAlign: 'super', marginLeft: 2 }}>®</span>
+      </span>
     </div>
   );
 }

@@ -16,6 +16,7 @@ import { renderComponent, SRC } from './lib/render-harness.mjs';
 import { createReporter } from './lib/esm-harness.mjs';
 
 const r = createReporter();
+const EVENT_TYPES_COUNT = 14;
 console.log('\u001b[1mAIME — Mirror landing & wedding creation\u001b[0m');
 
 const LANDING_ENTRY = `
@@ -74,8 +75,8 @@ try {
     // product) obtained by demonstration rather than by copy.
     r.check(!/World|Mirror|Canvas/.test(text),
       'the landing no longer explains three surfaces');
-    r.check(/Une journée. Un seul fil/.test(text) || /pellicule/.test(text),
-      'it shows the film of the day instead');
+    r.check(/Une phrase suffit pour commencer/.test(text) && /Une timeline, un panneau/.test(text),
+      'it explains the single path instead of demonstrating every module');
     r.check(/Démonstration/i.test(text),
       'and the demonstration says that it is one');
     const jargon = ['store', 'localStorage', 'projection pure', 'World Model', 'MediaAsset']
@@ -109,10 +110,11 @@ try {
     r.check(['Mariage', 'Festival', 'Concert', 'Gala', 'Spectacle', 'Journée', 'Mission', 'Voyage']
       .every((label) => [...typeOptions].some((o) => o.textContent.trim() === label)),
       'and it really carries the kinds of day the engine knows');
-    r.check(/const start = \(\) =>/.test(landingSrc) && /: create\(\)/.test(landingSrc),
-      'and every way in ends on the same single handler');
-    r.check(/store\.startWeddingCreation\(\)/.test(landingSrc),
-      'which is the store\u2019s one creation entry point');
+    r.check(/const create = \(\) => setIntakeOpen\(true\)/.test(landingSrc)
+      && /const start = create/.test(landingSrc),
+      'and every way in ends on the same hero intake handler');
+    r.check(/<IntakeStudio/.test(landingSrc),
+      'which opens the one intake and clarification surface');
     r.check(!/createRealWedding\(/.test(landingSrc),
       'the landing never reimplements the creation logic');
 
@@ -130,7 +132,7 @@ try {
   {
     const { document: doc } = await render(LANDING_ENTRY, { width: 1440 });
     const imgs = [...doc.querySelectorAll('img')];
-    r.check(imgs.length >= 5, `the landing carries real pictures (${imgs.length})`);
+    r.check(imgs.length === EVENT_TYPES_COUNT, `the landing carries one hero visual per offered event type (${imgs.length})`);
     r.check(imgs.every((i) => (i.getAttribute('src') || '').startsWith('/editorial/')),
       'all of them come from the product asset folder',
       imgs.map((i) => i.getAttribute('src')).filter((s) => !s.startsWith('/editorial/')).join(', '));
@@ -169,34 +171,31 @@ try {
   }
 
   // ---------------------------------------------------------------------------
-  console.log('\n[1c/4] Creating a wedding is one flow behind two doors');
+  console.log('\n[1c/4] Creating an event has one public door');
   // ---------------------------------------------------------------------------
   {
-    const modal = readFileSync(path.join(SRC, 'components', 'mirror', 'WeddingCreationModal.tsx'), 'utf8');
+    const intake = readFileSync(path.join(SRC, 'components', 'mirror', 'intake', 'IntakeStudio.tsx'), 'utf8');
     const store = readFileSync(path.join(SRC, 'game', 'weddingStore.ts'), 'utf8');
     const app = readFileSync(path.join(SRC, 'App.tsx'), 'utf8');
 
-    r.check(/store\.createRealWedding\(\{/.test(modal),
-      'the editorial modal ends on the one real creation method');
-    r.check(!/INITIAL_|applyDomain|saveWeddingProject/.test(modal),
-      'and reimplements none of its logic');
+    r.check(/store\.createRealWedding\(\{/.test(intake),
+      'the hero intake ends on the one real creation method');
+    r.check(/type Stage = 'reading' \| 'clarify' \| 'review'/.test(intake),
+      'missing information is clarified before review');
+    r.check(/clarificationOrder[^=]*= \['principals', 'date', 'place', 'headcount'\]/.test(intake),
+      'headline facts are requested in one explicit order');
+    r.check(/data-intake="clarification-field"/.test(intake),
+      'only one clarification field is rendered at a time');
     r.check(/if \(!this\.projectChosen \|\| this\.projection === 'mirror'\)/.test(store),
-      'startWeddingCreation routes to the editorial surface from the site');
+      'product creation actions return to the landing hero');
     r.check(/this\.createWeddingModalOpen = true;/.test(store),
-      'and keeps the existing spatial panel for the World');
-    r.check(/weddingStore\.weddingCreationOpen && \(/.test(app),
-      'the app mounts the editorial surface');
-
-    // Modal behaviour that a user actually feels.
-    r.check(/role="dialog"/.test(modal) && /aria-modal="true"/.test(modal), 'it is a real dialog');
-    r.check(/e\.key === 'Escape'/.test(modal), 'Escape closes it');
-    r.check(/document\.body\.style\.overflow = 'hidden'/.test(modal)
-      && /document\.body\.style\.overflow = previous/.test(modal),
-      'the page behind does not scroll, and gets its scroll back on close');
-    r.check(/shiftKey && document\.activeElement === first/.test(modal),
-      'focus is trapped inside');
-    r.check(/aria-label="Fermer et revenir au site"/.test(modal), 'and closing is labelled');
-    r.check(/Générer notre monde/.test(modal), 'the last step names what happens');
+      'the retired World keeps its private spatial panel');
+    r.check(!/WeddingCreationModal/.test(app),
+      'the duplicate editorial creation modal is no longer mounted');
+    r.check(/role="dialog"/.test(intake) && /aria-modal="true"/.test(intake),
+      'the intake is a real dialog');
+    r.check(/Créer la timeline du Jour J/.test(intake),
+      'the final action names the single source-of-truth interface');
   }
 
   // ---------------------------------------------------------------------------
@@ -208,7 +207,8 @@ try {
     r.check(!/devient un monde/.test(text), 'the landing steps aside');
     r.check(/Clara/.test(text), 'and the wedding is the subject again');
     const sections = [...doc.querySelectorAll('section[id^="mirror-"]')];
-    r.check(sections.length >= 6, `its sections render (${sections.length})`);
+    r.check(sections.length === 1 && doc.querySelectorAll('[data-story-moment]').length > 0,
+      `its single immersive programme renders (${sections.length} section)`);
   }
 
   // ---------------------------------------------------------------------------
@@ -276,7 +276,7 @@ try {
     const { document: doc } = await render(LANDING_ENTRY, { width: 390 });
     r.check(!!doc.querySelector('[data-landing="brief"]')
       && !!doc.querySelector('[data-landing="hero-create"]')
-      && !!doc.querySelector('[data-landing="files"]'),
+      && !!doc.querySelector('[data-landing="import-label"]'),
       'the whole tool is still rendered on a phone');
   }
 } finally {

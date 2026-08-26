@@ -12,7 +12,6 @@ import { MirrorLanding } from './MirrorLanding';
 import { TimelineStudio } from './timeline/TimelineStudio';
 import { PRODUCT_NAME, PRODUCT_MARK } from '../../design/productIdentity';
 import { OrganisationSection } from './organisation/OrganisationSection';
-import { GlobalSearch } from './GlobalSearch';
 import { AdminConsole } from './admin/AdminConsole';
 import { CalendarStudio } from './calendar/CalendarStudio';
 import './mirror.css';
@@ -72,83 +71,61 @@ export function MirrorSite() {
  */
 function ProductNav() {
   const store = weddingStore;
-  const [searchOpen, setSearchOpen] = useState(false);
-  const [adminOpen, setAdminOpen] = useState(false);
   const [calendarOpen, setCalendarOpen] = useState(false);
+  const [adminOpen, setAdminOpen] = useState(false);
+  const [projectMenuOpen, setProjectMenuOpen] = useState(false);
   const go = (id: string) => {
     const el = document.getElementById(id);
     el?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
 
-  // -------------------------------------------------------------------------
-  // WHAT YOU SEE DEPENDS ON WHAT YOU DO HERE.
-  //
-  // One engine, one navigation — but a couple living their own day has no use
-  // for delegation, travel or cross-event administration, and showing it to
-  // them is showing them someone else's job. The product asks the permission
-  // model that already exists (ProjectMembership → store.currentRole()); it
-  // does not invent a second one. Local single-user mode is the owner of their
-  // own day, and sees everything about it.
-  // -------------------------------------------------------------------------
-  // A couple lives their day; they do not administer a portfolio of events.
-  const showsAdmin = store.pilotsSeveralEvents();
-
-  // AUDITED: eight entries plus three actions plus the wordmark — twelve objects
-  // in one bar, which wrapped onto two lines at 1440px. They are now four
-  // destinations. Nothing disappeared: every former entry still exists, and
-  // still carries its own data-jourj hook, so every door that worked still
-  // works — they are simply grouped by what they are.
-  const ENTRIES: { id: string; label: string; tag: string; aliases?: string[] }[] = [
-    { id: 'jour-j', label: 'La journée', tag: 'nav-jourj', aliases: ['nav-today'] },
-    { id: 'mirror-guests', label: 'Les gens', tag: 'nav-people', aliases: ['nav-crew'] },
-    { id: 'organisation', label: 'L’organisation', tag: 'nav-organisation', aliases: ['nav-documents', 'nav-music'] },
-    { id: 'mirror-gallery', label: 'Souvenirs', tag: 'nav-memories' },
-  ];
+  // The wordmark owns every destination. The only persistent shortcut is
+  // time itself: the calendar. Search, creation and portfolio administration
+  // already have an explicit door in the wordmark/landing journey and must not
+  // be duplicated in this narrow working header.
 
   return (
     <>
       <nav style={productNavStyle} aria-label="Navigation">
-        <span style={{ fontWeight: 700, letterSpacing: '0.22em', fontSize: 12, whiteSpace: 'nowrap' }}>
-          {PRODUCT_NAME}
-          <span style={{ fontSize: '0.6em', verticalAlign: 'super', marginLeft: 2 }}>{PRODUCT_MARK}</span>
-        </span>
-        <div className="wc-product-nav-links">
-          {ENTRIES.map((e) => (
-            <button
-              key={e.tag}
-              onClick={() => go(e.id)}
-              style={productNavBtn}
-              data-jourj={e.tag}
-              // The doors that were merged keep their own hooks: a link, a test
-              // or a bookmark that pointed at « Musique » still lands right.
-              data-jourj-also={e.aliases?.join(' ')}
-            >
-              {e.label}
-            </button>
-          ))}
-          {/* The calendar is a PLACE of the product, like the timeline or the
-              people — not an action. Putting it back with the other places also
-              keeps the action group short enough to hold one line at 1440px,
-              where it had started to wrap. */}
-          <button onClick={() => setCalendarOpen(true)} style={productNavBtn} data-jourj="nav-calendar">
-            Calendrier
+        <div style={{ position: 'relative' }}>
+          <button
+            onClick={() => setProjectMenuOpen((value) => !value)}
+            style={productWordmarkBtn}
+            aria-expanded={projectMenuOpen}
+            aria-haspopup="menu"
+            data-jourj="brand-menu"
+          >
+            {PRODUCT_NAME}
+            <span style={{ fontSize: '0.6em', verticalAlign: 'super', marginLeft: 2 }}>{PRODUCT_MARK}</span>
+            <span aria-hidden style={{ marginLeft: 8, opacity: 0.5 }}>⌄</span>
           </button>
+          {projectMenuOpen && (
+            <div style={projectMenuStyle} role="menu" aria-label="Menu Le Grand Jour">
+              <button role="menuitem" onClick={() => { go('jour-j'); setProjectMenuOpen(false); }}>La timeline</button>
+              <button role="menuitem" onClick={() => { document.querySelector('[data-jourj="simulation"]')?.scrollIntoView({ behavior: 'smooth' }); setProjectMenuOpen(false); }}>Command center</button>
+              <button role="menuitem" onClick={() => { go('organisation'); setProjectMenuOpen(false); }}>Que voulez-vous faire ?</button>
+              <button role="menuitem" onClick={() => { go('wc-mirror-story'); setProjectMenuOpen(false); }}>Prévisualiser le mini-site</button>
+              {store.pilotsSeveralEvents() && (
+                <button role="menuitem" onClick={() => { setAdminOpen(true); setProjectMenuOpen(false); }}>Administration</button>
+              )}
+              <span />
+              <button role="menuitem" onClick={() => store.returnToLanding()}>Accueil · Mes événements</button>
+            </div>
+          )}
         </div>
         <span style={{ flex: 1 }} />
-        <button onClick={() => setSearchOpen(true)} style={productNavBtn} data-jourj="nav-search" aria-label="Recherche">
-          Rechercher
+        <button
+          onClick={() => setCalendarOpen(true)}
+          className="wc-product-calendar"
+          data-jourj="nav-calendar"
+          aria-label="Ouvrir le calendrier"
+          title="Calendrier"
+        >
+          <span aria-hidden>▦</span>
         </button>
-        {showsAdmin && (
-          <button onClick={() => setAdminOpen(true)} style={productNavBtn} data-jourj="nav-admin">
-            Administration
-          </button>
-        )}
-        <button onClick={() => store.returnToLanding()} style={productNavBtn} data-jourj="nav-weddings">Mes mariages</button>
-        <button onClick={() => store.startWeddingCreation()} style={productNavCta} data-jourj="nav-create">Créer</button>
       </nav>
-      {searchOpen && <GlobalSearch onClose={() => setSearchOpen(false)} />}
-      {adminOpen && <AdminConsole onClose={() => setAdminOpen(false)} />}
       {calendarOpen && <CalendarStudio onClose={() => setCalendarOpen(false)} />}
+      {adminOpen && <AdminConsole onClose={() => setAdminOpen(false)} />}
     </>
   );
 }
@@ -172,6 +149,25 @@ function MirrorProjection({ embedded }: { embedded?: boolean }) {
   const galleryImages = gallery.filter((m) => m.kind === 'image');
   const otherMedia = gallery.length - galleryImages.length;
 
+  // The embedded surface is the public mini-site preview. It deliberately has
+  // no edit actions and no collection forms: the dark film + right panel is
+  // the workspace; this is only the immersive story generated from it.
+  if (embedded) {
+    return (
+      <div id="wc-mirror-story" style={storyPageStyle} data-story="immersive-preview">
+        <MirrorHero hero={hero} />
+        {programme.hasData ? (
+          <section id="mirror-programme" aria-label="Programme immersif">
+            <MirrorTimeline moments={programme.moments} />
+          </section>
+        ) : (
+          <SectionShell id="programme" index="01" eyebrow="Le déroulé" title="Programme">
+            <EmptyState title="Le programme n’est pas encore composé" body="Les moments apparaîtront ici depuis la timeline du Jour J." />
+          </SectionShell>
+        )}
+      </div>
+    );
+  }
 
   // The nav lists exactly the sections that really render.
   const navSections = [
@@ -411,17 +407,17 @@ const productNavStyle: React.CSSProperties = {
   color: '#f6f5f3',
 };
 
-const productNavBtn: React.CSSProperties = {
-  appearance: 'none', background: 'transparent', border: 'none', cursor: 'pointer',
-  color: 'rgba(246,245,243,0.78)', fontSize: typography.editorial.caption,
-  fontFamily: typography.family.sans, padding: '8px 8px', whiteSpace: 'nowrap',
+const productWordmarkBtn: React.CSSProperties = {
+  appearance: 'none', border: 'none', background: 'transparent', color: '#f6f5f3',
+  cursor: 'pointer', padding: '8px 6px 8px 0', whiteSpace: 'nowrap',
+  fontFamily: typography.family.sans, fontWeight: 700, letterSpacing: '0.22em', fontSize: 12,
 };
 
-const productNavCta: React.CSSProperties = {
-  appearance: 'none', border: 'none', cursor: 'pointer',
-  background: '#f6f5f3', color: '#08090b', borderRadius: 999,
-  padding: '8px 16px', fontSize: typography.editorial.caption,
-  fontWeight: typography.weight.semibold, fontFamily: typography.family.sans,
+const projectMenuStyle: React.CSSProperties = {
+  position: 'absolute', top: 'calc(100% + 12px)', left: 0, zIndex: 1100,
+  width: 260, padding: 8, display: 'grid', gap: 2,
+  background: '#f6f5f3', color: '#141414', border: '1px solid rgba(20,20,20,0.14)',
+  boxShadow: '0 24px 60px rgba(0,0,0,0.28)',
 };
 
 const storyDividerStyle: React.CSSProperties = {
