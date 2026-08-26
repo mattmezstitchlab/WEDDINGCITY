@@ -22,7 +22,7 @@ import './timeline.css';
 // moment owns is duplicated here.
 // ---------------------------------------------------------------------------
 
-export function EventPanel({ onClose }: { onClose: () => void }) {
+export function EventPanel({ onClose, inline = false }: { onClose: () => void; inline?: boolean }) {
   const store = weddingStore;
   const project = store.currentProject;
   const phases = [...store.phases].sort((a, b) => a.startHour - b.startHour);
@@ -31,7 +31,7 @@ export function EventPanel({ onClose }: { onClose: () => void }) {
   const scenarios = store.scenarios;
 
   return (
-    <div className="wc-hub" role="dialog" aria-modal="true" aria-label="L’événement" data-jourj="event-panel">
+    <div className={`wc-hub${inline ? ' is-inline' : ''}`} role="region" aria-label="Édition de l’événement dans la timeline" data-jourj="event-panel" data-editor-location={inline ? 'timeline' : 'panel'}>
       <div className="wc-hub-event-head">
         <div>
           <div style={eyebrow}>L’événement</div>

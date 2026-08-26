@@ -91,7 +91,7 @@ export function SeatingPlan() {
             ? 'Aucune table pour l’instant.'
             : `${tables.length} table${tables.length > 1 ? 's' : ''} · ${guests.length - unseated.length}/${guests.length} invités placés`}
         </span>
-        {note && <span style={{ ...muted, color: '#f6f5f3' }} data-org="seating-note">{note}</span>}
+        {note && <span style={{ ...muted, color: '#315d43' }} data-org="seating-note">{note}</span>}
       </div>
 
       {/* ---- the floor ---- */}
@@ -113,8 +113,8 @@ export function SeatingPlan() {
               data-org="table"
               style={{
                 ...tableStyle,
-                borderColor: overTable === t.id ? '#f6f5f3' : over ? '#e0736a' : 'rgba(246,245,243,0.18)',
-                background: overTable === t.id ? 'rgba(246,245,243,0.08)' : 'transparent',
+                borderColor: overTable === t.id ? '#141414' : over ? '#a54840' : 'rgba(20,20,20,0.18)',
+                background: overTable === t.id ? 'rgba(20,20,20,0.05)' : 'transparent',
               }}
             >
               <div style={{ fontWeight: 600, fontSize: typography.editorial.caption }}>{t.label}</div>
@@ -145,7 +145,7 @@ export function SeatingPlan() {
         data-org="unseated"
         style={{
           ...unseatedZone,
-          borderColor: overTable === 'unseated' ? '#f6f5f3' : 'rgba(246,245,243,0.18)',
+          borderColor: overTable === 'unseated' ? '#141414' : 'rgba(20,20,20,0.18)',
         }}
       >
         <div style={{ ...muted, marginBottom: 8 }}>
@@ -185,30 +185,30 @@ export function SeatingPlan() {
 }
 
 const btn: React.CSSProperties = {
-  appearance: 'none', border: 'none', cursor: 'pointer', background: '#f6f5f3', color: '#08090b',
+  appearance: 'none', border: 'none', cursor: 'pointer', background: '#141414', color: '#f6f5f3',
   borderRadius: 999, padding: '10px 18px', fontSize: typography.editorial.caption,
   fontWeight: typography.weight.semibold, fontFamily: typography.family.sans,
 };
 
-const muted: React.CSSProperties = { fontSize: typography.editorial.caption, color: 'rgba(246,245,243,0.66)' };
+const muted: React.CSSProperties = { fontSize: typography.editorial.caption, color: 'rgba(20,20,20,0.58)' };
 
 const floor: React.CSSProperties = {
   display: 'flex', flexWrap: 'wrap', gap: 14, alignItems: 'flex-start',
-  border: '1px solid rgba(246,245,243,0.12)', borderRadius: 6, padding: 14, minHeight: 160,
+  border: '1px solid rgba(20,20,20,0.12)', borderRadius: 6, padding: 14, minHeight: 160,
 };
 
 /** A table reads as an object on a floor, not as a row in a grid. */
 const tableStyle: React.CSSProperties = {
   minWidth: 190, maxWidth: 260, padding: '18px 16px',
-  border: '1px solid rgba(246,245,243,0.18)', borderRadius: 18,
+  border: '1px solid rgba(20,20,20,0.18)', borderRadius: 18,
 };
 
 const unseatedZone: React.CSSProperties = {
-  marginTop: 14, padding: 14, border: '1px dashed rgba(246,245,243,0.18)', borderRadius: 6,
+  marginTop: 14, padding: 14, border: '1px dashed rgba(20,20,20,0.18)', borderRadius: 6,
 };
 
 const guestChip: React.CSSProperties = {
   display: 'inline-flex', alignItems: 'center', cursor: 'grab', touchAction: 'none',
-  border: '1px solid rgba(246,245,243,0.22)', borderRadius: 999,
-  padding: '6px 12px', fontSize: 12, color: '#f6f5f3', userSelect: 'none',
+  border: '1px solid rgba(20,20,20,0.18)', borderRadius: 999,
+  padding: '6px 12px', fontSize: 12, color: '#141414', background: '#fff', userSelect: 'none',
 };

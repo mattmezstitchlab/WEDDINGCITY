@@ -21,7 +21,7 @@ import { IconDocument } from '../../ui/Icons';
 // /documents route. One scroll, one moment, ten dimensions.
 // ---------------------------------------------------------------------------
 
-export function MomentHub({ phaseId, onClose }: { phaseId: string; onClose: () => void }) {
+export function MomentHub({ phaseId, onClose, inline = false }: { phaseId: string; onClose: () => void; inline?: boolean }) {
   const store = weddingStore;
   const hub = store.getPhaseHub(phaseId);
   const surfaceRef = useRef<HTMLDivElement>(null);
@@ -34,9 +34,9 @@ export function MomentHub({ phaseId, onClose }: { phaseId: string; onClose: () =
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') { e.preventDefault(); onClose(); } };
     document.addEventListener('keydown', onKey);
     const previous = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
+    if (!inline) document.body.style.overflow = 'hidden';
     return () => { document.removeEventListener('keydown', onKey); document.body.style.overflow = previous; };
-  }, [onClose]);
+  }, [onClose, inline]);
 
   if (!hub) return null;
   const { phase, persons, vendors, tracks, tasks, media, place } = hub;
@@ -52,7 +52,7 @@ export function MomentHub({ phaseId, onClose }: { phaseId: string; onClose: () =
   const duration = phase.endHour - phase.startHour;
 
   return (
-    <div ref={surfaceRef} className="wc-hub" role="dialog" aria-modal="true" aria-label={`Moment ${phase.name}`} data-jourj="hub">
+    <div ref={surfaceRef} className={`wc-hub${inline ? ' is-inline' : ''}`} role="region" aria-label={`Édition du moment ${phase.name}`} data-jourj="hub" data-editor-location={inline ? 'timeline' : 'panel'}>
       {/* ---- cover ---- */}
       <div className="wc-hub-cover">
         <img src={image.src} alt={image.alt} width={image.width} height={image.height} decoding="async" />
@@ -583,7 +583,7 @@ function PeopleRow({ persons, onRemove }: {
               title={`Voir les liens de ${p.displayName}`}
             >
               {src
-                ? <img src={src} alt="" width={28} height={28} style={avatarImg} />
+                ? <img src={src} alt={`Portrait de ${p.displayName}`} width={28} height={28} style={avatarImg} />
                 : <span style={avatarInitials} aria-hidden>{initials(p.displayName)}</span>}
               <span>
                 {p.displayName}

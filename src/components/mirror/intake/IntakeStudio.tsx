@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { weddingStore } from '../../../game/weddingStore';
 import { typography } from '../../../design/tokens';
 import { analyseIntake, summariseIntake, type IntakePlan, type IntakeSource } from '../../../game/projectIntake';
@@ -21,7 +21,8 @@ import { CERTAINTY, type Certainty } from '../../../design/certainty';
 // an unreadable file says so, and a missing answer becomes a question.
 // ---------------------------------------------------------------------------
 
-type Stage = 'reading' | 'review' | 'done';
+type Stage = 'reading' | 'clarify' | 'review' | 'done';
+type ClarificationKey = 'principals' | 'date' | 'place' | 'headcount';
 
 export function IntakeStudio({ description, files, projectType, onClose }: {
   description: string;
@@ -35,6 +36,8 @@ export function IntakeStudio({ description, files, projectType, onClose }: {
   const [stage, setStage] = useState<Stage>('reading');
   const [plan, setPlan] = useState<IntakePlan | null>(null);
   const [step, setStep] = useState('Lecture des fichiers');
+  const [clarificationDraft, setClarificationDraft] = useState('');
+  const [deferred, setDeferred] = useState<ClarificationKey[]>([]);
 
   // --- 1 & 2: read, then analyse ------------------------------------------
   useState(() => {
@@ -55,7 +58,8 @@ export function IntakeStudio({ description, files, projectType, onClose }: {
       setStep('Structuration du projet');
       await new Promise((r) => setTimeout(r, 260));
       setPlan(result);
-      setStage('review');
+      const hasMissingHeadline = Object.values(result.certainty).some((level) => level === 'missing');
+      setStage(hasMissingHeadline ? 'clarify' : 'review');
     })();
     return undefined;
   });
@@ -84,6 +88,47 @@ export function IntakeStudio({ description, files, projectType, onClose }: {
   const parse = (v: string) => {
     const m = /^(\d{1,2})\s*[:h]\s*(\d{2})?$/.exec(v.trim());
     return m ? Number(m[1]) + (m[2] ? Number(m[2]) / 60 : 0) : null;
+  };
+
+  const clarificationOrder: ClarificationKey[] = ['principals', 'date', 'place', 'headcount'];
+  const clarification = plan
+    ? clarificationOrder.find((key) => plan.certainty[key] === 'missing' && !deferred.includes(key)) ?? null
+    : null;
+  useEffect(() => {
+    if (stage === 'clarify' && plan && !clarification) setStage('review');
+  }, [stage, plan, clarification]);
+
+  const clarificationCopy: Record<ClarificationKey, { question: string; hint: string; type: string }> = {
+    principals: {
+      question: schema.principalsQuestion ?? `Quel nom donner à cet événement ?`,
+      hint: 'Cette information identifie votre événement. Nous ne la devinerons pas.',
+      type: 'text',
+    },
+    date: { question: 'Quelle est la date du Jour J ?', hint: 'Vous pourrez toujours la modifier.', type: 'date' },
+    place: { question: 'Quel est le lieu principal ?', hint: 'Un nom de lieu suffit pour commencer.', type: 'text' },
+    headcount: {
+      question: `Combien de ${schema.headcountLabel} prévoyez-vous ?`,
+      hint: 'Une estimation est suffisante et restera clairement modifiable.',
+      type: 'number',
+    },
+  };
+
+  const answerClarification = (skip = false) => {
+    if (!plan || !clarification) { setStage('review'); return; }
+    const value = clarificationDraft.trim();
+    if (skip) {
+      setDeferred([...deferred, clarification]);
+    } else if (value) {
+      const patch: Partial<IntakePlan> = clarification === 'principals'
+        ? { coupleNames: value }
+        : clarification === 'date'
+          ? { weddingDate: value }
+          : clarification === 'place'
+            ? { locationName: value }
+            : { guestCountTarget: Number(value) || null };
+      setPlan({ ...plan, ...patch, certainty: { ...plan.certainty, [clarification]: 'confirmed' } });
+    } else return;
+    setClarificationDraft('');
   };
 
   const canGenerate = Boolean(plan?.coupleNames && plan.coupleNames.trim());
@@ -125,6 +170,37 @@ export function IntakeStudio({ description, files, projectType, onClose }: {
             <div style={barTrack}><div style={barFill} /></div>
           </div>
         )}
+
+        {stage === 'clarify' && plan && clarification && (
+          <div style={{ padding: '48px 0', maxWidth: 680 }} data-intake="clarify">
+            <div style={eyebrow}>
+              Une information à la fois · {clarificationOrder.filter((key) => plan.certainty[key] !== 'missing' || deferred.includes(key)).length + 1}/4
+            </div>
+            <div style={title}>{clarificationCopy[clarification].question}</div>
+            <p style={{ ...muted, marginTop: 14 }}>{clarificationCopy[clarification].hint}</p>
+            <input
+              autoFocus
+              type={clarificationCopy[clarification].type}
+              min={clarification === 'headcount' ? 1 : undefined}
+              value={clarificationDraft}
+              onChange={(e) => setClarificationDraft(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') answerClarification(); }}
+              style={{ ...input, marginTop: 30, width: 'min(100%, 520px)', fontSize: 24 }}
+              data-intake="clarification-field"
+            />
+            <div style={{ display: 'flex', gap: 12, marginTop: 24, flexWrap: 'wrap' }}>
+              <button onClick={() => answerClarification()} disabled={!clarificationDraft.trim()} style={{ ...primary, opacity: clarificationDraft.trim() ? 1 : 0.45 }} data-intake="clarification-next">
+                Continuer <span aria-hidden>→</span>
+              </button>
+              {clarification !== 'principals' && (
+                <button onClick={() => answerClarification(true)} style={ghost} data-intake="clarification-later">
+                  Je ne sais pas encore
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+
 
         {stage === 'review' && plan && (
           <div data-intake="review">
@@ -366,7 +442,7 @@ export function IntakeStudio({ description, files, projectType, onClose }: {
                 style={{ ...primary, opacity: canGenerate ? 1 : 0.4, cursor: canGenerate ? 'pointer' : 'not-allowed' }}
                 data-intake="generate"
               >
-                Générer ma journée <span aria-hidden>→</span>
+                Créer la timeline du Jour J <span aria-hidden>→</span>
               </button>
               <button onClick={onClose} style={ghost}>Annuler</button>
             </div>

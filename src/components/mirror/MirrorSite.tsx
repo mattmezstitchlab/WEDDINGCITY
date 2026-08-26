@@ -75,6 +75,7 @@ function ProductNav() {
   const [searchOpen, setSearchOpen] = useState(false);
   const [adminOpen, setAdminOpen] = useState(false);
   const [calendarOpen, setCalendarOpen] = useState(false);
+  const [projectMenuOpen, setProjectMenuOpen] = useState(false);
   const go = (id: string) => {
     const el = document.getElementById(id);
     el?.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -108,10 +109,29 @@ function ProductNav() {
   return (
     <>
       <nav style={productNavStyle} aria-label="Navigation">
-        <span style={{ fontWeight: 700, letterSpacing: '0.22em', fontSize: 12, whiteSpace: 'nowrap' }}>
-          {PRODUCT_NAME}
-          <span style={{ fontSize: '0.6em', verticalAlign: 'super', marginLeft: 2 }}>{PRODUCT_MARK}</span>
-        </span>
+        <div style={{ position: 'relative' }}>
+          <button
+            onClick={() => setProjectMenuOpen((value) => !value)}
+            style={productWordmarkBtn}
+            aria-expanded={projectMenuOpen}
+            aria-haspopup="menu"
+            data-jourj="brand-menu"
+          >
+            {PRODUCT_NAME}
+            <span style={{ fontSize: '0.6em', verticalAlign: 'super', marginLeft: 2 }}>{PRODUCT_MARK}</span>
+            <span aria-hidden style={{ marginLeft: 8, opacity: 0.5 }}>⌄</span>
+          </button>
+          {projectMenuOpen && (
+            <div style={projectMenuStyle} role="menu" aria-label="Menu Le Grand Jour">
+              <button role="menuitem" onClick={() => { go('jour-j'); setProjectMenuOpen(false); }}>La timeline</button>
+              <button role="menuitem" onClick={() => { document.querySelector('[data-jourj="simulation"]')?.scrollIntoView({ behavior: 'smooth' }); setProjectMenuOpen(false); }}>Command center</button>
+              <button role="menuitem" onClick={() => { go('organisation'); setProjectMenuOpen(false); }}>Que voulez-vous faire ?</button>
+              <button role="menuitem" onClick={() => { go('wc-mirror-story'); setProjectMenuOpen(false); }}>Prévisualiser le mini-site</button>
+              <span />
+              <button role="menuitem" onClick={() => store.returnToLanding()}>Accueil · Mes événements</button>
+            </div>
+          )}
+        </div>
         <div className="wc-product-nav-links">
           {ENTRIES.map((e) => (
             <button
@@ -172,6 +192,25 @@ function MirrorProjection({ embedded }: { embedded?: boolean }) {
   const galleryImages = gallery.filter((m) => m.kind === 'image');
   const otherMedia = gallery.length - galleryImages.length;
 
+  // The embedded surface is the public mini-site preview. It deliberately has
+  // no edit actions and no collection forms: the dark film + right panel is
+  // the workspace; this is only the immersive story generated from it.
+  if (embedded) {
+    return (
+      <div id="wc-mirror-story" style={storyPageStyle} data-story="immersive-preview">
+        <MirrorHero hero={hero} />
+        {programme.hasData ? (
+          <section id="mirror-programme" aria-label="Programme immersif">
+            <MirrorTimeline moments={programme.moments} />
+          </section>
+        ) : (
+          <SectionShell id="programme" index="01" eyebrow="Le déroulé" title="Programme">
+            <EmptyState title="Le programme n’est pas encore composé" body="Les moments apparaîtront ici depuis la timeline du Jour J." />
+          </SectionShell>
+        )}
+      </div>
+    );
+  }
 
   // The nav lists exactly the sections that really render.
   const navSections = [
@@ -409,6 +448,19 @@ const productNavStyle: React.CSSProperties = {
   padding: '14px clamp(18px, 5vw, 64px)',
   background: '#08090b', borderBottom: '1px solid rgba(246,245,243,0.12)',
   color: '#f6f5f3',
+};
+
+const productWordmarkBtn: React.CSSProperties = {
+  appearance: 'none', border: 'none', background: 'transparent', color: '#f6f5f3',
+  cursor: 'pointer', padding: '8px 6px 8px 0', whiteSpace: 'nowrap',
+  fontFamily: typography.family.sans, fontWeight: 700, letterSpacing: '0.22em', fontSize: 12,
+};
+
+const projectMenuStyle: React.CSSProperties = {
+  position: 'absolute', top: 'calc(100% + 12px)', left: 0, zIndex: 1100,
+  width: 260, padding: 8, display: 'grid', gap: 2,
+  background: '#f6f5f3', color: '#141414', border: '1px solid rgba(20,20,20,0.14)',
+  boxShadow: '0 24px 60px rgba(0,0,0,0.28)',
 };
 
 const productNavBtn: React.CSSProperties = {

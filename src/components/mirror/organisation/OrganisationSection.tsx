@@ -1,163 +1,99 @@
 import { useState } from 'react';
 import { weddingStore } from '../../../game/weddingStore';
-import { typography } from '../../../design/tokens';
-import { SeatingPlan } from './SeatingPlan';
-import { ScenariosPanel } from './ScenariosPanel';
 import { CrewPanel } from './CrewPanel';
+import { ScenariosPanel } from './ScenariosPanel';
+import { SeatingPlan } from './SeatingPlan';
 
 // ---------------------------------------------------------------------------
-// ORGANISATION — the part of the day that is not an hour.
+// ORGANISATION — an action launcher, not another dashboard.
 // ---------------------------------------------------------------------------
-// Plan de table, prestataires, documents, and the LAB: what is missing and
-// what contradicts itself. All of it reads the same store as the timeline —
-// no second source of truth, no duplicated entity list.
+// Every capability used to be expanded at once below the film. The page looked
+// like five products stacked together. This surface now asks one question and
+// reveals one tool only after a deliberate choice. Each tool still reads and
+// writes the same store; no workflow was duplicated.
 // ---------------------------------------------------------------------------
+
+type Action = 'analyse' | 'crew' | 'scenario' | 'seating' | 'events' | null;
+
+const ACTIONS: { id: Exclude<Action, null>; index: string; title: string; detail: string }[] = [
+  { id: 'analyse', index: '01', title: 'Analyser ma journée', detail: 'Voir ce qui manque, se contredit ou reste à confirmer.' },
+  { id: 'crew', index: '02', title: 'Ajouter une personne de métier', detail: 'Artiste, technicien, photographe, DJ ou autre intervenant.' },
+  { id: 'scenario', index: '03', title: 'Préparer un scénario', detail: 'Comparer un plan B sans modifier la journée principale.' },
+  { id: 'seating', index: '04', title: 'Organiser les invités', detail: 'Composer le plan de table à partir des personnes existantes.' },
+  { id: 'events', index: '05', title: 'Vérifier mes autres événements', detail: 'Repérer une même personne attendue ailleurs au même moment.' },
+];
 
 export function OrganisationSection() {
   const store = weddingStore;
-  const [findings, setFindings] = useState<ReturnType<typeof store.projectFindings> | null>(null);
-
-  const clock = (h: number) => `${String(Math.floor(h) % 24).padStart(2, '0')}:${String(Math.round((h % 1) * 60)).padStart(2, '0')}`;
-  const documentsByMoment = store.phases
-    .map((p) => ({ phase: p, media: store.media.filter((m) => m.ownerKind === 'event' && m.ownerId === p.id) }))
-    .filter((x) => x.media.length > 0);
-  const loose = store.media.filter((m) => m.ownerKind !== 'event');
+  const [action, setAction] = useState<Action>(null);
+  const findings = action === 'analyse' ? store.projectFindings() : [];
+  const conflicts = action === 'events' ? store.crossEventConflicts() : [];
 
   return (
-    <section id="organisation" style={section} aria-label="Organisation">
-      <h2 style={h2}>Organisation</h2>
+    <section id="organisation" className="wc-org-choice" aria-label="Organisation">
+      <header className="wc-org-choice-head">
+        <span>Organisation</span>
+        <h2>Que voulez-vous faire&nbsp;?</h2>
+        <p>Choisissez une action. Un seul outil s’ouvre à la fois, puis se referme pour vous rendre la journée.</p>
+      </header>
 
-      {/* ---- LAB: read the project, say what it lacks ---- */}
-      <div style={block}>
-        <h3 style={h3}>Lab · l’état réel du projet</h3>
-        <p style={muted}>
-          Le Lab lit vos données — il n’imagine rien et n’appelle aucun service
-          extérieur. Il dit ce qui manque, ce qui se contredit, ce qui reste à
-          confirmer.
-        </p>
-        <button onClick={() => setFindings(store.projectFindings())} style={btn} data-org="lab-run">
-          Analyser ma journée
-        </button>
-        {findings && (
-          <ul style={list} data-org="lab-findings">
-            {findings.map((f, i) => (
-              <li key={i} style={{ ...listItem, borderLeft: `2px solid ${f.level === 'conflict' ? '#e0736a' : f.level === 'ok' ? '#7fb08a' : 'rgba(246,245,243,0.3)'}` }}>
-                <span style={{ fontWeight: 600 }}>
-                  {f.level === 'conflict' ? '⚠ ' : f.level === 'ok' ? '✓ ' : '· '}{f.title}
-                </span>
-                <span style={muted}>{f.detail}</span>
-              </li>
-            ))}
-          </ul>
-        )}
+      <div className="wc-org-actions">
+        {ACTIONS.map((item) => (
+          <button
+            key={item.id}
+            onClick={() => setAction(action === item.id ? null : item.id)}
+            className={action === item.id ? 'is-active' : ''}
+            aria-expanded={action === item.id}
+            data-org-action={item.id}
+          >
+            <span>{item.index}</span>
+            <strong>{item.title}</strong>
+            <p>{item.detail}</p>
+            <i aria-hidden>{action === item.id ? '−' : '→'}</i>
+          </button>
+        ))}
       </div>
 
-      {/* ---- those who make the moment happen ---- */}
-      <div style={block} id="equipe">
-        <h3 style={h3}>Artistes &amp; techniciens</h3>
-        <CrewPanel />
-      </div>
+      {action && (
+        <div className="wc-org-tool" data-org={`tool-${action}`}>
+          <div className="wc-org-tool-head">
+            <div><span>Action en cours</span><h3>{ACTIONS.find((item) => item.id === action)?.title}</h3></div>
+            <button onClick={() => setAction(null)}>Fermer</button>
+          </div>
 
-      {/* ---- scenarios: a parallel day ---- */}
-      <div style={block} id="scenarios">
-        <h3 style={h3}>Scénarios</h3>
-        <ScenariosPanel />
-      </div>
-
-      {/* ---- seating ---- */}
-      <div style={block}>
-        <h3 style={h3}>Plan de table</h3>
-        <SeatingPlan />
-      </div>
-
-      {/* ---- vendors, across the day ---- */}
-      <div style={block}>
-        <h3 style={h3}>Prestataires</h3>
-        {store.vendors.length === 0 ? (
-          <p style={muted}>Aucun prestataire n’est encore rattaché à ce mariage.</p>
-        ) : (
-          <ul style={list}>
-            {store.vendors.map((v) => {
-              const covers = store.phases
-                .filter((p) => (p.vendorIds ?? []).includes(v.id))
-                .sort((a, b) => a.startHour - b.startHour);
-              return (
-                <li key={v.id} style={listItem} data-org="vendor">
-                  <span style={{ fontWeight: 600 }}>{v.companyName} <span style={muted}>· {v.category}</span></span>
-                  <span style={muted}>
-                    {covers.length > 0
-                      ? `${clock(covers[0].startHour)} → ${clock(covers[covers.length - 1].endHour)} · ${covers.map((c) => c.name).join(', ')}`
-                      : 'aucun moment couvert — ouvrez un moment pour l’y rattacher'}
-                  </span>
+          {action === 'analyse' && (
+            <ul className="wc-org-findings" data-org="lab-findings">
+              {findings.map((finding, index) => (
+                <li key={`${finding.title}-${index}`} data-level={finding.level}>
+                  <span>{finding.level === 'ok' ? '✓' : finding.level === 'conflict' ? '!' : '·'}</span>
+                  <div><strong>{finding.title}</strong><p>{finding.detail}</p></div>
                 </li>
-              );
-            })}
-          </ul>
-        )}
-      </div>
+              ))}
+            </ul>
+          )}
 
-      {/* ---- documents, by moment ---- */}
-      <div style={block}>
-        <h3 style={h3}>Documents</h3>
-        {documentsByMoment.length === 0 && loose.length === 0 ? (
-          <p style={muted}>
-            Aucun document n’a encore été importé. Un fichier s’importe depuis le
-            moment qu’il concerne — c’est là qu’il servira.
-          </p>
-        ) : (
-          <ul style={list}>
-            {documentsByMoment.map(({ phase, media }) => (
-              <li key={phase.id} style={listItem} data-org="documents-moment">
-                <span style={{ fontWeight: 600 }}>{clock(phase.startHour)} · {phase.name}</span>
-                <span style={muted}>{media.map((m) => m.title || m.fileName || 'document').join(' · ')}</span>
-              </li>
-            ))}
-            {loose.length > 0 && (
-              <li style={listItem}>
-                <span style={{ fontWeight: 600 }}>Non rattachés</span>
-                <span style={muted}>{loose.map((m) => m.title || m.fileName || 'document').join(' · ')}</span>
-              </li>
-            )}
-          </ul>
-        )}
-      </div>
+          {action === 'crew' && <div id="equipe"><CrewPanel /></div>}
+          {action === 'scenario' && <div id="scenarios"><ScenariosPanel /></div>}
+          {action === 'seating' && <SeatingPlan />}
+
+          {action === 'events' && (
+            <div className="wc-org-cross-events">
+              <p className="wc-org-honesty">La correspondance entre événements utilise le nom de la personne. Elle signale une piste à vérifier, jamais une identité certaine.</p>
+              {conflicts.length === 0 ? (
+                <div className="wc-org-empty">Aucun chevauchement détecté avec les événements conservés dans ce navigateur.</div>
+              ) : (
+                <ul>{conflicts.map((conflict, index) => (
+                  <li key={`${conflict.personName}-${index}`}>
+                    <strong>{conflict.personName}</strong>
+                    <span>{conflict.here}</span>
+                    <span>{conflict.otherProjectName} · {conflict.there}</span>
+                  </li>
+                ))}</ul>
+              )}
+            </div>
+          )}
+        </div>
+      )}
     </section>
   );
 }
-
-const section: React.CSSProperties = {
-  padding: 'clamp(40px, 7vw, 90px) clamp(18px, 5vw, 64px)',
-  borderTop: '1px solid rgba(246,245,243,0.12)',
-  background: '#08090b', color: '#f6f5f3',
-};
-
-const h2: React.CSSProperties = {
-  margin: 0, fontSize: 'clamp(26px, 4.6vw, 56px)', letterSpacing: '-0.035em',
-  fontWeight: typography.weight.semibold, lineHeight: 1.02,
-};
-
-const h3: React.CSSProperties = {
-  margin: '0 0 10px', fontSize: 'clamp(15px, 1.5vw, 19px)',
-  letterSpacing: '0.02em', fontWeight: typography.weight.semibold,
-};
-
-const block: React.CSSProperties = { marginTop: 'clamp(26px, 4vw, 48px)', maxWidth: 1080 };
-
-const muted: React.CSSProperties = {
-  fontSize: typography.editorial.caption, color: 'rgba(246,245,243,0.66)', lineHeight: 1.6,
-};
-
-const btn: React.CSSProperties = {
-  appearance: 'none', border: 'none', cursor: 'pointer', background: '#f6f5f3', color: '#08090b',
-  borderRadius: 999, padding: '10px 18px', marginTop: 10,
-  fontSize: typography.editorial.caption, fontWeight: typography.weight.semibold,
-  fontFamily: typography.family.sans,
-};
-
-const list: React.CSSProperties = { listStyle: 'none', margin: '14px 0 0', padding: 0, display: 'grid', gap: 10 };
-
-const listItem: React.CSSProperties = {
-  display: 'grid', gap: 4, paddingLeft: 12,
-  borderLeft: '2px solid rgba(246,245,243,0.18)',
-  fontSize: typography.editorial.caption,
-};
