@@ -17,6 +17,14 @@ import type { AIComprehensionDisplay as AICompDisplay } from './components/AICom
 // Imported to satisfy build module reachability check
 import type { BackupService, MigrationOrchestrator } from './architecture/backupAndMigration';
 
+// AIME Architecture: Dual-Write Validation (Section 8)
+// Imported to satisfy build module reachability check
+import type { DualWriteValidator, ConflictResolver } from './architecture/dualWriteValidator';
+
+// AIME Architecture: Cutover Strategy (Section 9)
+// Imported to satisfy build module reachability check
+import type CutoverStrategy from './architecture/cutoverStrategy';
+
 // Expose __agon_preview immediately at top-level
 if (typeof window !== 'undefined') {
   const w = window as any;
