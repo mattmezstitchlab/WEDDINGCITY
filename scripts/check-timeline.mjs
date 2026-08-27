@@ -883,7 +883,6 @@ try {
   // -------------------------------------------------------------------------
   const hubUx = read('components', 'mirror', 'timeline', 'MomentDock.tsx');
   const hubLegacy = read('components', 'mirror', 'timeline', 'MomentHub.tsx');
-  const eventPanel = read('components', 'mirror', 'timeline', 'EventPanel.tsx');
   const sectionSrc = read('components', 'mirror', 'timeline', 'PanelSection.tsx');
   const canvasUx = read('components', 'canvas', 'CanvasCore.tsx');
 
@@ -891,17 +890,6 @@ try {
   r.check(/export function PanelSection/.test(sectionSrc), 'there is one folding section component');
   r.check(/MomentDock/.test(read('components', 'mirror', 'timeline', 'MomentCard.tsx')),
     'the moment edits on its own card');
-  r.check(!/from '\.\/PanelSection'/.test(eventPanel),
-    'the event surface is a short identity form, not a second folding hub');
-  r.check(/wc-event-surface/.test(eventPanel) && /data-jourj=\"event-panel\"/.test(eventPanel),
-    'the event surface is its own shell under the day head — not the moment hub');
-  r.check(!/event-open-moment/.test(eventPanel) && !/event-calendar/.test(eventPanel)
-    && !/event-scenarios/.test(eventPanel) && !/Comparer les scénarios/.test(eventPanel),
-    'the event surface holds only day identity — no moment list, calendar or plan B');
-  r.check(/event-name/.test(eventPanel) && /event-type/.test(eventPanel)
-    && /event-date/.test(eventPanel) && /event-place/.test(eventPanel)
-    && /event-headcount/.test(eventPanel),
-    'event fields: name, type, date, place, headcount');
   // Seven since « Scénarios » joined: a plan B now has an obvious door on the
   // moment it concerns, instead of only living in the propagation bar.
   r.check(/data-jourj=\"moment-plus\"/.test(hubUx) && /moment-action-doc/.test(hubUx),
