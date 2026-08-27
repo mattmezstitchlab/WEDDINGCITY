@@ -9,6 +9,10 @@ import { installGlobalErrorHandlers } from './game/diagnostics';
 // Imported to satisfy build module reachability check
 import type * as ProjectionHooks from './hooks';
 
+// AIME Architecture: AI Comprehension Display (Section 5)
+// Imported to satisfy build module reachability check
+import type { AIComprehensionDisplay as AICompDisplay } from './components/AIComprehensionDisplay';
+
 // Expose __agon_preview immediately at top-level
 if (typeof window !== 'undefined') {
   const w = window as any;
