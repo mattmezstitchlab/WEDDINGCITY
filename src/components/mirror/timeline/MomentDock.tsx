@@ -47,9 +47,6 @@ export function MomentDock({
 }) {
   const store = weddingStore;
   const hub = phaseId ? store.getPhaseHub(phaseId) : null;
-  const [menuOpen, setMenuOpen] = useState(false);
-  const [docOpen, setDocOpen] = useState(false);
-  const menuRef = useRef<HTMLDivElement>(null);
   const active = Boolean(hub && phaseId);
 
   useEffect(() => {
@@ -57,8 +54,6 @@ export function MomentDock({
       if (e.key === 'Escape' && phaseId) {
         e.preventDefault();
         onClear();
-        setMenuOpen(false);
-        setDocOpen(false);
       }
     };
     document.addEventListener('keydown', onKey);
@@ -66,33 +61,14 @@ export function MomentDock({
   }, [phaseId, onClear]);
 
   useEffect(() => {
-    if (!menuOpen && !docOpen) return;
-    const onDoc = (e: MouseEvent) => {
-      if (!menuRef.current?.contains(e.target as Node)) {
-        setMenuOpen(false);
-        setDocOpen(false);
-      }
-    };
-    document.addEventListener('pointerdown', onDoc);
-    return () => document.removeEventListener('pointerdown', onDoc);
-  }, [menuOpen, docOpen]);
-
-  // If the selected moment disappears, clear selection.
-  useEffect(() => {
     if (phaseId && !hub) onClear();
   }, [phaseId, hub, onClear]);
-
-  useEffect(() => {
-    setMenuOpen(false);
-    setDocOpen(false);
-  }, [phaseId]);
 
   const phase = hub?.phase;
   const persons = hub?.persons ?? [];
   const vendors = hub?.vendors ?? [];
   const duration = phase ? phase.endHour - phase.startHour : 0;
   const gaps = phaseId ? store.phaseFindings(phaseId).filter((f) => f.level !== 'ok') : [];
-  const nightBias = store.phases.some((p) => p.endHour > 12);
 
   return (
     <div
@@ -113,30 +89,11 @@ export function MomentDock({
         {active && phase && phaseId && (
           <>
             <div className="wc-moment-dock-fields">
-              <TimeWheel
-                value={phase.startHour}
-                nightBias={nightBias}
-                onCommit={(h) => store.setPhaseTime(phaseId, normalizeNightHour(h, store.phases))}
-                testId="hub-start"
-                ariaLabel="Heure de début"
-              />
+              {/* Heure & nom s’éditent sur la carte (clic heure / titre). Ici : secondaires. */}
               <DurationWheel
                 minutes={Math.round(duration * 60)}
                 onCommit={(m) => store.setPhaseDuration(phaseId, m / 60)}
                 testId="hub-duration"
-              />
-              <input
-                className="wc-moment-dock-input wc-moment-dock-title"
-                key={`title-${phaseId}-${phase.name}`}
-                defaultValue={phase.name}
-                placeholder="Nom"
-                onBlur={(e) => {
-                  const v = e.target.value.trim();
-                  if (v && v !== phase.name) store.setPhaseTitle(phaseId, v);
-                }}
-                onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
-                data-jourj="hub-title"
-                aria-label="Nom du moment"
               />
               <select
                 className="wc-moment-dock-select"
@@ -251,138 +208,6 @@ export function MomentDock({
               )}
             </div>
 
-            <div className="wc-moment-dock-actions" ref={menuRef}>
-              <button
-                type="button"
-                className="wc-moment-dock-plus"
-                data-jourj="moment-plus"
-                aria-label="Actions"
-                aria-expanded={menuOpen}
-                onClick={() => {
-                  setMenuOpen((v) => !v);
-                  setDocOpen(false);
-                }}
-              >
-                +
-              </button>
-              {menuOpen && !docOpen && (
-                <ul className="wc-moment-dock-menu" role="menu" data-jourj="moment-plus-menu">
-                  <li>
-                    <button type="button" role="menuitem" data-jourj="moment-action-doc" onClick={() => setDocOpen(true)}>
-                      <span aria-hidden>📄</span> Document
-                    </button>
-                  </li>
-                  <li>
-                    <button
-                      type="button"
-                      role="menuitem"
-                      data-jourj="moment-action-task"
-                      onClick={() => {
-                        const title = window.prompt('Tâche ?');
-                        if (title?.trim()) store.createTaskForPhase(phaseId, title.trim());
-                        setMenuOpen(false);
-                      }}
-                    >
-                      <span aria-hidden>✓</span> Tâche
-                    </button>
-                  </li>
-                  <li>
-                    <button
-                      type="button"
-                      role="menuitem"
-                      data-jourj="moment-action-planb"
-                      onClick={() => {
-                        const scenario = store.createScenario(`Plan B — ${phase.name}`);
-                        if (scenario) store.setActiveScenario(scenario.id);
-                        setMenuOpen(false);
-                      }}
-                    >
-                      <span aria-hidden>⎇</span> Plan B
-                    </button>
-                  </li>
-                  <li>
-                    <button
-                      type="button"
-                      role="menuitem"
-                      data-jourj="hub-move-earlier"
-                      aria-label={`Avancer ${phase.name} dans la journée`}
-                      onClick={() => {
-                        const order = [...store.phases].sort((a, b) => a.startHour - b.startHour).findIndex((x) => x.id === phaseId);
-                        store.movePhaseToIndex(phaseId, order - 1);
-                        setMenuOpen(false);
-                      }}
-                    >
-                      <span aria-hidden>↑</span> Plus tôt
-                    </button>
-                  </li>
-                  <li>
-                    <button
-                      type="button"
-                      role="menuitem"
-                      data-jourj="hub-move-later"
-                      aria-label={`Retarder ${phase.name} dans la journée`}
-                      onClick={() => {
-                        const order = [...store.phases].sort((a, b) => a.startHour - b.startHour).findIndex((x) => x.id === phaseId);
-                        store.movePhaseToIndex(phaseId, order + 1);
-                        setMenuOpen(false);
-                      }}
-                    >
-                      <span aria-hidden>↓</span> Plus tard
-                    </button>
-                  </li>
-                  <li>
-                    <button
-                      type="button"
-                      role="menuitem"
-                      data-jourj="moment-action-person"
-                      onClick={() => {
-                        const name = window.prompt('Prénom Nom ?');
-                        if (!name?.trim()) return;
-                        const person = store.createPerson({ displayName: name.trim(), asGuest: true, rsvp: 'pending' });
-                        if (person) store.attachPersonToPhase(phaseId, person.id);
-                        setMenuOpen(false);
-                      }}
-                    >
-                      <span aria-hidden>👤</span> Personne
-                    </button>
-                  </li>
-                  <li>
-                    <button
-                      type="button"
-                      role="menuitem"
-                      data-jourj="moment-action-vendor"
-                      onClick={() => {
-                        const name = window.prompt('Prestataire ?');
-                        if (!name?.trim()) return;
-                        const vendor = store.createVendor({ companyName: name.trim(), category: 'autre' });
-                        if (vendor) store.attachVendorToPhase(phaseId, vendor.id);
-                        setMenuOpen(false);
-                      }}
-                    >
-                      <span aria-hidden>🏢</span> Presta
-                    </button>
-                  </li>
-                  <li className="is-danger">
-                    <button
-                      type="button"
-                      role="menuitem"
-                      data-jourj="moment-action-delete"
-                      onClick={() => {
-                        if (store.deletePhase(phaseId)) onClear();
-                      }}
-                    >
-                      Supprimer
-                    </button>
-                  </li>
-                </ul>
-              )}
-              {docOpen && (
-                <DocComposer
-                  phaseId={phaseId}
-                  onClose={() => { setDocOpen(false); setMenuOpen(false); }}
-                />
-              )}
-            </div>
           </>
         )}
       </div>
@@ -480,28 +305,82 @@ function DurationWheel({
   );
 }
 
-/** Read-only face on the film — never an editor. */
+/** Film card face: click hour / title to edit in place; + opens actions on the card. */
 export function MomentCardFace({
   phaseId,
   dense,
   displayName,
+  selected,
 }: {
   phaseId: string;
   dense: boolean;
   displayName: string;
+  selected?: boolean;
 }) {
   const store = weddingStore;
   const hub = store.getPhaseHub(phaseId);
   const phase = store.phases.find((p) => p.id === phaseId);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [docOpen, setDocOpen] = useState(false);
+  const [editHour, setEditHour] = useState(false);
+  const [editTitle, setEditTitle] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!menuOpen && !docOpen) return;
+    const onDoc = (e: MouseEvent) => {
+      if (!menuRef.current?.contains(e.target as Node)) {
+        setMenuOpen(false);
+        setDocOpen(false);
+      }
+    };
+    document.addEventListener('pointerdown', onDoc);
+    return () => document.removeEventListener('pointerdown', onDoc);
+  }, [menuOpen, docOpen]);
+
+  useEffect(() => {
+    if (!selected) {
+      setMenuOpen(false);
+      setDocOpen(false);
+      setEditHour(false);
+      setEditTitle(false);
+    }
+  }, [selected]);
+
   if (!phase) return null;
   const durationMin = Math.round((phase.endHour - phase.startHour) * 60);
   const findings = store.phaseFindings(phaseId);
   const gaps = findings.filter((f) => f.level !== 'ok');
+  const nightBias = store.phases.some((p) => p.endHour > 12);
+  const stop = (e: React.SyntheticEvent) => { e.stopPropagation(); };
 
   return (
-    <div className="wc-moment-face" data-jourj="moment-face">
-      <div className="wc-moment-face-hour">
-        {formatHour(phase.startHour)}
+    <div className={`wc-moment-face${selected ? ' is-selected-face' : ''}`} data-jourj="moment-face">
+      <div className="wc-moment-face-top">
+        {editHour ? (
+          <div className="wc-moment-face-hour-edit" onPointerDown={stop} onClick={stop}>
+            <TimeWheel
+              value={phase.startHour}
+              nightBias={nightBias}
+              onCommit={(h) => {
+                store.setPhaseTime(phaseId, normalizeNightHour(h, store.phases));
+                setEditHour(false);
+              }}
+              testId="hub-start"
+              ariaLabel="Heure de début"
+            />
+          </div>
+        ) : (
+          <button
+            type="button"
+            className="wc-moment-face-hour-btn"
+            data-jourj="moment-hour"
+            onPointerDown={stop}
+            onClick={(e) => { stop(e); setEditHour(true); setEditTitle(false); }}
+          >
+            {formatHour(phase.startHour)}
+          </button>
+        )}
         {phase.confidence && phase.confidence !== 'confirmed' && (
           <span
             className="wc-moment-cert"
@@ -511,10 +390,136 @@ export function MomentCardFace({
             {CERTAINTY[phase.confidence].label}
           </span>
         )}
+
+        {selected && (
+          <div className="wc-moment-face-plus-wrap" ref={menuRef} onPointerDown={stop} onClick={stop}>
+            <button
+              type="button"
+              className="wc-moment-face-plus"
+              data-jourj="moment-plus"
+              aria-label="Actions du moment"
+              aria-expanded={menuOpen}
+              onClick={() => { setMenuOpen((v) => !v); setDocOpen(false); }}
+            >
+              +
+            </button>
+            {menuOpen && !docOpen && (
+              <ul className="wc-moment-face-menu" role="menu" data-jourj="moment-plus-menu">
+                <li>
+                  <button type="button" role="menuitem" data-jourj="moment-action-doc" onClick={() => setDocOpen(true)}>
+                    <span aria-hidden>📄</span> Document
+                  </button>
+                </li>
+                <li>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    data-jourj="moment-action-task"
+                    onClick={() => {
+                      const title = window.prompt('Tâche ?');
+                      if (title?.trim()) store.createTaskForPhase(phaseId, title.trim());
+                      setMenuOpen(false);
+                    }}
+                  >
+                    <span aria-hidden>✓</span> Tâche
+                  </button>
+                </li>
+                <li>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    data-jourj="moment-action-planb"
+                    onClick={() => {
+                      const scenario = store.createScenario(`Plan B — ${phase.name}`);
+                      if (scenario) store.setActiveScenario(scenario.id);
+                      setMenuOpen(false);
+                    }}
+                  >
+                    <span aria-hidden>⎇</span> Plan B
+                  </button>
+                </li>
+                <li>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    data-jourj="moment-action-person"
+                    onClick={() => {
+                      const name = window.prompt('Prénom Nom ?');
+                      if (!name?.trim()) return;
+                      const person = store.createPerson({ displayName: name.trim(), asGuest: true, rsvp: 'pending' });
+                      if (person) store.attachPersonToPhase(phaseId, person.id);
+                      setMenuOpen(false);
+                    }}
+                  >
+                    <span aria-hidden>👤</span> Personne
+                  </button>
+                </li>
+                <li>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    data-jourj="moment-action-vendor"
+                    onClick={() => {
+                      const name = window.prompt('Prestataire ?');
+                      if (!name?.trim()) return;
+                      const vendor = store.createVendor({ companyName: name.trim(), category: 'autre' });
+                      if (vendor) store.attachVendorToPhase(phaseId, vendor.id);
+                      setMenuOpen(false);
+                    }}
+                  >
+                    <span aria-hidden>🏢</span> Presta
+                  </button>
+                </li>
+                <li className="is-danger">
+                  <button
+                    type="button"
+                    role="menuitem"
+                    data-jourj="moment-action-delete"
+                    onClick={() => { store.deletePhase(phaseId); setMenuOpen(false); }}
+                  >
+                    Supprimer
+                  </button>
+                </li>
+              </ul>
+            )}
+            {docOpen && (
+              <DocComposer phaseId={phaseId} onClose={() => { setDocOpen(false); setMenuOpen(false); }} />
+            )}
+          </div>
+        )}
       </div>
+
       {!dense && (
         <>
-          <div className="wc-moment-face-name">{displayName}</div>
+          {editTitle ? (
+            <input
+              className="wc-moment-face-title-input"
+              autoFocus
+              defaultValue={phase.name}
+              data-jourj="hub-title"
+              onPointerDown={stop}
+              onClick={stop}
+              onBlur={(e) => {
+                const v = e.target.value.trim();
+                if (v && v !== phase.name) store.setPhaseTitle(phaseId, v);
+                setEditTitle(false);
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+                if (e.key === 'Escape') setEditTitle(false);
+              }}
+            />
+          ) : (
+            <button
+              type="button"
+              className="wc-moment-face-name-btn"
+              data-jourj="moment-title"
+              onPointerDown={stop}
+              onClick={(e) => { stop(e); setEditTitle(true); setEditHour(false); }}
+            >
+              {displayName}
+            </button>
+          )}
           <div className="wc-moment-face-meta">
             {durationMin >= 60
               ? `${Math.floor(durationMin / 60)} h${durationMin % 60 ? ` ${durationMin % 60}` : ''}`
@@ -522,6 +527,7 @@ export function MomentCardFace({
             {hub && hub.persons.length > 0 && ` · ${hub.persons.length} pers.`}
             {hub && hub.vendors.length > 0 && ` · ${hub.vendors.length} prest.`}
             {hub && hub.media.length > 0 && ` · ${hub.media.length} doc.`}
+            {hub?.place ? ` · ${hub.place.name}` : ''}
           </div>
           {gaps.length > 0 && (
             <ul className="wc-moment-gaps is-face" data-jourj="moment-state">
@@ -577,7 +583,7 @@ function DocComposer({ phaseId, onClose }: { phaseId: string; onClose: () => voi
   };
 
   return (
-    <div className="wc-moment-dock-composer" data-jourj="moment-doc-composer">
+    <div className="wc-moment-doc-pop" data-jourj="moment-doc-composer">
       <label>
         <span>Type</span>
         <select value={docKind} onChange={(e) => setDocKind(e.target.value)} data-jourj="hub-generate-kind">

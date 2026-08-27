@@ -90,11 +90,13 @@
 }
 
 /* The open moment is identified on the film itself — a white frame, never a
-   second selection chrome elsewhere. */
+   second selection chrome elsewhere. Overflow visible so the card + menu
+   can spill without a big blob covering the strip. */
 .wc-jourj-moment.is-selected {
   border-color: #f6f5f3;
   box-shadow: 0 0 0 1px #f6f5f3, 0 18px 40px rgba(0, 0, 0, 0.45);
-  z-index: 20;
+  z-index: 28;
+  overflow: visible;
 }
 
 .wc-jourj-moment.is-ghosted { opacity: 0.5; }
@@ -645,106 +647,6 @@
 }
 .wc-hub.is-inline .wc-hub-event-head { position: sticky; top: 48px; z-index: 3; }
 
-.wc-pinned-time {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  width: 2px;
-  z-index: 40;
-  background: #f6f5f3;
-}
-.wc-pinned-time > div {
-  position: absolute;
-  top: 8px;
-  left: 8px;
-  padding: 4px 7px;
-  border-radius: 999px;
-  background: #f6f5f3;
-  color: #08090b;
-  font: 600 10px/1 ui-monospace,monospace;
-}
-.wc-pinned-time > button {
-  position: absolute;
-  top: 38px;
-  left: 8px;
-  width: max-content;
-  appearance: none;
-  border: 1px solid rgba(246,245,243,.3);
-  border-radius: 999px;
-  background: #101114;
-  color: #f6f5f3;
-  padding: 7px 10px;
-  cursor: pointer;
-  font-size: 10px;
-}
-.wc-pinned-time > button:last-child { top: 72px; padding: 5px 8px; }
-
-
-/* --- EVENT SURFACE (day identity) — warm paper, under the head ------------ */
-.wc-event-surface {
-  background: #f4f1ea;
-  color: #141414;
-  border-top: 1px solid rgba(20, 20, 20, 0.1);
-  border-bottom: 1px solid rgba(20, 20, 20, 0.12);
-}
-.wc-event-surface.is-inline {
-  position: relative;
-  inset: auto;
-  width: auto;
-  z-index: 2;
-}
-.wc-event-surface-head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 14px;
-  padding: clamp(18px, 3vw, 28px) clamp(18px, 5vw, 64px) 8px;
-}
-.wc-event-surface-body {
-  padding: 4px clamp(18px, 5vw, 64px) clamp(22px, 4vw, 36px);
-  max-width: 640px;
-}
-
-/* --- placement mode on the film ------------------------------------------- */
-.wc-jourj-strip.is-placing {
-  cursor: crosshair;
-}
-.wc-pinned-time.is-following {
-  background: rgba(246, 245, 243, 0.55);
-  pointer-events: none;
-}
-.wc-create-capsule {
-  position: absolute;
-  top: 38px;
-  left: 8px;
-  z-index: 45;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
-  width: min(420px, 70vw);
-  padding: 12px;
-  border-radius: 12px;
-  background: #101114;
-  border: 1px solid rgba(246, 245, 243, 0.28);
-  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.55);
-  pointer-events: auto;
-}
-.wc-create-templates {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  width: 100%;
-  margin-top: 4px;
-}
-.wc-pinned-time > button[data-jourj="add-here"] {
-  top: 38px;
-}
-.wc-pinned-time > button[data-jourj="pin-clear"] {
-  top: 8px;
-  left: auto;
-  right: -36px;
-}
 
 
 
@@ -1203,4 +1105,244 @@
   .wc-ripple-bar.has-dock {
     bottom: calc(118px + env(safe-area-inset-bottom, 0px));
   }
+}
+
+/* --- PIN (empty-time add) — clean stack, no ghost badge -------------------- */
+.wc-jourj-strip.is-placing { cursor: crosshair; }
+.wc-pin {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 0;
+  z-index: 40;
+  pointer-events: none;
+}
+.wc-pin-rail {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 2px;
+  background: #f6f5f3;
+  transform: translateX(-1px);
+}
+.wc-pin.is-following .wc-pin-rail { background: rgba(246, 245, 243, 0.55); }
+.wc-pin-stack {
+  pointer-events: auto;
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  z-index: 2;
+}
+.wc-pin-top {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.wc-pin-hour {
+  display: inline-flex;
+  align-items: center;
+  height: 28px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: #f6f5f3;
+  color: #08090b;
+  font: 700 11px/1 ui-monospace, monospace;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+.wc-pin.is-following .wc-pin-hour {
+  background: rgba(246, 245, 243, 0.92);
+}
+.wc-pin-dismiss {
+  appearance: none;
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  border: 1px solid rgba(246, 245, 243, 0.28);
+  background: #101114;
+  color: #f6f5f3;
+  cursor: pointer;
+  font-size: 16px;
+  line-height: 1;
+  display: grid;
+  place-items: center;
+  padding: 0;
+}
+.wc-pin-dismiss:hover { background: #1a1c20; }
+.wc-pin-add {
+  appearance: none;
+  border: 1px solid rgba(246, 245, 243, 0.28);
+  border-radius: 999px;
+  background: #101114;
+  color: #f6f5f3;
+  padding: 9px 14px;
+  cursor: pointer;
+  font: 600 12px/1 inherit;
+  white-space: nowrap;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45);
+}
+.wc-pin-add:hover { background: #181a1f; }
+
+/* --- Face: clickable hour/title + card + menu ----------------------------- */
+.wc-moment-face-top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 28px;
+  pointer-events: none;
+}
+.wc-moment-face-hour-btn,
+.wc-moment-face-name-btn {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  padding: 0;
+  pointer-events: auto;
+  border-radius: 4px;
+}
+.wc-moment-face-hour-btn {
+  font-family: ui-monospace, monospace;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  color: #f6f5f3;
+}
+.wc-moment-face-hour-btn:hover,
+.wc-moment-face-name-btn:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.wc-moment-face-name-btn {
+  margin-top: 4px;
+  font-size: clamp(15px, 1.5vw, 20px);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+  color: #f6f5f3;
+  pointer-events: auto;
+  width: 100%;
+}
+.wc-moment-face-title-input {
+  margin-top: 4px;
+  width: 100%;
+  box-sizing: border-box;
+  appearance: none;
+  border: 1px solid rgba(246, 245, 243, 0.28);
+  border-radius: 6px;
+  background: rgba(8, 9, 11, 0.85);
+  color: #f6f5f3;
+  font: 600 15px/1.2 inherit;
+  letter-spacing: -0.02em;
+  padding: 6px 8px;
+  outline: none;
+  pointer-events: auto;
+}
+.wc-moment-face-hour-edit {
+  pointer-events: auto;
+  transform: scale(0.92);
+  transform-origin: left center;
+}
+.wc-moment-face-plus-wrap {
+  margin-left: auto;
+  position: relative;
+  pointer-events: auto;
+  z-index: 5;
+}
+.wc-moment-face-plus {
+  appearance: none;
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  border: 1px solid rgba(246, 245, 243, 0.35);
+  background: rgba(246, 245, 243, 0.12);
+  color: #f6f5f3;
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  padding: 0;
+}
+.wc-moment-face-plus:hover { background: rgba(246, 245, 243, 0.22); }
+.wc-moment-face-menu {
+  list-style: none;
+  margin: 6px 0 0;
+  padding: 6px;
+  position: absolute;
+  right: 0;
+  top: 100%;
+  min-width: 160px;
+  background: #14161a;
+  border: 1px solid rgba(246, 245, 243, 0.22);
+  border-radius: 12px;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.55);
+  display: grid;
+  gap: 2px;
+  z-index: 30;
+}
+.wc-moment-face-menu button {
+  appearance: none;
+  width: 100%;
+  text-align: left;
+  border: 0;
+  background: transparent;
+  color: #f6f5f3;
+  padding: 8px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.wc-moment-face-menu button:hover { background: rgba(246, 245, 243, 0.08); }
+.wc-moment-face-menu li.is-danger button { color: #e0736a; }
+.wc-moment-doc-pop {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  width: min(260px, 70vw);
+  padding: 12px;
+  background: #14161a;
+  border: 1px solid rgba(246, 245, 243, 0.22);
+  border-radius: 12px;
+  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.6);
+  display: grid;
+  gap: 8px;
+  z-index: 31;
+  color: #f6f5f3;
+}
+.wc-moment-doc-pop label {
+  display: grid;
+  gap: 4px;
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: rgba(246, 245, 243, 0.5);
+}
+.wc-moment-doc-pop select,
+.wc-moment-doc-pop input {
+  appearance: none;
+  width: 100%;
+  box-sizing: border-box;
+  background: rgba(246, 245, 243, 0.06);
+  border: 1px solid rgba(246, 245, 243, 0.18);
+  border-radius: 8px;
+  color: #f6f5f3;
+  padding: 8px 10px;
+  font: inherit;
+  font-size: 12px;
+  text-transform: none;
+  letter-spacing: 0;
 }

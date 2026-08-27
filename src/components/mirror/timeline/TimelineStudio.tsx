@@ -122,13 +122,10 @@ export function TimelineStudio() {
   const [drag, setDrag] = useState<DragState | null>(null);
   const [cursorHour, setCursorHour] = useState<number | null>(null);
   const [openPhaseId, setOpenPhaseId] = useState<string | null>(null);
-  // Placement mode: one add flow. The vertical ruler follows time, a click
-  // freezes the hour, and the creation capsule opens THERE — never a second
-  // form parked above the film.
+  // Placement / pin: empty-time click freezes the hour; one « Ajouter un
+  // moment » creates immediately — no create capsule, no header form.
   const [placing, setPlacing] = useState(false);
   const [pinnedHour, setPinnedHour] = useState<number | null>(null);
-  const [draftName, setDraftName] = useState('');
-  const [draftDuration, setDraftDuration] = useState('60');
   const [ripple, setRipple] = useState<{ phaseId: string; delta: number; count: number } | null>(null);
   const [eventPanelOpen, setEventPanelOpen] = useState(false);
   // Click vs drag: the card is both selection surface and drag handle. A real
@@ -339,7 +336,6 @@ export function TimelineStudio() {
     const rect = strip.getBoundingClientRect();
     const hour = snap(hourForX(clientX - rect.left + strip.scrollLeft));
     setPinnedHour(hour);
-    if (placing) setDraftName('');
   };
 
   const endPan = (e?: React.PointerEvent) => {
@@ -350,7 +346,6 @@ export function TimelineStudio() {
     // Threshold is generous: trackpads and synthetic clicks drift a few px.
     if (e && pan && strip && Math.abs(e.clientX - pan.startX) < 12
       && !(e.target as HTMLElement).closest('[data-jourj="moment"]')
-      && !(e.target as HTMLElement).closest('[data-jourj="create-capsule"]')
       && !(e.target as HTMLElement).closest('[data-jourj="pinned-time"]')
       && !(e.target as HTMLElement).closest('button, input, select, textarea, a')) {
       pinHourAtClientX(e.clientX);
@@ -364,7 +359,6 @@ export function TimelineStudio() {
     // on empty film still freezes the hour (especially in placement mode).
     if (drag) return;
     if ((e.target as HTMLElement).closest('[data-jourj="moment"]')) return;
-    if ((e.target as HTMLElement).closest('[data-jourj="create-capsule"]')) return;
     if ((e.target as HTMLElement).closest('[data-jourj="pinned-time"]')) return;
     if ((e.target as HTMLElement).closest('button, input, select, textarea, a')) return;
     pinHourAtClientX(e.clientX);
@@ -378,40 +372,12 @@ export function TimelineStudio() {
     return Number.isFinite(h) ? h : null;
   };
 
-  const submitMoment = () => {
-    if (pinnedHour === null) return;
-    const minutes = Number(draftDuration);
-    if (!draftName.trim() || !Number.isFinite(minutes) || minutes <= 0) return;
-    const start = normalizeNightHour(pinnedHour, phases);
-    const created = store.createPhase({
-      name: draftName.trim(),
-      startHour: start,
-      durationHours: minutes / 60,
-    });
-    if (!created) return;
-    setDraftName('');
-    setDraftDuration('60');
-    setPlacing(false);
-    setPinnedHour(null);
-    // Bring the new moment into view and open its contextual surface.
-    requestAnimationFrame(() => {
-      const strip = stripRef.current;
-      if (strip) strip.scrollLeft = Math.max(0, xForHour(created.startHour) - 120);
-      openMomentEditor(created.id);
-    });
-  };
-
   const beginPlacement = (seedHour?: number) => {
     setEventPanelOpen(false);
     setOpenPhaseId(null);
     setPlacing(true);
-    setDraftName('');
-    setDraftDuration('60');
-    if (seedHour !== undefined) {
-      setPinnedHour(snap(seedHour));
-    } else {
-      setPinnedHour(null);
-    }
+    if (seedHour !== undefined) setPinnedHour(snap(seedHour));
+    else setPinnedHour(null);
     requestAnimationFrame(() => {
       stripRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
     });
@@ -420,7 +386,6 @@ export function TimelineStudio() {
   const cancelPlacement = () => {
     setPlacing(false);
     setPinnedHour(null);
-    setDraftName('');
   };
 
   const addTemplate = (label: string, startHour: number, durationHours: number) => {
@@ -428,7 +393,6 @@ export function TimelineStudio() {
     if (created) {
       setPlacing(false);
       setPinnedHour(null);
-      setDraftName('');
       requestAnimationFrame(() => {
         const strip = stripRef.current;
         if (strip) strip.scrollLeft = Math.max(0, xForHour(created.startHour) - 120);
@@ -598,7 +562,7 @@ export function TimelineStudio() {
                 data-selected={isSelected ? 'yes' : 'no'}
                 aria-current={isSelected ? 'true' : undefined}
               >
-                <MomentCardFace phaseId={phase.id} dense={dense} displayName={displayName} />
+                <MomentCardFace phaseId={phase.id} dense={dense} displayName={displayName} selected={isSelected} />
               </article>
             );
           })}
@@ -628,89 +592,63 @@ export function TimelineStudio() {
             </div>
           )}
 
-          {/* Where you are in the day. Clicking empty time pins the ruler and
-              turns it into an insertion point rather than a fleeting hover. */}
-          {/* Placement / pin ruler: the vertical line is the temporal anchor.
-              In placement mode the cursor line follows time until a click freezes
-              it; the creation capsule then opens at that hour — « Ajouter ici »
-              is that confirmation, not a second builder. */}
+          {/* Pin: empty-time click freezes the hour. One chip + add. */}
           {placing && pinnedHour === null && cursorHour !== null && !drag && (
-            <div className="wc-pinned-time is-following" style={{ left: xForHour(cursorHour) }} data-jourj="placement-cursor">
-              <div>{formatHour(cursorHour)}</div>
+            <div className="wc-pin is-following" style={{ left: xForHour(cursorHour) }} data-jourj="placement-cursor">
+              <div className="wc-pin-rail" aria-hidden />
+              <div className="wc-pin-stack">
+                <span className="wc-pin-hour">{formatHour(cursorHour)}</span>
+              </div>
             </div>
           )}
           {pinnedHour !== null && (
-            <div className="wc-pinned-time" style={{ left: xForHour(pinnedHour) }} data-jourj="pinned-time">
-              <div>{formatHour(pinnedHour)}</div>
-              {placing ? (
-                <div
-                  className="wc-create-capsule"
-                  data-jourj="create-capsule"
-                  onPointerDown={(event) => event.stopPropagation()}
-                  onClick={(event) => event.stopPropagation()}
-                >
-                  <input
-                    autoFocus
-                    value={draftName}
-                    onChange={(e) => setDraftName(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') submitMoment();
-                      if (e.key === 'Escape') cancelPlacement();
+            <div className="wc-pin" style={{ left: xForHour(pinnedHour) }} data-jourj="pinned-time">
+              <div className="wc-pin-rail" aria-hidden />
+              <div
+                className="wc-pin-stack"
+                onPointerDown={(e) => e.stopPropagation()}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="wc-pin-top">
+                  <span className="wc-pin-hour">{formatHour(pinnedHour)}</span>
+                  <button
+                    type="button"
+                    className="wc-pin-dismiss"
+                    data-jourj="pin-clear"
+                    aria-label="Retirer le repère"
+                    onClick={() => {
+                      setPinnedHour(null);
+                      setPlacing(false);
                     }}
-                    placeholder="Nom du moment"
-                    style={{ ...input, width: 168, flex: '1 1 auto' }}
-                    data-jourj="moment-name"
-                    aria-label="Nom du moment"
-                  />
-                  <input
-                    value={draftDuration}
-                    onChange={(e) => setDraftDuration(e.target.value)}
-                    onKeyDown={(e) => { if (e.key === 'Enter') submitMoment(); }}
-                    placeholder="60"
-                    style={{ ...input, width: 56 }}
-                    aria-label="Durée en minutes"
-                    data-jourj="moment-duration"
-                  />
-                  <span style={{ color: 'var(--jourj-faint)', fontSize: 10 }}>min</span>
-                  <button onClick={submitMoment} style={primaryBtn} data-jourj="moment-create">Créer</button>
-                  <button onClick={cancelPlacement} style={ghostBtn} data-jourj="placement-cancel">Annuler</button>
-                  {/* Templates once — only inside the capsule at the pinned hour. */}
-                  <div className="wc-create-templates" data-jourj="create-templates">
-                    {MOMENT_TEMPLATES.map((t) => (
-                      <button
-                        key={t.label}
-                        onClick={() => addTemplate(t.label, pinnedHour, t.durationHours)}
-                        style={templateChip}
-                        data-jourj="template"
-                      >
-                        {t.label}
-                      </button>
-                    ))}
-                  </div>
+                  >
+                    ×
+                  </button>
                 </div>
-              ) : (
                 <button
-                  onPointerDown={(event) => event.stopPropagation()}
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    beginPlacement(pinnedHour);
-                  }}
+                  type="button"
+                  className="wc-pin-add"
                   data-jourj="add-moment"
+                  onClick={() => {
+                    const startH = normalizeNightHour(pinnedHour, phases);
+                    const created = store.createPhase({
+                      name: 'Nouveau moment',
+                      startHour: startH,
+                      durationHours: 1,
+                    });
+                    setPinnedHour(null);
+                    setPlacing(false);
+                    if (created) {
+                      requestAnimationFrame(() => {
+                        const strip = stripRef.current;
+                        if (strip) strip.scrollLeft = Math.max(0, xForHour(created.startHour) - 120);
+                        openMomentEditor(created.id);
+                      });
+                    }
+                  }}
                 >
                   + Ajouter un moment
                 </button>
-              )}
-              <button
-                onPointerDown={(event) => event.stopPropagation()}
-                onClick={() => {
-                  if (placing) cancelPlacement();
-                  else setPinnedHour(null);
-                }}
-                aria-label="Retirer le repère"
-                data-jourj="pin-clear"
-              >
-                ×
-              </button>
+              </div>
             </div>
           )}
           {cursorHour !== null && pinnedHour === null && !placing && !drag && (
@@ -743,8 +681,7 @@ export function TimelineStudio() {
             + Ajouter le premier moment
           </button>
           <p style={{ ...emptyBody, marginTop: 14, fontSize: typography.editorial.micro }}>
-            Même flux que « Ajouter un moment » : placez l’heure sur la journée, puis
-            nommez le moment. Les modèles n’apparaissent qu’une fois, au moment de créer.
+            Cliquez une heure sur la journée, puis « Ajouter un moment ».
           </p>
         </div>
       )}

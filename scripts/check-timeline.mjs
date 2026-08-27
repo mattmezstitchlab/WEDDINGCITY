@@ -249,8 +249,9 @@ try {
     'no separate « Ouvrir » button — the card click is the only door');
   r.check(/DRAG_THRESHOLD_PX/.test(studio) && /wasClick/.test(studio),
     'click and drag are distinguished by a movement threshold');
-  r.check(/create-capsule/.test(studio) && /data-jourj=\"add-moment\"/.test(studio),
-    'adding a moment is pin + « Ajouter un moment » on the film — not a header button');
+  r.check(/data-jourj=\"pinned-time\"/.test(studio) && /data-jourj=\"add-moment\"/.test(studio)
+    && !/create-capsule/.test(studio) && !/draftName/.test(studio),
+    'adding a moment is pin + instant « Ajouter un moment » — no create capsule');
   r.check(!/\.wc-jourj-tools[\s\S]{0,800}data-jourj=\"add-moment\"/.test(studio),
     'no Ajouter button in the day header tools');
   r.check(!/setComposing/.test(studio),
