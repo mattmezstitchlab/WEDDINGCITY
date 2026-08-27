@@ -91,7 +91,7 @@ export function MirrorLanding() {
           {projects.length > 0 && (
             <div className="wc-gj-project-menu">
               <button onClick={() => setProjectMenuOpen((open) => !open)} className="wc-gj-nav-link" aria-expanded={projectMenuOpen}>
-                Mes événements <span aria-hidden>⌄</span>
+                Mes événements <span aria-hidden style={{ fontSize: 14 }}>⌄</span>
               </button>
               {projectMenuOpen && (
                 <div role="menu" aria-label="Mes événements">
