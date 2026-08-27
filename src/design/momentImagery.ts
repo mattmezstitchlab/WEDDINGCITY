@@ -80,14 +80,109 @@ export function archetypeForMoment(name: string): MomentArchetype {
  * wins, and in that case `isProductAsset` is false so the interface can say
  * whose picture it is.
  */
-export function momentImage(name: string, ownMediaSource?: string | null): {
+/**
+ * When the moment name does not match a wedding archetype, the event type
+ * still needs a real product picture — never a grey void. These pools only
+ * reuse shipped editorial assets; nothing is invented as a fake memory.
+ */
+const EVENT_TYPE_DEFAULTS: Record<string, MomentArchetype[]> = {
+  mariage: ['ceremonie', 'cocktail', 'diner', 'bal', 'soiree', 'preparatifs'],
+  corporate: ['discours', 'dejeuner', 'moment', 'cocktail'],
+  seminaire: ['discours', 'dejeuner', 'moment', 'cocktail'],
+  festival: ['soiree', 'bal', 'after', 'moment'],
+  concert: ['soiree', 'bal', 'after', 'moment'],
+  spectacle: ['soiree', 'bal', 'discours', 'moment'],
+  gala: ['diner', 'discours', 'bal', 'soiree', 'cocktail'],
+  associatif: ['discours', 'dejeuner', 'moment', 'cocktail'],
+  culturel: ['discours', 'moment', 'cocktail', 'soiree'],
+  anniversaire: ['soiree', 'diner', 'cocktail', 'bal', 'after'],
+  journee: ['moment', 'dejeuner', 'discours'],
+  mission: ['moment', 'preparatifs', 'discours'],
+  voyage: ['moment', 'after', 'preparatifs'],
+  autre: ['moment', 'cocktail', 'diner'],
+  fete: ['soiree', 'diner', 'cocktail', 'bal'],
+  soiree: ['soiree', 'bal', 'after', 'cocktail'],
+  convention: ['discours', 'dejeuner', 'moment', 'cocktail'],
+};
+
+/** Stable pick inside a pool so the same title always lands on the same image. */
+function pickFromPool(name: string, pool: MomentArchetype[]): MomentArchetype {
+  if (pool.length === 0) return 'moment';
+  let hash = 0;
+  const text = name || 'moment';
+  for (let i = 0; i < text.length; i++) hash = (hash * 31 + text.charCodeAt(i)) >>> 0;
+  return pool[hash % pool.length];
+}
+
+/**
+ * The picture to show for a moment.
+ *
+ * `ownMediaSource` is the couple's own image when they attached one: it always
+ * wins, and in that case `isProductAsset` is false so the interface can say
+ * whose picture it is.
+ *
+ * `eventTypeId` only steers the product fallback when the moment name does not
+ * match a known archetype — it never overrides a real user media.
+ */
+export function momentImage(
+  name: string,
+  ownMediaSource?: string | null,
+  eventTypeId?: string | null,
+): {
   src: string; alt: string; width: number; height: number; isProductAsset: boolean;
 } {
   if (ownMediaSource) {
     return { src: ownMediaSource, alt: name || 'Photographie du moment', width: 1376, height: 768, isProductAsset: false };
   }
-  const asset = MOMENT_ASSETS[archetypeForMoment(name)];
+  let key = archetypeForMoment(name);
+  if (key === 'moment' && eventTypeId) {
+    const pool = EVENT_TYPE_DEFAULTS[eventTypeId] ?? EVENT_TYPE_DEFAULTS.autre;
+    key = pickFromPool(name, pool);
+  }
+  const asset = MOMENT_ASSETS[key];
   return { src: asset.src, alt: asset.alt, width: asset.width, height: asset.height, isProductAsset: true };
+}
+
+/** Public navigation entries of the mini-site, adapted to the event kind. */
+export type MiniSiteNavAction = 'programme' | 'rsvp' | 'ticketing' | 'artists' | 'participants' | 'speakers' | 'travelers' | 'infos';
+
+export function miniSiteNavigation(eventTypeId?: string | null): { label: string; action: MiniSiteNavAction }[] {
+  const kind = eventTypeId ?? 'mariage';
+  if (kind === 'mariage' || kind === 'anniversaire' || kind === 'fete' || kind === 'soiree') {
+    return [
+      { label: 'Programme', action: 'programme' },
+      { label: 'RSVP', action: 'rsvp' },
+      { label: 'Infos pratiques', action: 'infos' },
+    ];
+  }
+  if (kind === 'spectacle' || kind === 'concert' || kind === 'festival') {
+    return [
+      { label: 'Programme', action: 'programme' },
+      { label: 'Billetterie', action: 'ticketing' },
+      { label: 'Artistes', action: 'artists' },
+      { label: 'Infos pratiques', action: 'infos' },
+    ];
+  }
+  if (['corporate', 'seminaire', 'convention', 'gala', 'associatif', 'culturel'].includes(kind)) {
+    return [
+      { label: 'Programme', action: 'programme' },
+      { label: 'Participants', action: 'participants' },
+      { label: 'Intervenants', action: 'speakers' },
+      { label: 'Infos pratiques', action: 'infos' },
+    ];
+  }
+  if (kind === 'voyage') {
+    return [
+      { label: 'Itinéraire', action: 'programme' },
+      { label: 'Voyageurs', action: 'travelers' },
+      { label: 'Infos pratiques', action: 'infos' },
+    ];
+  }
+  return [
+    { label: 'Programme', action: 'programme' },
+    { label: 'Participants', action: 'participants' },
+    { label: 'Infos pratiques', action: 'infos' },
+  ];
 }
 
 /**
