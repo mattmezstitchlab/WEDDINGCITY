@@ -248,7 +248,7 @@ const attach = async (phaseName, personName) => {
   await p.evaluate((phaseId) => {
     const card = document.querySelector(`[data-phase-id="${phaseId}"]`);
     card?.scrollIntoView({ inline: 'center' });
-    card?.querySelector('[data-jourj="open-moment"]')?.click();
+    card?.click();
   }, phaseId);
   await wait(900);
   await unfoldHub();
@@ -366,7 +366,7 @@ const dinerId = (await state()).phases.find((x) => x.name === 'Dîner')?.id;
 await p.evaluate((id) => {
   const card = document.querySelector(`[data-phase-id="${id}"]`);
   card?.scrollIntoView({ inline: 'center' });
-  card?.querySelector('[data-jourj="open-moment"]')?.click();
+  card?.click();
 }, dinerId);
 await wait(900);
 await unfoldHub();
@@ -402,7 +402,7 @@ const cocktailId = (await state()).phases.find((x) => x.name === 'Cocktail')?.id
 await p.evaluate((id) => {
   const card = document.querySelector(`[data-phase-id="${id}"]`);
   card?.scrollIntoView({ inline: 'center' });
-  card?.querySelector('[data-jourj="open-moment"]')?.click();
+  card?.click();
 }, cocktailId);
 await wait(600);
 await unfoldHub();

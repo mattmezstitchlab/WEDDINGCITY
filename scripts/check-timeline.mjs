@@ -236,6 +236,14 @@ try {
     'public mini-site navigation no longer sits above the working film');
   r.check(/is-selected/.test(studio) && /openMomentEditor/.test(studio),
     'opening a moment selects it on the film and opens the editor under it');
+  r.check(!/data-jourj=\"open-moment\"/.test(studio) && !/>\s*Ouvrir\s*<\/button>/.test(studio),
+    'no separate « Ouvrir » button — the card click is the only door');
+  r.check(/DRAG_THRESHOLD_PX/.test(studio) && /wasClick/.test(studio),
+    'click and drag are distinguished by a movement threshold');
+  r.check(/beginPlacement/.test(studio) && /create-capsule/.test(studio),
+    'adding a moment is one placement flow with a creation capsule on the film');
+  r.check(!/setComposing/.test(studio),
+    'no second creation form above the film');
   const miniSite = read('components', 'mirror', 'site', 'MiniSiteStudio.tsx');
   r.check(/id: 'desktop'/.test(miniSite) && /Ordinateur/.test(miniSite)
     && /id: 'tablet'/.test(miniSite) && /iPad/.test(miniSite)
@@ -858,16 +866,25 @@ try {
 
   // One folding mechanism, used by both contexts of the one panel.
   r.check(/export function PanelSection/.test(sectionSrc), 'there is one folding section component');
-  r.check(/from '\.\/PanelSection'/.test(hubUx) && /from '\.\/PanelSection'/.test(eventPanel),
-    'and both the moment and the event use it — not two mechanics');
-  r.check(/className=\{`wc-hub\$\{inline \? ' is-inline' : ''\}`\}/.test(eventPanel),
-    'the event editor reuses the moment shell inline in the timeline');
+  r.check(/from '\.\/PanelSection'/.test(hubUx),
+    'the moment uses the folding section — one mechanic inside its surface');
+  r.check(!/from '\.\/PanelSection'/.test(eventPanel),
+    'the event surface is a short identity form, not a second folding hub');
+  r.check(/wc-event-surface/.test(eventPanel) && /data-jourj=\"event-panel\"/.test(eventPanel),
+    'the event surface is its own shell under the day head — not the moment hub');
+  r.check(!/event-open-moment/.test(eventPanel) && !/event-calendar/.test(eventPanel)
+    && !/event-scenarios/.test(eventPanel) && !/Comparer les scénarios/.test(eventPanel),
+    'the event surface holds only day identity — no moment list, calendar or plan B');
+  r.check(/event-name/.test(eventPanel) && /event-type/.test(eventPanel)
+    && /event-date/.test(eventPanel) && /event-place/.test(eventPanel)
+    && /event-headcount/.test(eventPanel),
+    'event fields: name, type, date, place, headcount');
   // Seven since « Scénarios » joined: a plan B now has an obvious door on the
   // moment it concerns, instead of only living in the propagation bar.
   r.check((hubUx.match(/<PanelSection/g) || []).length === 7,
     'the moment folds into seven sections', String((hubUx.match(/<PanelSection/g) || []).length));
-  r.check(/summary=/.test(hubUx) && /summary=/.test(eventPanel),
-    'a closed section always carries a summary of its own state');
+  r.check(/summary=/.test(hubUx),
+    'a closed moment section always carries a summary of its own state');
 
   // The five duplicates found by the audit are gone from the composition surface.
   for (const [call, what] of [

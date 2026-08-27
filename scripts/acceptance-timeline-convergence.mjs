@@ -93,7 +93,7 @@ const openMomentCard = async (name) => {
     const card = [...document.querySelectorAll('[data-jourj="moment"]')]
       .find((c) => (c.textContent || '').includes(name)) || document.querySelector('[data-jourj="moment"]');
     card?.scrollIntoView({ inline: 'center', block: 'nearest' });
-    card?.querySelector('[data-jourj="open-moment"]')?.click();
+    card?.click();
   }, name);
   await wait(900);
 };

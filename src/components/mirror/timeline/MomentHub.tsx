@@ -17,8 +17,9 @@ import { IconDocument } from '../../ui/Icons';
 // straight into the store, on THIS moment, and nothing exists until someone
 // types it.
 //
-// Deliberately not a settings page: no tabs, no wizard, no separate
-// /documents route. One scroll, one moment, ten dimensions.
+// ONE contextual surface under the film. No floating menu, no « Tout éditer »,
+// no second level: click a moment and everything that belongs to it is here.
+// Folding sections are navigation inside THIS surface, not another door.
 // ---------------------------------------------------------------------------
 
 export function MomentHub({ phaseId, onClose, inline = false }: { phaseId: string; onClose: () => void; inline?: boolean }) {

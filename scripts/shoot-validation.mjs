@@ -107,13 +107,14 @@ if (deskCal.visibleCalendarButtons > 0 || deskCal.eventNav || deskCal.story) {
   process.exit(1);
 }
 
-// Open first moment.
-const openBtn = await page.$('[data-jourj="open-moment"]');
-if (!openBtn) {
-  console.error('FAIL: no open-moment button');
+// Open first moment — the card itself is the door (no « Ouvrir » button).
+const card = await page.$('[data-jourj="moment"]');
+if (!card) {
+  console.error('FAIL: no moment card to click');
   process.exit(1);
 }
-await openBtn.click();
+await card.evaluate((el) => el.scrollIntoView({ inline: 'center', block: 'nearest' }));
+await card.click();
 await settle(1400);
 
 const editor = await page.evaluate(() => {

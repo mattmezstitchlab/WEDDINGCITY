@@ -87,7 +87,7 @@ const openMomentCard = async (name) => {
     const card = [...document.querySelectorAll('[data-jourj="moment"]')]
       .find((c) => (c.textContent || '').includes(name)) || document.querySelector('[data-jourj="moment"]');
     card?.scrollIntoView({ inline: 'center', block: 'nearest' });
-    card?.querySelector('[data-jourj="open-moment"]')?.click();
+    card?.click();
   }, name);
   await wait(900);
 };
@@ -204,32 +204,34 @@ check('et il écrit sur le bon moment',
 await click('jourj', 'hub-close');
 await wait(600);
 
-// --- 4. the event has its own panel, same shell -----------------------------
-say('\n=== 4. L’ÉVÉNEMENT A SON PROPRE PANNEAU ===');
+// --- 4. the event has its own identity surface under the day head -----------
+say('\n=== 4. L’ÉVÉNEMENT A SA SURFACE D’IDENTITÉ ===');
 check('la porte « L’événement » existe sur la journée', await click('jourj', 'open-event'));
 await wait(900);
 const ev = await p.evaluate(() => {
   const panel = document.querySelector('[data-jourj="event-panel"]');
-  const sections = [...document.querySelectorAll('[data-jourj="hub-section"]')];
+  const hub = document.querySelector('[data-jourj="hub"]');
   return {
     panel: !!panel,
-    sameShell: panel ? panel.classList.contains('wc-hub') : false,
-    sections: sections.map((s) => s.dataset.section),
-    summaries: sections.map((s) => s.querySelector('[data-jourj="hub-section-summary"]')?.textContent.trim()),
-    fields: ['event-name', 'event-date', 'event-place', 'event-type']
+    eventShell: panel ? panel.classList.contains('wc-event-surface') : false,
+    notMomentShell: panel ? !panel.classList.contains('wc-hub') : false,
+    noMomentList: !document.querySelector('[data-jourj="event-open-moment"]'),
+    noCalendar: !document.querySelector('[data-jourj="event-calendar"]'),
+    noScenarios: !document.querySelector('[data-jourj="event-scenarios"]'),
+    fields: ['event-name', 'event-date', 'event-place', 'event-type', 'event-headcount']
       .filter((t) => !!document.querySelector(`[data-jourj="${t}"]`)),
+    hubStillClosed: !hub,
   };
 });
 say('  ' + JSON.stringify(ev));
-check('il s’ouvre dans la même géométrie que le moment — un seul panneau', ev.panel && ev.sameShell);
-check('il porte l’événement, la journée, les plans B et le calendrier',
-  ['event', 'day', 'scenarios', 'calendar'].every((id) => ev.sections.includes(id)), ev.sections.join(','));
-check('ses sections fermées annoncent elles aussi leur état',
-  ev.summaries.every((t) => t && t.length > 2), JSON.stringify(ev.summaries).slice(0, 160));
-check('le nom, la nature, la date et le lieu y sont modifiables',
-  ev.fields.length === 4, ev.fields.join(','));
+check('il s’ouvre sous l’en-tête, dans sa propre surface (pas le hub moment)',
+  ev.panel && ev.eventShell && ev.notMomentShell);
+check('pas de liste de moments, calendrier ni plans B',
+  ev.noMomentList && ev.noCalendar && ev.noScenarios);
+check('le nom, la nature, la date, le lieu et l’effectif y sont modifiables',
+  ev.fields.length === 5, ev.fields.join(','));
 await shot('02-panneau-evenement');
-await noOverflow('Panneau de l’événement');
+await noOverflow('Surface de l’événement');
 
 await commit('jourj', 'event-place', 'CHÂTEAU DE VAUX — ORANGERIE');
 await commit('jourj', 'event-date', '2027-07-19');
@@ -240,17 +242,18 @@ await commit('jourj', 'event-date', 'pas une date');
 const s4 = await state();
 check('une date qui n’en est pas une est refusée, sans rien casser', s4.project.date === '2027-07-19', String(s4.project.date));
 
-// a moment opens from the event panel — after opening « La journée », because
-// a folded section really does unmount its content. That is the behaviour under
-// test, not a workaround.
-await click('jourj', 'hub-section-day');
-await wait(500);
-check('la liste des moments vit dans « La journée »',
-  await p.evaluate(() => document.querySelectorAll('[data-jourj="event-open-moment"]').length >= 1));
-await p.evaluate(() => document.querySelector('[data-jourj="event-open-moment"]')?.click());
+// Close event, open a moment from the film — one door only.
+await click('jourj', 'event-close');
+await wait(400);
+await p.evaluate(() => {
+  const card = document.querySelector('[data-jourj="moment"]');
+  card?.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, clientX: 120, clientY: 120, pointerId: 1, button: 0 }));
+  card?.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, clientX: 120, clientY: 120, pointerId: 1, button: 0 }));
+});
 await wait(900);
-check('depuis l’événement, un moment s’ouvre',
-  await p.evaluate(() => !!document.querySelector('[data-jourj="hub"]')));
+check('un clic sur la carte ouvre la surface contextuelle du moment',
+  await p.evaluate(() => !!document.querySelector('[data-jourj="hub"]')
+    && !!document.querySelector('[data-jourj="moment"].is-selected')));
 await click('jourj', 'hub-close');
 await wait(500);
 
