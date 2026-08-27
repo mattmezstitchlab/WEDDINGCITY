@@ -92,12 +92,6 @@ export function MomentDock({
         {active && phase && phaseId && (
           <>
             <div className="wc-moment-dock-fields">
-              {/* Heure & nom s’éditent sur la carte (clic heure / titre). Ici : secondaires. */}
-              <DurationWheel
-                minutes={Math.round(duration * 60)}
-                onCommit={(m) => store.setPhaseDuration(phaseId, m / 60)}
-                testId="hub-duration"
-              />
               <select
                 className="wc-moment-dock-select"
                 value={phase.primaryPlaceId || ''}
@@ -119,20 +113,6 @@ export function MomentDock({
                 />
                 <IconSun size={14} color="currentColor" />
               </label>
-              <input
-                className="wc-moment-dock-input wc-moment-dock-num"
-                key={`€-${phaseId}-${phase.budget?.amount ?? ''}`}
-                defaultValue={phase.budget?.amount !== undefined ? String(phase.budget.amount) : ''}
-                placeholder="€"
-                inputMode="decimal"
-                onBlur={(e) => {
-                  const n = Number(e.target.value);
-                  if (Number.isFinite(n) && n >= 0) store.setPhaseBudget(phaseId, { amount: n });
-                }}
-                onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
-                data-jourj="hub-cost"
-                aria-label="Budget"
-              />
             </div>
 
             <div className="wc-moment-dock-meta">
@@ -262,46 +242,6 @@ function TimeWheel({
       >
         {MINS.map((m) => (
           <option key={m} value={m}>{String(m).padStart(2, '0')}</option>
-        ))}
-      </select>
-    </div>
-  );
-}
-
-/** Duration as H + M wheels (total minutes under the hood). */
-function DurationWheel({
-  minutes,
-  onCommit,
-  testId,
-}: {
-  minutes: number;
-  onCommit: (m: number) => void;
-  testId?: string;
-}) {
-  const h = Math.floor(Math.max(0, minutes) / 60);
-  const m = snapMin(Math.max(0, minutes) % 60);
-  const hoursOpts = useMemo(() => Array.from({ length: 13 }, (_, i) => i), []);
-
-  return (
-    <div className="wc-time-wheel wc-duration-wheel" data-jourj={testId} role="group" aria-label="Durée">
-      <select
-        className="wc-time-wheel-col"
-        value={h}
-        aria-label="Heures de durée"
-        onChange={(e) => onCommit(Number(e.target.value) * 60 + m)}
-      >
-        {hoursOpts.map((x) => (
-          <option key={x} value={x}>{x} h</option>
-        ))}
-      </select>
-      <select
-        className="wc-time-wheel-col"
-        value={m}
-        aria-label="Minutes de durée"
-        onChange={(e) => onCommit(h * 60 + Number(e.target.value))}
-      >
-        {MINS.map((x) => (
-          <option key={x} value={x}>{String(x).padStart(2, '0')}</option>
         ))}
       </select>
     </div>
