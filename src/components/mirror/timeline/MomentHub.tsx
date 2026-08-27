@@ -48,30 +48,57 @@ export function MomentHub({ phaseId, onClose, inline = false }: { phaseId: strin
     .findIndex((p) => p.id === phase.id);
 
   const ownImage = media.find((m) => m.kind === 'image');
-  const image = momentImage(phase.name, ownImage?.source);
+  const image = momentImage(phase.name, ownImage?.source, store.currentProject.eventTypeId);
   const duration = phase.endHour - phase.startHour;
+  const formatDuration = (hours: number) => {
+    const total = Math.round(hours * 60);
+    const h = Math.floor(total / 60);
+    const m = total % 60;
+    if (h === 0) return `${m} min`;
+    if (m === 0) return `${h} h`;
+    return `${h} h ${String(m).padStart(2, '0')}`;
+  };
 
   return (
     <div ref={surfaceRef} className={`wc-hub${inline ? ' is-inline' : ''}`} role="region" aria-label={`Édition du moment ${phase.name}`} data-jourj="hub" data-editor-location={inline ? 'timeline' : 'panel'}>
-      {/* ---- cover ---- */}
-      <div className="wc-hub-cover">
-        <img src={image.src} alt={image.alt} width={image.width} height={image.height} decoding="async" />
-        <div style={coverScrim} />
-        <button onClick={onClose} style={closeBtn} aria-label="Fermer le moment" data-jourj="hub-close">Fermer</button>
-        <div style={coverText}>
-          <div style={{ fontFamily: typography.family.mono, fontSize: 14, letterSpacing: '0.06em' }}>
-            {formatHourWithDay(phase.startHour)} → {formatHourWithDay(phase.endHour)}
-          </div>
-          <div style={{ fontSize: 26, fontWeight: 600, letterSpacing: '-0.02em', marginTop: 4, overflowWrap: 'anywhere' }}>
-            {phase.name}
-          </div>
-          {image.isProductAsset && (
-            <div style={{ fontSize: 10, color: 'rgba(246,245,243,0.6)', marginTop: 6 }}>
-              Image d’illustration du produit — vos photographies la remplaceront.
+      {/* ---- identity ----
+          Inline under the film: a compact strip, no large product visual.
+          The film already frames the selected moment in white. The cover image
+          remains available only when the hub is opened as a free-standing panel
+          (legacy path), never in the operational timeline editor. */}
+      {inline ? (
+        <div className="wc-hub-inline-head" data-jourj="hub-inline-head">
+          <div>
+            <div style={{ fontFamily: typography.family.mono, fontSize: 13, letterSpacing: '0.06em', color: 'rgba(246,245,243,0.72)' }}>
+              {formatHourWithDay(phase.startHour)} → {formatHourWithDay(phase.endHour)}
+              <span style={{ marginLeft: 10, opacity: 0.55 }}>{formatDuration(duration)}</span>
             </div>
-          )}
+            <div style={{ fontSize: 22, fontWeight: 600, letterSpacing: '-0.02em', marginTop: 4, overflowWrap: 'anywhere' }}>
+              {phase.name}
+            </div>
+          </div>
+          <button onClick={onClose} style={closeBtnInline} aria-label="Fermer le moment" data-jourj="hub-close">Fermer</button>
         </div>
-      </div>
+      ) : (
+        <div className="wc-hub-cover">
+          <img src={image.src} alt={image.alt} width={image.width} height={image.height} decoding="async" />
+          <div style={coverScrim} />
+          <button onClick={onClose} style={closeBtn} aria-label="Fermer le moment" data-jourj="hub-close">Fermer</button>
+          <div style={coverText}>
+            <div style={{ fontFamily: typography.family.mono, fontSize: 14, letterSpacing: '0.06em' }}>
+              {formatHourWithDay(phase.startHour)} → {formatHourWithDay(phase.endHour)}
+            </div>
+            <div style={{ fontSize: 26, fontWeight: 600, letterSpacing: '-0.02em', marginTop: 4, overflowWrap: 'anywhere' }}>
+              {phase.name}
+            </div>
+            {image.isProductAsset && (
+              <div style={{ fontSize: 10, color: 'rgba(246,245,243,0.6)', marginTop: 6 }}>
+                Image d’illustration du produit — vos photographies la remplaceront.
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* ---- WHAT THIS MOMENT IS MISSING, AND WHAT TO DO ABOUT IT ----
              The state comes from phaseFindings(); the actions are shortcuts to
@@ -1131,6 +1158,13 @@ const coverScrim: React.CSSProperties = {
 };
 
 const coverText: React.CSSProperties = { position: 'absolute', left: 22, right: 22, bottom: 18, color: '#f6f5f3' };
+
+const closeBtnInline: React.CSSProperties = {
+  appearance: 'none', cursor: 'pointer', flex: '0 0 auto',
+  background: 'transparent', color: '#f6f5f3',
+  border: '1px solid rgba(246,245,243,0.28)', borderRadius: 999,
+  padding: '8px 14px', fontSize: 12, fontFamily: typography.family.sans,
+};
 
 const closeBtn: React.CSSProperties = {
   position: 'absolute', top: 14, right: 16, appearance: 'none', cursor: 'pointer',

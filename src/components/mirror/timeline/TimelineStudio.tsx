@@ -133,6 +133,8 @@ export function TimelineStudio() {
   // ONE DOOR, WHEREVER YOU CAME FROM. The calendar, the search, a mission or a
   // document all ask the store to open a moment; the timeline is the only thing
   // that knows how. The request is consumed once, so nothing re-opens by itself.
+  // The editor always opens INLINE under the film — never as a floating panel
+  // after the Command Center.
   useEffect(() => {
     const requested = store.focusPhaseId;
     if (!requested) return;
@@ -143,6 +145,8 @@ export function TimelineStudio() {
     requestAnimationFrame(() => {
       document.querySelector(`[data-phase-id="${requested}"]`)
         ?.scrollIntoView({ inline: 'center', block: 'nearest' });
+      document.querySelector('[data-jourj="hub"]')
+        ?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     });
   }, [store.focusPhaseId, store.version]);
 
@@ -345,45 +349,31 @@ export function TimelineStudio() {
   for (let h = DAY_START; h <= DAY_END; h += tickStep) ticks.push(Number(h.toFixed(4)));
 
   const project = store.currentProject;
-  const eventNavigation = (() => {
-    const eventKind = project.eventTypeId ?? 'mariage';
-    const common = [
-      { label: 'Programme', action: 'programme' },
-      { label: 'Infos pratiques', action: 'event' },
-    ];
-    if (eventKind === 'mariage') return [common[0], { label: 'RSVP', action: 'seating' }, common[1]];
-    if (['spectacle', 'concert', 'festival'].includes(eventKind)) return [common[0], { label: 'Billetterie', action: 'event' }, { label: 'Artistes', action: 'crew' }, common[1]];
-    if (['corporate', 'seminaire', 'convention', 'gala', 'associatif', 'culturel'].includes(eventKind)) return [common[0], { label: 'Participants', action: 'seating' }, { label: 'Intervenants', action: 'crew' }, common[1]];
-    if (eventKind === 'voyage') return [{ label: 'Itinéraire', action: 'programme' }, { label: 'Voyageurs', action: 'seating' }, common[1]];
-    return [common[0], { label: 'Participants', action: 'seating' }, common[1]];
-  })();
-  const openEventDestination = (action: string) => {
-    if (action === 'event') { setEventPanelOpen(true); return; }
-    if (action === 'programme') { stripRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }); return; }
-    document.getElementById('organisation')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    window.setTimeout(() => document.querySelector<HTMLButtonElement>(`[data-org-action="${action}"]`)?.click(), 450);
-  };
+  // Public mini-site navigation (Programme · RSVP · …) lives inside the
+  // MiniSiteStudio device preview — never above the working film.
   const dayLabel = project.weddingDate
     ? new Date(project.weddingDate).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
     : null;
 
+  const openMomentEditor = (phaseId: string) => {
+    setOpenPhaseId(phaseId);
+    requestAnimationFrame(() => {
+      document.querySelector('[data-jourj="hub"]')
+        ?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    });
+  };
+
+  // ONE DOOR — focus requests also scroll the inline editor into view.
+  useEffect(() => {
+    if (!openPhaseId) return;
+    requestAnimationFrame(() => {
+      document.querySelector('[data-jourj="hub"]')
+        ?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    });
+  }, [openPhaseId]);
+
   return (
     <section className="wc-jourj" id="jour-j" aria-label="Le Jour J">
-      {/* A public-site vocabulary above the working film. The entries adapt to
-          the event chosen at intake: RSVP for a wedding, ticketing for a show,
-          participants for a professional day. They lead to existing tools;
-          they do not create a second navigation model. */}
-      <nav className="wc-event-nav" aria-label="Navigation de l’événement" data-jourj="event-nav">
-        <span className="wc-event-nav-name">{project.coupleNames || project.title}</span>
-        <div>
-          {eventNavigation.map((entry) => (
-            <button key={`${entry.label}-${entry.action}`} onClick={() => openEventDestination(entry.action)} data-event-action={entry.action}>
-              {entry.label}
-            </button>
-          ))}
-        </div>
-      </nav>
-
       {/* MON GRAND JOUR — where the day stands, above the film it describes.
           Not a page, not a dashboard: four sentences and a ruler one can open.
           Only drawn once there is a day to say something about. */}
@@ -559,10 +549,11 @@ export function TimelineStudio() {
               ...allFindings.filter((f) => f.level === 'ok'),
             ];
             const extraFindings = Math.max(0, findings.length - 3);
+            const isSelected = openPhaseId === phase.id;
             return (
               <article
                 key={phase.id}
-                className={`wc-jourj-moment${isDragged ? ' is-dragging' : ''}`}
+                className={`wc-jourj-moment${isDragged ? ' is-dragging' : ''}${isSelected ? ' is-selected' : ''}`}
                 style={{ left, width: cardWidth }}
                 onPointerDown={(e) => onMomentPointerDown(e, phase.id)}
                 onPointerMove={onMomentPointerMove}
@@ -571,6 +562,8 @@ export function TimelineStudio() {
                 data-jourj="moment"
                 data-phase-id={phase.id}
                 data-start={phase.startHour}
+                data-selected={isSelected ? 'yes' : 'no'}
+                aria-current={isSelected ? 'true' : undefined}
               >
                 <div style={momentBody}>
                   <div style={momentHour}>
@@ -623,7 +616,7 @@ export function TimelineStudio() {
                   )}
                 </div>
                 <button
-                  onClick={(e) => { e.stopPropagation(); setOpenPhaseId(phase.id); }}
+                  onClick={(e) => { e.stopPropagation(); openMomentEditor(phase.id); }}
                   onPointerDown={(e) => e.stopPropagation()}
                   style={openBtn}
                   data-jourj="open-moment"
@@ -811,10 +804,8 @@ export function TimelineStudio() {
         );
       })()}
 
-      {/* « ET SI… » — inside the film, because a consequence is only readable
-          next to the thing it changes. */}
-      <SimulationBar onOpenMoment={(id) => setOpenPhaseId(id)} />
-
+      {/* The moment editor opens IMMEDIATELY under the film. Nothing is parked
+          after the Command Center, and no lateral panel is reintroduced. */}
       {openPhaseId && (
         <MomentHub phaseId={openPhaseId} inline onClose={() => setOpenPhaseId(null)} />
       )}
@@ -822,6 +813,10 @@ export function TimelineStudio() {
       {/* Event facts are edited in the same timeline flow, never in a lateral
           panel that hides the hours being changed. */}
       {eventPanelOpen && <EventPanel inline onClose={() => setEventPanelOpen(false)} />}
+
+      {/* « ET SI… » — inside the film, because a consequence is only readable
+          next to the thing it changes. */}
+      <SimulationBar onOpenMoment={(id) => openMomentEditor(id)} />
     </section>
   );
 }
