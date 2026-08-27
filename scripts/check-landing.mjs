@@ -206,9 +206,14 @@ try {
     const text = doc.body.textContent.replace(/\s+/g, ' ');
     r.check(!/devient un monde/.test(text), 'the landing steps aside');
     r.check(/Clara/.test(text), 'and the wedding is the subject again');
-    const sections = [...doc.querySelectorAll('section[id^="mirror-"]')];
-    r.check(sections.length === 1 && doc.querySelectorAll('[data-story-moment]').length > 0,
-      `its single immersive programme renders (${sections.length} section)`);
+    // The desk is the timeline. The immersive mini-site is a separate studio
+    // opened from the brand menu — it is no longer embedded under the page.
+    r.check(!!doc.getElementById('jour-j'), 'the Jour J timeline owns the open wedding');
+    r.check(doc.querySelectorAll('[data-jourj="moment"]').length > 0,
+      'and the film carries the real moments of the day');
+    const site = readFileSync(path.join(SRC, 'components', 'mirror', 'MirrorSite.tsx'), 'utf8');
+    r.check(/data-jourj="open-minisite"/.test(site) && /MiniSiteStudio/.test(site),
+      'the brand menu opens the Studio mini-site for the public preview');
   }
 
   // ---------------------------------------------------------------------------

@@ -210,14 +210,13 @@ try {
   const css = read('components', 'mirror', 'timeline', 'timeline.css');
 
   r.check(site.indexOf('<TimelineStudio />') > 0, 'the timeline is what the Mirror renders first');
-  r.check(site.indexOf('<TimelineStudio />') < site.indexOf('<MirrorProjection'),
-    'and the editorial story comes after the day, in the same page');
+  r.check(/OrganisationSection/.test(site) && !/<MirrorProjection/.test(site),
+    'the desk is timeline + organisation — the mini-site is a separate studio');
+  r.check(/MiniSiteStudio/.test(site) && /data-jourj="open-minisite"/.test(site),
+    'the brand menu opens the Studio mini-site');
   r.check(!/setProjection\('world'\)/.test(site) && !/setProjection\('world'\)/.test(nav),
     'nothing in the product sends the couple into the 3D World');
   r.check(!/<ProjectionSwitcher \/>/.test(app), 'and the projection capsule is gone from the surface');
-  // PRODUCT DECISION (convergence pass): the navigation is the definitive one —
-  // the places of a wedding day, plus search, my weddings and create. Still one
-  // bar, still no sidebar, and still nothing that leads to a 3D world.
   // The timeline header has one navigation owner (the wordmark menu) and one
   // immediate temporal tool (the calendar). Search/create/portfolio actions
   // belong to the landing and must not be duplicated here.
@@ -226,6 +225,20 @@ try {
   for (const tag of ['nav-search', 'nav-weddings', 'nav-create', 'nav-admin']) {
     r.check(!site.includes(`data-jourj="${tag}"`), `the timeline header no longer duplicates ${tag}`);
   }
+  r.check(!/wc-event-nav/.test(studio) && !/data-jourj="event-nav"/.test(studio),
+    'public mini-site navigation no longer sits above the working film');
+  r.check(/is-selected/.test(studio) && /openMomentEditor/.test(studio),
+    'opening a moment selects it on the film and opens the editor under it');
+  const miniSite = read('components', 'mirror', 'site', 'MiniSiteStudio.tsx');
+  r.check(/id: 'desktop'/.test(miniSite) && /Ordinateur/.test(miniSite)
+    && /id: 'tablet'/.test(miniSite) && /iPad/.test(miniSite)
+    && /id: 'phone'/.test(miniSite) && /iPhone/.test(miniSite)
+    && /data-minisite-device=\{item\.id\}/.test(miniSite),
+    'the Studio mini-site previews desktop, tablet and phone');
+  r.check(/data-minisite="public-nav"/.test(miniSite) && /miniSiteNavigation/.test(miniSite),
+    'public navigation lives only inside the device frame');
+  r.check(/n’est pas encore activée/.test(miniSite) || /pas encore activée/.test(miniSite),
+    'RSVP and ticketing honestly state that public collection is not live');
 
   const storeSrc = read('game', 'weddingStore.ts');
   r.check(/this\.projection = 'mirror';\s*\n\s*\/\/ Opening a wedding|Opening a wedding means opening its day/.test(storeSrc),

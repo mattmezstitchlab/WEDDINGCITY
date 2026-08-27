@@ -225,7 +225,13 @@ function checkDeadModules() {
     'components/mirror/timeline/LandingFilm.tsx', 'design/editorialRegistry.ts',
     // Search now lives directly in the landing hero; this former product-wide
     // overlay is intentionally disconnected pending historical archival.
-    'components/mirror/GlobalSearch.tsx'];
+    'components/mirror/GlobalSearch.tsx',
+    // The six-section magazine projection left the product path when the
+    // Studio mini-site became the only public preview. Keep the modules until
+    // a dedicated archival pass; MiniSiteStudio reuses Hero + Timeline only.
+    'components/mirror/MirrorNav.tsx',
+    'components/mirror/MirrorPeople.tsx',
+    'components/mirror/MirrorSections.tsx'];
   const unexpected = dead.filter((f) => !KNOWN_DEAD.includes(f));
   const revived = KNOWN_DEAD.filter((f) => !dead.includes(f));
 

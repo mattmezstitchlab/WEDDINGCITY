@@ -1,0 +1,249 @@
+/* ---------------------------------------------------------------------------
+   MINI-SITE STUDIO — device preview of the public site.
+   ---------------------------------------------------------------------------
+   The working desk stays the timeline. This surface only frames the same
+   projection (hero + vertical programme + public panels) inside a device.
+   --------------------------------------------------------------------------- */
+
+.wc-minisite-studio {
+  position: fixed;
+  inset: 0;
+  z-index: 1600;
+  display: grid;
+  grid-template-rows: auto 1fr;
+  background: #0a0b0d;
+  color: #f6f5f3;
+  font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+}
+
+.wc-minisite-bar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding: 14px clamp(16px, 4vw, 40px);
+  border-bottom: 1px solid rgba(246, 245, 243, 0.12);
+  background: #08090b;
+}
+
+.wc-minisite-bar-copy {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.wc-minisite-bar-copy span {
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: rgba(246, 245, 243, 0.5);
+  font-weight: 700;
+}
+
+.wc-minisite-bar-copy strong {
+  font-size: 15px;
+  letter-spacing: -0.02em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: min(42vw, 360px);
+}
+
+.wc-minisite-devices {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-left: auto;
+}
+
+.wc-minisite-devices button,
+.wc-minisite-close {
+  appearance: none;
+  cursor: pointer;
+  border-radius: 999px;
+  font: inherit;
+  font-size: 12px;
+  padding: 9px 14px;
+  color: #f6f5f3;
+  background: transparent;
+  border: 1px solid rgba(246, 245, 243, 0.24);
+}
+
+.wc-minisite-devices button.is-active {
+  background: #f6f5f3;
+  color: #08090b;
+  border-color: #f6f5f3;
+  font-weight: 600;
+}
+
+.wc-minisite-close:hover,
+.wc-minisite-devices button:hover {
+  border-color: rgba(246, 245, 243, 0.5);
+}
+
+.wc-minisite-stage {
+  display: grid;
+  place-items: center;
+  padding: clamp(18px, 3vw, 36px);
+  overflow: auto;
+  background:
+    radial-gradient(ellipse at 50% 0%, rgba(246, 245, 243, 0.06), transparent 55%),
+    #0a0b0d;
+}
+
+.wc-minisite-device {
+  position: relative;
+  max-width: 100%;
+  border-radius: 18px;
+  background: #1a1b1f;
+  border: 1px solid rgba(246, 245, 243, 0.16);
+  box-shadow: 0 40px 90px rgba(0, 0, 0, 0.55);
+  overflow: hidden;
+}
+
+.wc-minisite-device.is-phone {
+  border-radius: 36px;
+  padding: 12px 10px 18px;
+}
+
+.wc-minisite-device.is-tablet {
+  border-radius: 28px;
+  padding: 14px 12px 18px;
+}
+
+.wc-minisite-device.is-desktop {
+  border-radius: 14px;
+  padding: 10px 10px 14px;
+}
+
+.wc-minisite-bezel {
+  position: relative;
+  height: 14px;
+  display: grid;
+  place-items: center;
+}
+
+.wc-minisite-notch {
+  width: 96px;
+  height: 10px;
+  border-radius: 999px;
+  background: #050506;
+}
+
+.wc-minisite-cam {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: #3a3b40;
+}
+
+.wc-minisite-screen {
+  position: relative;
+  overflow-x: hidden;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  background: #f7f5f0;
+  color: #16181d;
+  border-radius: 8px;
+  max-width: 100%;
+}
+
+.wc-minisite-device.is-phone .wc-minisite-screen { border-radius: 24px; }
+.wc-minisite-device.is-tablet .wc-minisite-screen { border-radius: 16px; }
+
+/* Public navigation lives ONLY inside the device. */
+.wc-minisite-public-nav {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 12px 16px;
+  background: rgba(247, 245, 240, 0.94);
+  border-bottom: 1px solid rgba(20, 20, 20, 0.1);
+  backdrop-filter: blur(10px);
+}
+
+.wc-minisite-public-name {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  max-width: 40%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wc-minisite-public-nav > div {
+  display: flex;
+  gap: 2px;
+  overflow-x: auto;
+  margin-left: auto;
+  scrollbar-width: none;
+}
+
+.wc-minisite-public-nav > div::-webkit-scrollbar { display: none; }
+
+.wc-minisite-public-nav button {
+  appearance: none;
+  flex: 0 0 auto;
+  border: 0;
+  background: transparent;
+  color: rgba(20, 20, 20, 0.55);
+  padding: 8px 10px;
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  border-radius: 999px;
+}
+
+.wc-minisite-public-nav button.is-active,
+.wc-minisite-public-nav button:hover {
+  color: #141414;
+  background: rgba(20, 20, 20, 0.06);
+}
+
+.wc-minisite-panel,
+.wc-minisite-empty {
+  padding: clamp(36px, 8vw, 88px) clamp(18px, 5vw, 56px);
+  background: #f7f5f0;
+  color: #16181d;
+  border-top: 1px solid rgba(20, 20, 20, 0.08);
+}
+
+.wc-minisite-panel > span,
+.wc-minisite-empty > span {
+  display: block;
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  font-weight: 700;
+  color: rgba(20, 20, 20, 0.42);
+}
+
+.wc-minisite-panel h2,
+.wc-minisite-empty h2 {
+  margin: 14px 0 0;
+  font-size: clamp(28px, 5vw, 48px);
+  letter-spacing: -0.035em;
+  line-height: 1.05;
+}
+
+.wc-minisite-panel p,
+.wc-minisite-empty p {
+  max-width: 54ch;
+  margin: 16px 0 0;
+  font-size: 15px;
+  line-height: 1.6;
+  color: rgba(20, 20, 20, 0.62);
+  white-space: pre-wrap;
+}
+
+@media (max-width: 720px) {
+  .wc-minisite-bar-copy strong { max-width: 55vw; }
+  .wc-minisite-devices { width: 100%; margin-left: 0; order: 3; }
+  .wc-minisite-close { margin-left: auto; }
+}
