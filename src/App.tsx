@@ -1,4 +1,7 @@
 import { useState, useEffect, useSyncExternalStore, lazy, Suspense } from 'react';
+import React from 'react';
+const IntentToolbar = lazy(() => import('./components/ui/IntentToolbar').then((m) => ({ default: m.IntentToolbar })));
+
 import { weddingStore } from './game/weddingStore';
 import { isTypingTarget } from './game/input';
 // The projection capsule is retired from the product surface (Jour J pass);
@@ -470,6 +473,9 @@ export default function App() {
           weddingStore.notify();
         }} />
       )}
+
+      {/* Intent toolbar — persistent, available across main surfaces */}
+      {(weddingStore.projection === 'mirror' || weddingStore.projection === 'world') && <React.Suspense fallback={null}><IntentToolbar /></React.Suspense>}
     </div>
   );
 }
