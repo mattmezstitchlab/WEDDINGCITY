@@ -82,13 +82,6 @@ export function MomentDock({
       data-active={active ? 'yes' : 'no'}
     >
       <div className="wc-moment-dock-inner" data-jourj="moment-card">
-        {!active && (
-          <div className="wc-moment-dock-idle" data-jourj="dock-idle">
-            <span className="wc-moment-dock-idle-mark" aria-hidden />
-            <span>Sélectionnez un moment sur la pellicule</span>
-          </div>
-        )}
-
         {active && phase && phaseId && (
           <>
             <div className="wc-moment-dock-fields">

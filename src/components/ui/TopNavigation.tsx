@@ -50,8 +50,8 @@ export function TopNavigation({ onOpenImport, onOpenConflicts }: TopNavigationPr
         </div>
         <div>
           <div style={{ fontWeight: 800, fontSize: 13, letterSpacing: '0.04em', color: '#ffffff', display: 'flex', alignItems: 'center', gap: 4 }}>
-            <span>WEDDING CITY</span>
-            <span style={{ fontSize: 9, color: BRAND_ACCENT }}>▼</span>
+            <span>LE GRAND JOUR</span>
+            <span style={{ fontSize: 14, color: BRAND_ACCENT }}>▼</span>
           </div>
           <div style={{ fontSize: 9, color: BRAND_TEXT_MUTED, letterSpacing: '0.06em', fontWeight: 600 }}>
             {store.currentProject.coupleNames || 'SIMCITY DU MARIAGE'}
