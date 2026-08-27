@@ -3,7 +3,7 @@ import { weddingStore } from '../../../game/weddingStore';
 import { typography } from '../../../design/tokens';
 import { MOMENT_TEMPLATES } from '../../../design/momentImagery';
 import { PRODUCT_NAME } from '../../../design/productIdentity';
-import { MomentCardChrome, MomentCardFace } from './MomentCard';
+import { MomentDock, MomentCardFace } from './MomentDock';
 import { EventPanel } from './EventPanel';
 import { SimulationBar } from './SimulationBar';
 import { Cockpit } from './Cockpit';
@@ -598,11 +598,7 @@ export function TimelineStudio() {
                 data-selected={isSelected ? 'yes' : 'no'}
                 aria-current={isSelected ? 'true' : undefined}
               >
-                {isSelected ? (
-                  <MomentCardChrome phaseId={phase.id} dense={dense} displayName={displayName} />
-                ) : (
-                  <MomentCardFace phaseId={phase.id} dense={dense} displayName={displayName} />
-                )}
+                <MomentCardFace phaseId={phase.id} dense={dense} displayName={displayName} />
               </article>
             );
           })}
@@ -763,7 +759,7 @@ export function TimelineStudio() {
         const minutes = Math.round(ripple.delta * 60);
         const sign = minutes > 0 ? '+' : '';
         return (
-          <div style={rippleBar} role="status" data-jourj="ripple">
+          <div className={`wc-ripple-bar${openPhaseId ? " has-dock" : ""}`} role="status" data-jourj="ripple">
             <div style={{ display: 'grid', gap: 10, flex: '1 1 420px' }}>
               <span>
                 <strong>{impact?.moment.name ?? 'Ce moment'} {sign}{minutes}</strong>
@@ -840,6 +836,10 @@ export function TimelineStudio() {
 
       {/* « ET SI… » — inside the film, because a consequence is only readable
           next to the thing it changes. */}
+      {openPhaseId && (
+        <MomentDock phaseId={openPhaseId} onClose={() => setOpenPhaseId(null)} />
+      )}
+
       <SimulationBar onOpenMoment={(id) => openMomentEditor(id)} />
     </section>
   );
@@ -1087,12 +1087,3 @@ const conflictLine: React.CSSProperties = {
   borderLeft: '2px solid #e0736a', paddingLeft: 10, fontSize: 11, lineHeight: 1.5,
 };
 
-const rippleBar: React.CSSProperties = {
-  position: 'fixed', left: '50%', bottom: 24, transform: 'translateX(-50%)',
-  zIndex: 1300, display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap',
-  background: '#101114', color: '#f6f5f3',
-  border: '1px solid rgba(246,245,243,0.24)', borderRadius: 999,
-  padding: '10px 12px 10px 20px', maxWidth: 'min(92vw, 720px)',
-  fontSize: typography.editorial.caption,
-  boxShadow: '0 24px 60px rgba(0,0,0,0.6)',
-};

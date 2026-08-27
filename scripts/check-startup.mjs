@@ -236,6 +236,7 @@ function checkDeadModules() {
     // hub and its folding sections stay inventoried until archival; TrackArt and
     // the music player were only reached through that hub / magazine path.
     'components/mirror/timeline/MomentHub.tsx',
+    'components/mirror/timeline/MomentCard.tsx',
     'components/mirror/timeline/PanelSection.tsx',
     'components/mirror/TrackArt.tsx',
     'game/musicPlayer.ts'];

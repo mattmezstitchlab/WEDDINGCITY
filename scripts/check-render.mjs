@@ -334,7 +334,7 @@ try {
     const site = readFileSync(p2('components', 'mirror', 'MirrorSite.tsx'), 'utf8');
     const studio = readFileSync(p2('components', 'mirror', 'timeline', 'TimelineStudio.tsx'), 'utf8');
     const miniSrc = readFileSync(p2('components', 'mirror', 'site', 'MiniSiteStudio.tsx'), 'utf8');
-    const hub = readFileSync(p2('components', 'mirror', 'timeline', 'MomentCard.tsx'), 'utf8');
+    const hub = readFileSync(p2('components', 'mirror', 'timeline', 'MomentDock.tsx'), 'utf8');
     const css = readFileSync(p2('components', 'mirror', 'timeline', 'timeline.css'), 'utf8');
     const imagery = readFileSync(p2('design', 'momentImagery.ts'), 'utf8');
     const landing = readFileSync(p2('components', 'mirror', 'MirrorLanding.tsx'), 'utf8');
@@ -358,8 +358,8 @@ try {
       'timeline studio no longer renders public event navigation');
     r.check(/is-selected/.test(studio) && /is-selected/.test(css),
       'the selected moment is framed on the film');
-    r.check(/MomentCardChrome/.test(hub) && /moment-plus/.test(hub) && !/wc-hub-cover/.test(hub),
-      'the operational editor is the compact card with + — no large cover');
+    r.check(/MomentDock/.test(hub) && /moment-plus/.test(hub) && !/wc-hub-cover/.test(hub),
+      'the operational editor is the bottom dock capsule with + — no large cover');
     r.check(/\.wc-hub\.is-inline \.wc-hub-cover \{ display: none/.test(css)
       || /display: none/.test(css.split('.wc-hub.is-inline .wc-hub-cover')[1] || ''),
       'inline hub cover is suppressed in CSS');
@@ -423,7 +423,7 @@ try {
       'and the keyboard alternative is announced, not mouse-only');
 
     const hubSource = readFileSync(
-      path.join(SRC, 'components', 'mirror', 'timeline', 'MomentCard.tsx'), 'utf8');
+      path.join(SRC, 'components', 'mirror', 'timeline', 'MomentDock.tsx'), 'utf8');
     r.check(/data-jourj="hub-move-earlier"/.test(hubSource) && /data-jourj="hub-move-later"/.test(hubSource),
       'a moment can still be reordered — on the moment itself');
     r.check(/aria-label={`Avancer/.test(hubSource) && /aria-label={`Retarder/.test(hubSource),

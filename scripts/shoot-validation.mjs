@@ -118,26 +118,30 @@ await card.click();
 await settle(1400);
 
 const editor = await page.evaluate(() => {
+  const dock = document.querySelector('[data-jourj="moment-dock"]');
   const card = document.querySelector('[data-jourj="moment-card"]');
   const selected = document.querySelector('[data-jourj="moment"].is-selected, [data-selected="yes"]');
   const plus = document.querySelector('[data-jourj="moment-plus"]');
   const hub = document.querySelector('[data-jourj="hub"]');
-  const strip = document.querySelector('[data-jourj="strip"]');
+  const face = document.querySelector('[data-jourj="moment"].is-selected [data-jourj="moment-face"]');
   const headerAdd = [...document.querySelectorAll('[data-jourj="add-moment"]')]
     .filter((el) => el.closest('.wc-jourj-tools'));
+  const dockFixed = dock ? getComputedStyle(dock).position === 'fixed' : false;
   return {
+    dock: !!dock,
     card: !!card,
     selected: !!selected,
     plus: !!plus,
+    faceOnFilm: !!face,
     noHubUnder: !hub,
     noHeaderAdd: headerAdd.length === 0,
     titleField: !!document.querySelector('[data-jourj="hub-title"]'),
-    inStrip: !!(card && strip && strip.contains(card)),
+    dockFixed,
   };
 });
 console.log('editor', JSON.stringify(editor));
-if (!editor.card || !editor.selected || !editor.plus || !editor.noHubUnder || !editor.noHeaderAdd || !editor.inStrip) {
-  console.error('FAIL: moment editor must be the selected card with +, no hub under strip, no header add');
+if (!editor.dock || !editor.selected || !editor.plus || !editor.faceOnFilm || !editor.noHubUnder || !editor.noHeaderAdd || !editor.dockFixed || !editor.titleField) {
+  console.error('FAIL: moment editor must be the bottom dock; film card stays a face only');
   process.exit(1);
 }
 // Compose a shot that keeps the strip + the top of the editor together.

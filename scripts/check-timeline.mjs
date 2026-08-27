@@ -236,10 +236,10 @@ try {
     'public mini-site navigation no longer sits above the working film');
   r.check(/is-selected/.test(studio) && /openMomentEditor/.test(studio),
     'opening a moment selects it on the film');
-  r.check(/MomentCardChrome/.test(studio) && /moment-plus/.test(read('components', 'mirror', 'timeline', 'MomentCard.tsx')),
-    'the selected card is the compact editor with a + menu — not a hub under the strip');
+  r.check(/MomentDock/.test(studio) && /moment-plus/.test(read('components', 'mirror', 'timeline', 'MomentDock.tsx')),
+    'the selected moment opens a bottom dock capsule — not an in-card form');
   r.check(!/MomentHub/.test(studio),
-    'no MomentHub mounted under the film');
+    'no MomentHub under the film; editing is the bottom dock');
   r.check(!/data-jourj=\"open-moment\"/.test(studio),
     'no separate « Ouvrir » button — the card click is the only door');
   r.check(/DRAG_THRESHOLD_PX/.test(studio) && /wasClick/.test(studio),
@@ -869,7 +869,7 @@ try {
   // -------------------------------------------------------------------------
   console.log('\n[15/15] PANNEAU DU JOUR J — one door per piece of information');
   // -------------------------------------------------------------------------
-  const hubUx = read('components', 'mirror', 'timeline', 'MomentCard.tsx');
+  const hubUx = read('components', 'mirror', 'timeline', 'MomentDock.tsx');
   const hubLegacy = read('components', 'mirror', 'timeline', 'MomentHub.tsx');
   const eventPanel = read('components', 'mirror', 'timeline', 'EventPanel.tsx');
   const sectionSrc = read('components', 'mirror', 'timeline', 'PanelSection.tsx');
@@ -877,7 +877,7 @@ try {
 
   // One folding mechanism, used by both contexts of the one panel.
   r.check(/export function PanelSection/.test(sectionSrc), 'there is one folding section component');
-  r.check(/MomentCardChrome/.test(read('components', 'mirror', 'timeline', 'MomentCard.tsx')),
+  r.check(/MomentDock/.test(read('components', 'mirror', 'timeline', 'MomentCard.tsx')),
     'the moment edits on its own card');
   r.check(!/from '\.\/PanelSection'/.test(eventPanel),
     'the event surface is a short identity form, not a second folding hub');
