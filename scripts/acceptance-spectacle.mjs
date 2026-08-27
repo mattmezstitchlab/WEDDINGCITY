@@ -248,7 +248,7 @@ const attach = async (phaseName, personName) => {
   await p.evaluate((phaseId) => {
     const card = document.querySelector(`[data-phase-id="${phaseId}"]`);
     card?.scrollIntoView({ inline: 'center' });
-    card?.querySelector('[data-jourj="open-moment"]')?.click();
+    card?.click();
   }, phaseId);
   await wait(900);
   await unfoldHub();
@@ -263,7 +263,10 @@ const attach = async (phaseName, personName) => {
     return true;
   }, personName);
   await wait(700);
-  await click('jourj', 'hub-close');
+  await page.evaluate(() => {
+  const selected = document.querySelector('[data-jourj="moment"].is-selected');
+  selected?.click(); // second click deselects
+});
   await wait(500);
   return ok;
 };
@@ -366,7 +369,7 @@ const dinerId = (await state()).phases.find((x) => x.name === 'Dîner')?.id;
 await p.evaluate((id) => {
   const card = document.querySelector(`[data-phase-id="${id}"]`);
   card?.scrollIntoView({ inline: 'center' });
-  card?.querySelector('[data-jourj="open-moment"]')?.click();
+  card?.click();
 }, dinerId);
 await wait(900);
 await unfoldHub();
@@ -380,7 +383,10 @@ await p.evaluate(() => {
 });
 await wait(600);
 await commit('jourj', 'hub-start', fmt((await state()).phases.find((x) => x.name === 'Cocktail').start + 0.25));
-await click('jourj', 'hub-close'); await wait(600);
+await page.evaluate(() => {
+  const selected = document.querySelector('[data-jourj="moment"].is-selected');
+  selected?.click(); // second click deselects
+}); await wait(600);
 await click('jourj', 'nav-crew'); await wait(900);
 const conflicts = await p.evaluate(() => [...document.querySelectorAll('[data-crew="finding"][data-level="conflict"]')]
   .map((f) => f.textContent.replace(/\s+/g, ' ').trim().slice(0, 100)));
@@ -402,14 +408,17 @@ const cocktailId = (await state()).phases.find((x) => x.name === 'Cocktail')?.id
 await p.evaluate((id) => {
   const card = document.querySelector(`[data-phase-id="${id}"]`);
   card?.scrollIntoView({ inline: 'center' });
-  card?.querySelector('[data-jourj="open-moment"]')?.click();
+  card?.click();
 }, cocktailId);
 await wait(600);
 await unfoldHub();
 await wait(900);
 const fileInput = await p.$('[data-jourj="hub-file"]');
 if (fileInput) { await fileInput.uploadFile(DOC); await wait(1600); }
-await click('jourj', 'hub-close'); await wait(600);
+await page.evaluate(() => {
+  const selected = document.querySelector('[data-jourj="moment"].is-selected');
+  selected?.click(); // second click deselects
+}); await wait(600);
 s = await state();
 check('le contrat est rattaché au moment',
   s.media.some((m) => m.owner === 'event' && /contrat-saxophoniste/.test(m.name || '')),

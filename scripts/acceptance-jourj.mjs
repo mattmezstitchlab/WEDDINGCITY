@@ -270,7 +270,7 @@ say('\n=== 5. LE MOMENT EST UN HUB (lieu, personnes, prestataire, musique, tâch
 const dinerId = s.phases.find((x) => x.name === 'Dîner').id;
 await p.evaluate((id) => {
   const card = document.querySelector(`[data-phase-id="${id}"]`);
-  card?.querySelector('[data-jourj="open-moment"]')?.click();
+  card?.click();
 }, dinerId);
 await wait(900);
 await unfoldHub();

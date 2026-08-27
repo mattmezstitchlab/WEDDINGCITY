@@ -1477,7 +1477,7 @@
   outline-offset: -3px;
 }
 
-/* Round hero utilities: import and universal search are peers. */
+/* Round hero utilities: import, search and agenda are peers. */
 .wc-gj-bar-icon {
   appearance: none;
   width: 36px;
@@ -1485,13 +1485,28 @@
   flex: 0 0 36px;
   display: inline-grid;
   place-items: center;
+  place-content: center;
   border: 1px solid rgba(20,22,26,.2);
   border-radius: 999px;
   background: rgba(20,22,26,.045);
   color: #14161a;
   cursor: pointer;
-  font: 500 20px/1 inherit;
+  font: inherit;
+  line-height: 0;
   padding: 0;
+}
+.wc-gj-bar-icon svg {
+  display: block;
+  flex-shrink: 0;
+}
+.wc-gj-bar-plus {
+  display: block;
+  font-size: 26px;
+  font-weight: 400;
+  line-height: 1;
+  letter-spacing: 0;
+  /* Optical centering: the glyph sits slightly high in most sans faces. */
+  transform: translateY(-0.5px);
 }
 .wc-gj-bar-icon:hover { background: rgba(20,22,26,.1); }
 .wc-gj-bar-icon:focus-visible { outline: 2px solid #14161a; outline-offset: 2px; }

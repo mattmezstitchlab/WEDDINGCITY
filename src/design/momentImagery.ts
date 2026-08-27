@@ -28,11 +28,15 @@ export interface MomentAsset {
 
 export type MomentArchetype =
   | 'preparatifs' | 'ceremonie' | 'dejeuner' | 'cocktail' | 'diner'
-  | 'discours' | 'bal' | 'soiree' | 'after' | 'moment';
+  | 'discours' | 'bal' | 'soiree' | 'after' | 'moment'
+  // Stage / show universe — shipped under /editorial/spectacle
+  | 'regie' | 'coulisses' | 'musicien' | 'danseuse'
+  // Professional & travel universes — reuse editorial product frames
+  | 'pro' | 'itineraire' | 'immersion';
 
-const A = (key: MomentArchetype, alt: string): MomentAsset => ({
+const A = (key: MomentArchetype, alt: string, src?: string): MomentAsset => ({
   key,
-  src: `/editorial/moments/${key}.jpg`,
+  src: src ?? `/editorial/moments/${key}.jpg`,
   alt,
   width: 1376,
   height: 768,
@@ -49,6 +53,13 @@ export const MOMENT_ASSETS: Record<MomentArchetype, MomentAsset> = {
   soiree: A('soiree', 'Piste de danse en fin de soirée, silhouettes et guirlandes'),
   after: A('after', 'Cour au petit matin, premières lueurs et guirlandes encore allumées'),
   moment: A('moment', 'Deux alliances posées près d’un déroulé écrit à la main'),
+  regie: A('regie', 'Régie de spectacle : consoles, casques et moniteurs', '/editorial/spectacle/regie.jpg'),
+  coulisses: A('coulisses', 'Coulisses avant l’entrée en scène', '/editorial/spectacle/coulisses.jpg'),
+  musicien: A('musicien', 'Musicien en répétition sous les projecteurs', '/editorial/spectacle/musicien.jpg'),
+  danseuse: A('danseuse', 'Danseuse en mouvement sur le plateau', '/editorial/spectacle/danseuse.jpg'),
+  pro: A('pro', 'Salle de réunion professionnelle, lumière du jour', '/editorial/canvas.jpg'),
+  itineraire: A('itineraire', 'Route et horizon — l’itinéraire du voyage', '/editorial/world.jpg'),
+  immersion: A('immersion', 'Immersion en mouvement, paysage traversé', '/editorial/immersive.jpg'),
 };
 
 /**
@@ -56,13 +67,19 @@ export const MOMENT_ASSETS: Record<MomentArchetype, MomentAsset> = {
  * Order matters: the most specific words are tested first.
  */
 const RULES: { key: MomentArchetype; words: RegExp }[] = [
+  { key: 'regie', words: /r[ée]gie|sound ?check|balance|technique|console/i },
+  { key: 'coulisses', words: /coulisse|loges?|backstage|montage|d[ée]montage|load[- ]?(?:in|out)/i },
+  { key: 'musicien', words: /musicien|concert|plateau|set|groupe|orchestre|guitar|piano/i },
+  { key: 'danseuse', words: /danse(?:use|ur)?|ballet|chor[ée]graph/i },
+  { key: 'itineraire', words: /itin[ée]raire|trajet|vol|train|route|d[ée]part|arriv[ée]e|voyage/i },
+  { key: 'pro', words: /pl[ée]ni[èe]re|atelier|workshop|keynote|s[ée]minaire|accueil|session/i },
   { key: 'preparatifs', words: /pr[ée]paratif|coiffure|maquillage|habillage|getting ready|apprêt|essayage/i },
   { key: 'ceremonie', words: /c[ée]r[ée]monie|mairie|[ée]glise|temple|va[uœ]x|vœu|alliance|engagement|la[iï]que|civil/i },
   { key: 'dejeuner', words: /d[ée]jeuner|midi|lunch|brunch/i },
   { key: 'after', words: /after|petit matin|aube|fin de (la )?nuit|clôture/i },
   { key: 'cocktail', words: /cocktail|vin d.honneur|ap[ée]ritif|apéro|photo de groupe|brunch/i },
   { key: 'diner', words: /d[îi]ner|repas|banquet|table|traiteur|entr[ée]e|dessert|g[âa]teau|pi[èe]ce mont[ée]e/i },
-  { key: 'discours', words: /discours|toast|remerciement|prise de parole|micro/i },
+  { key: 'discours', words: /discours|toast|remerciement|prise de parole|micro|intervention/i },
   { key: 'bal', words: /ouverture de bal|premi[èe]re danse|bal|valse|danse des mari/i },
   { key: 'soiree', words: /soir[ée]e|dance ?floor|piste|dj|party|f[êe]te|feu d.artifice|nuit/i },
 ];
@@ -80,14 +97,109 @@ export function archetypeForMoment(name: string): MomentArchetype {
  * wins, and in that case `isProductAsset` is false so the interface can say
  * whose picture it is.
  */
-export function momentImage(name: string, ownMediaSource?: string | null): {
+/**
+ * When the moment name does not match a wedding archetype, the event type
+ * still needs a real product picture — never a grey void. These pools only
+ * reuse shipped editorial assets; nothing is invented as a fake memory.
+ */
+const EVENT_TYPE_DEFAULTS: Record<string, MomentArchetype[]> = {
+  mariage: ['ceremonie', 'cocktail', 'diner', 'bal', 'soiree', 'preparatifs'],
+  corporate: ['pro', 'discours', 'dejeuner', 'cocktail'],
+  seminaire: ['pro', 'discours', 'dejeuner', 'moment'],
+  festival: ['musicien', 'regie', 'coulisses', 'danseuse', 'soiree'],
+  concert: ['musicien', 'regie', 'coulisses', 'soiree'],
+  spectacle: ['regie', 'coulisses', 'danseuse', 'musicien'],
+  gala: ['diner', 'discours', 'bal', 'soiree', 'cocktail'],
+  associatif: ['pro', 'discours', 'dejeuner', 'moment'],
+  culturel: ['danseuse', 'discours', 'coulisses', 'immersion'],
+  anniversaire: ['soiree', 'diner', 'cocktail', 'bal', 'after'],
+  journee: ['pro', 'dejeuner', 'moment'],
+  mission: ['pro', 'itineraire', 'preparatifs'],
+  voyage: ['itineraire', 'immersion', 'after', 'preparatifs'],
+  autre: ['moment', 'cocktail', 'diner'],
+  fete: ['soiree', 'diner', 'cocktail', 'bal'],
+  soiree: ['soiree', 'bal', 'after', 'cocktail'],
+  convention: ['pro', 'discours', 'dejeuner', 'moment'],
+};
+
+/** Stable pick inside a pool so the same title always lands on the same image. */
+function pickFromPool(name: string, pool: MomentArchetype[]): MomentArchetype {
+  if (pool.length === 0) return 'moment';
+  let hash = 0;
+  const text = name || 'moment';
+  for (let i = 0; i < text.length; i++) hash = (hash * 31 + text.charCodeAt(i)) >>> 0;
+  return pool[hash % pool.length];
+}
+
+/**
+ * The picture to show for a moment.
+ *
+ * `ownMediaSource` is the couple's own image when they attached one: it always
+ * wins, and in that case `isProductAsset` is false so the interface can say
+ * whose picture it is.
+ *
+ * `eventTypeId` only steers the product fallback when the moment name does not
+ * match a known archetype — it never overrides a real user media.
+ */
+export function momentImage(
+  name: string,
+  ownMediaSource?: string | null,
+  eventTypeId?: string | null,
+): {
   src: string; alt: string; width: number; height: number; isProductAsset: boolean;
 } {
   if (ownMediaSource) {
     return { src: ownMediaSource, alt: name || 'Photographie du moment', width: 1376, height: 768, isProductAsset: false };
   }
-  const asset = MOMENT_ASSETS[archetypeForMoment(name)];
+  let key = archetypeForMoment(name);
+  if (key === 'moment' && eventTypeId) {
+    const pool = EVENT_TYPE_DEFAULTS[eventTypeId] ?? EVENT_TYPE_DEFAULTS.autre;
+    key = pickFromPool(name, pool);
+  }
+  const asset = MOMENT_ASSETS[key];
   return { src: asset.src, alt: asset.alt, width: asset.width, height: asset.height, isProductAsset: true };
+}
+
+/** Public navigation entries of the mini-site, adapted to the event kind. */
+export type MiniSiteNavAction = 'programme' | 'rsvp' | 'ticketing' | 'artists' | 'participants' | 'speakers' | 'travelers' | 'infos';
+
+export function miniSiteNavigation(eventTypeId?: string | null): { label: string; action: MiniSiteNavAction }[] {
+  const kind = eventTypeId ?? 'mariage';
+  if (kind === 'mariage' || kind === 'anniversaire' || kind === 'fete' || kind === 'soiree') {
+    return [
+      { label: 'Programme', action: 'programme' },
+      { label: 'RSVP', action: 'rsvp' },
+      { label: 'Infos pratiques', action: 'infos' },
+    ];
+  }
+  if (kind === 'spectacle' || kind === 'concert' || kind === 'festival') {
+    return [
+      { label: 'Programme', action: 'programme' },
+      { label: 'Billetterie', action: 'ticketing' },
+      { label: 'Artistes', action: 'artists' },
+      { label: 'Infos pratiques', action: 'infos' },
+    ];
+  }
+  if (['corporate', 'seminaire', 'convention', 'gala', 'associatif', 'culturel'].includes(kind)) {
+    return [
+      { label: 'Programme', action: 'programme' },
+      { label: 'Participants', action: 'participants' },
+      { label: 'Intervenants', action: 'speakers' },
+      { label: 'Infos pratiques', action: 'infos' },
+    ];
+  }
+  if (kind === 'voyage') {
+    return [
+      { label: 'Itinéraire', action: 'programme' },
+      { label: 'Voyageurs', action: 'travelers' },
+      { label: 'Infos pratiques', action: 'infos' },
+    ];
+  }
+  return [
+    { label: 'Programme', action: 'programme' },
+    { label: 'Participants', action: 'participants' },
+    { label: 'Infos pratiques', action: 'infos' },
+  ];
 }
 
 /**

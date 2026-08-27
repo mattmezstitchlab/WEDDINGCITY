@@ -517,7 +517,7 @@ say('\n=== 8. LA MUSIQUE EST UNE COUCHE TEMPORELLE ===');
 await p.evaluate(() => {
   const cards = [...document.querySelectorAll('[data-jourj="moment"]')];
   const card = cards.find((c) => c.textContent.includes('Soirée')) || cards[cards.length - 1];
-  card?.querySelector('[data-jourj="open-moment"]')?.click();
+  card?.click();
 });
 await wait(900);
 await unfoldHub();

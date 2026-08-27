@@ -264,7 +264,7 @@ say('\n=== 4. UNE MODIFICATION SE PROPAGE (rien n’est copié) ===');
 const before = (await state()).phases.find((x) => x.name === 'Cocktail');
 await p.evaluate(() => {
   const card = [...document.querySelectorAll('[data-jourj="moment"]')].find((c) => c.textContent.includes('Cérémonie'));
-  card?.querySelector('[data-jourj="open-moment"]')?.click();
+  card?.click();
 });
 await wait(1000);
 await unfoldHub();

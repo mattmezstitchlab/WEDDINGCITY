@@ -7,6 +7,7 @@ import { EVENT_TYPES, eventType, type EventTypeId } from '../../design/eventType
 import { IntakeStudio } from './intake/IntakeStudio';
 import { ImportStudio } from './intake/ImportStudio';
 import { PublicSearchResults } from './search/PublicSearchStudio';
+import { CalendarStudio } from './calendar/CalendarStudio';
 import './landing.css';
 
 // ---------------------------------------------------------------------------
@@ -40,6 +41,7 @@ export function MirrorLanding() {
   const [projectMenuOpen, setProjectMenuOpen] = useState(false);
   const [heroSlide, setHeroSlide] = useState(0);
   const [quoteSent, setQuoteSent] = useState(false);
+  const [calendarOpen, setCalendarOpen] = useState(false);
   const [quote, setQuote] = useState({ name: '', email: '', organisation: '', websiteNeed: '', budget: '', message: '' });
 
   useEffect(() => { setProjects(getStoredProjects()); }, []);
@@ -47,6 +49,16 @@ export function MirrorLanding() {
     const timer = window.setInterval(() => setHeroSlide((index) => (index + 1) % EVENT_TYPES.length), 5000);
     return () => window.clearInterval(timer);
   }, []);
+
+  // Search results live below the hero: once a request is launched, bring them
+  // into view so the visitor never has to guess where the answer landed.
+  useEffect(() => {
+    if (searchRequest <= 0) return;
+    requestAnimationFrame(() => {
+      document.getElementById('recherche-resultats')
+        ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  }, [searchRequest]);
 
   const create = () => setIntakeOpen(true);
   const start = create;
@@ -117,12 +129,12 @@ export function MirrorLanding() {
             <button
               type="button"
               onClick={() => setImportOpen(true)}
-              className="wc-gj-bar-icon"
+              className="wc-gj-bar-icon wc-gj-bar-icon-plus"
               data-landing="import-label"
               aria-label="Importer des fichiers"
               title="Importer des fichiers"
             >
-              <span aria-hidden>+</span>
+              <span aria-hidden className="wc-gj-bar-plus">+</span>
             </button>
             <button
               type="button"
@@ -133,6 +145,21 @@ export function MirrorLanding() {
               title="Rechercher"
             >
               <svg aria-hidden viewBox="0 0 24 24" width="16" height="16"><circle cx="11" cy="11" r="6.5" fill="none" stroke="currentColor" strokeWidth="1.8"/><path d="m16 16 4 4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/></svg>
+            </button>
+            <button
+              type="button"
+              onClick={() => setCalendarOpen(true)}
+              className="wc-gj-bar-icon"
+              data-landing="agenda"
+              data-jourj="nav-calendar"
+              aria-label="Ouvrir l’agenda"
+              title="Agenda"
+            >
+              <svg aria-hidden viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="3.5" y="5" width="17" height="15.5" rx="2.2" />
+                <path d="M8 3.5v3.2M16 3.5v3.2M3.5 10h17" />
+                <path d="M8 14h.01M12 14h.01M16 14h.01M8 17.5h.01M12 17.5h.01M16 17.5h.01" strokeWidth="2.4" />
+              </svg>
             </button>
             {searchMode ? (
               <select value={searchRadius} onChange={(event) => setSearchRadius(Number(event.target.value))} aria-label="Distance de recherche" className="wc-gj-bar-type" data-landing="distance">
@@ -241,6 +268,8 @@ export function MirrorLanding() {
           onClose={() => setIntakeOpen(false)}
         />
       )}
+
+      {calendarOpen && <CalendarStudio onClose={() => setCalendarOpen(false)} />}
     </div>
   );
 }

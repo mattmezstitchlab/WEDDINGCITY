@@ -263,7 +263,7 @@ say('\n=== 5. LE MOMENT EST UN POSTE DE PILOTAGE ===');
 await p.evaluate(() => {
   const cards = [...document.querySelectorAll('[data-jourj="moment"]')];
   const cocktail = cards.find((c) => c.textContent.includes('Cocktail')) || cards[0];
-  cocktail?.querySelector('[data-jourj="open-moment"]')?.click();
+  cocktail?.click();
 });
 await wait(1000);
 await unfoldHub();

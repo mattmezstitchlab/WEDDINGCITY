@@ -93,7 +93,7 @@ const openMomentCard = async (name) => {
     const card = [...document.querySelectorAll('[data-jourj="moment"]')]
       .find((c) => (c.textContent || '').includes(name)) || document.querySelector('[data-jourj="moment"]');
     card?.scrollIntoView({ inline: 'center', block: 'nearest' });
-    card?.querySelector('[data-jourj="open-moment"]')?.click();
+    card?.click();
   }, name);
   await wait(900);
 };
@@ -241,7 +241,10 @@ await wait(600);
 const s1 = await state();
 check('« en extérieur » est une déclaration, enregistrée sur le moment',
   s1.phases.some((x) => x.outdoor === true), JSON.stringify(s1.phases.map((x) => `${x.name}:${x.outdoor}`)));
-await click('jourj', 'hub-close');
+await page.evaluate(() => {
+  const selected = document.querySelector('[data-jourj="moment"].is-selected');
+  selected?.click(); // second click deselects
+});
 await wait(600);
 
 // --- 4. the simulation lives in the film ------------------------------------

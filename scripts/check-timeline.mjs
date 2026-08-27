@@ -210,22 +210,71 @@ try {
   const css = read('components', 'mirror', 'timeline', 'timeline.css');
 
   r.check(site.indexOf('<TimelineStudio />') > 0, 'the timeline is what the Mirror renders first');
-  r.check(site.indexOf('<TimelineStudio />') < site.indexOf('<MirrorProjection'),
-    'and the editorial story comes after the day, in the same page');
+  r.check(/OrganisationSection/.test(site) && !/<MirrorProjection/.test(site),
+    'the desk is timeline + organisation — the mini-site is a separate studio');
+  r.check(/MiniSiteStudio/.test(site) && /data-jourj="open-minisite"/.test(site),
+    'the brand menu opens the Studio mini-site');
   r.check(!/setProjection\('world'\)/.test(site) && !/setProjection\('world'\)/.test(nav),
     'nothing in the product sends the couple into the 3D World');
   r.check(!/<ProjectionSwitcher \/>/.test(app), 'and the projection capsule is gone from the surface');
-  // PRODUCT DECISION (convergence pass): the navigation is the definitive one —
-  // the places of a wedding day, plus search, my weddings and create. Still one
-  // bar, still no sidebar, and still nothing that leads to a 3D world.
   // The timeline header has one navigation owner (the wordmark menu) and one
   // immediate temporal tool (the calendar). Search/create/portfolio actions
   // belong to the landing and must not be duplicated here.
   r.check(/data-jourj="brand-menu"/.test(site), 'the wordmark owns timeline navigation');
-  r.check(/data-jourj="nav-calendar"/.test(site), 'the calendar remains the single header shortcut');
+  // PRODUCT DECISION: Agenda lives ONLY in the landing hero. The desk may keep
+  // a hidden bridge for EventPanel, but never a visible header calendar button.
+  r.check(!/wc-product-calendar/.test(site),
+    'the timeline header no longer shows a visible calendar / Agenda button');
+  r.check(/data-landing="agenda"/.test(read('components', 'mirror', 'MirrorLanding.tsx')),
+    'Agenda is the single persistent entry — on the landing hero');
   for (const tag of ['nav-search', 'nav-weddings', 'nav-create', 'nav-admin']) {
     r.check(!site.includes(`data-jourj="${tag}"`), `the timeline header no longer duplicates ${tag}`);
   }
+  r.check(/Ouvrir le studio mini-site/.test(site),
+    'the brand menu labels the studio entry explicitly');
+  r.check(!/wc-event-nav/.test(studio) && !/data-jourj="event-nav"/.test(studio),
+    'public mini-site navigation no longer sits above the working film');
+  r.check(/is-selected/.test(studio) && /openMomentEditor/.test(studio),
+    'opening a moment selects it on the film');
+  r.check(/MomentDock/.test(studio) && /moment-plus/.test(read('components', 'mirror', 'timeline', 'MomentDock.tsx')),
+    'the Jour J page keeps a permanent bottom toolbar dock for moment editing');
+  r.check(/TimeWheel|wc-time-wheel/.test(read('components', 'mirror', 'timeline', 'MomentDock.tsx')),
+    'hours use a wheel-style picker, not a free-text clock field');
+  r.check(!/data-jourj=\"hub-close\"/.test(read('components', 'mirror', 'timeline', 'MomentDock.tsx'))
+    && !/>\s*Fermer\s*</.test(read('components', 'mirror', 'timeline', 'MomentDock.tsx')),
+    'the toolbar has no close control — deselect is a second card click or Escape');
+  r.check(!/MomentHub/.test(studio),
+    'no MomentHub under the film; editing is the bottom dock');
+  r.check(!/data-jourj=\"open-moment\"/.test(studio),
+    'no separate « Ouvrir » button — the card click is the only door');
+  r.check(/DRAG_THRESHOLD_PX/.test(studio) && /wasClick/.test(studio),
+    'click and drag are distinguished by a movement threshold');
+  r.check(/createAtClientX/.test(studio) && /data-jourj=\"empty-add\"/.test(studio)
+    && !/create-capsule/.test(studio) && !/draftName/.test(studio) && !/pinned-time/.test(studio),
+    'adding a moment is an empty-time click (instant create) — no pin capsule');
+  r.check(/moment-resize-start/.test(studio) && /moment-resize-end/.test(studio)
+    && /onResizePointerDown/.test(studio),
+    'moment edges can be stretched to set start/end hours');
+  r.check(!/data-jourj=\"open-event\"/.test(studio) && /event-name-edit/.test(studio),
+    'day identity is edited in the head — no L\u2019événement button');
+  r.check(!/\.wc-jourj-tools[\s\S]{0,800}data-jourj=\"add-moment\"/.test(studio),
+    'no Ajouter button in the day header tools');
+  r.check(!/setComposing/.test(studio),
+    'no second creation form above the film');
+  r.check(/momentDocs/.test(read('design', 'momentDocs.ts')) || /DOC_KINDS/.test(read('design', 'momentDocs.ts')),
+    'document kinds know intermittent / spectacle statuses');
+  r.check(/GUSO/.test(read('design', 'momentDocs.ts')) && /intermittent/.test(read('design', 'momentDocs.ts')),
+    'French spectacle paperwork (GUSO, intermittent) is in the catalogue');
+  const miniSite = read('components', 'mirror', 'site', 'MiniSiteStudio.tsx');
+  r.check(/id: 'desktop'/.test(miniSite) && /Ordinateur/.test(miniSite)
+    && /id: 'tablet'/.test(miniSite) && /iPad/.test(miniSite)
+    && /id: 'phone'/.test(miniSite) && /iPhone/.test(miniSite)
+    && /data-minisite-device=\{item\.id\}/.test(miniSite),
+    'the Studio mini-site previews desktop, tablet and phone');
+  r.check(/data-minisite="public-nav"/.test(miniSite) && /miniSiteNavigation/.test(miniSite),
+    'public navigation lives only inside the device frame');
+  r.check(/n’est pas encore activée/.test(miniSite) || /pas encore activée/.test(miniSite),
+    'RSVP and ticketing honestly state that public collection is not live');
 
   const storeSrc = read('game', 'weddingStore.ts');
   r.check(/this\.projection = 'mirror';\s*\n\s*\/\/ Opening a wedding|Opening a wedding means opening its day/.test(storeSrc),
@@ -236,7 +285,8 @@ try {
   // The drag surface is the CARD, not a handle — the reported bug.
   r.check(/className={`wc-jourj-moment/.test(studio) && /onPointerDown={\(e\) => onMomentPointerDown\(e, phase\.id\)}/.test(studio),
     'the whole card is the drag surface, so an icon can never travel alone');
-  r.check(/const left = isDragged \? drag!\.left : xForHour\(phase\.startHour\)/.test(studio),
+  r.check(/const left = isDragged \? drag!\.left : xForHour\(liveStart\)/.test(studio)
+    || /isDragged \? drag!\.left/.test(studio),
     'and the card itself is repositioned during the drag');
   r.check(/data-jourj="drop-time"/.test(studio), 'the target hour is shown while dragging');
 
@@ -831,23 +881,35 @@ try {
   // -------------------------------------------------------------------------
   console.log('\n[15/15] PANNEAU DU JOUR J — one door per piece of information');
   // -------------------------------------------------------------------------
-  const hubUx = read('components', 'mirror', 'timeline', 'MomentHub.tsx');
+  const hubUx = read('components', 'mirror', 'timeline', 'MomentDock.tsx');
+  const hubLegacy = read('components', 'mirror', 'timeline', 'MomentHub.tsx');
   const eventPanel = read('components', 'mirror', 'timeline', 'EventPanel.tsx');
   const sectionSrc = read('components', 'mirror', 'timeline', 'PanelSection.tsx');
   const canvasUx = read('components', 'canvas', 'CanvasCore.tsx');
 
   // One folding mechanism, used by both contexts of the one panel.
   r.check(/export function PanelSection/.test(sectionSrc), 'there is one folding section component');
-  r.check(/from '\.\/PanelSection'/.test(hubUx) && /from '\.\/PanelSection'/.test(eventPanel),
-    'and both the moment and the event use it — not two mechanics');
-  r.check(/className=\{`wc-hub\$\{inline \? ' is-inline' : ''\}`\}/.test(eventPanel),
-    'the event editor reuses the moment shell inline in the timeline');
+  r.check(/MomentDock/.test(read('components', 'mirror', 'timeline', 'MomentCard.tsx')),
+    'the moment edits on its own card');
+  r.check(!/from '\.\/PanelSection'/.test(eventPanel),
+    'the event surface is a short identity form, not a second folding hub');
+  r.check(/wc-event-surface/.test(eventPanel) && /data-jourj=\"event-panel\"/.test(eventPanel),
+    'the event surface is its own shell under the day head — not the moment hub');
+  r.check(!/event-open-moment/.test(eventPanel) && !/event-calendar/.test(eventPanel)
+    && !/event-scenarios/.test(eventPanel) && !/Comparer les scénarios/.test(eventPanel),
+    'the event surface holds only day identity — no moment list, calendar or plan B');
+  r.check(/event-name/.test(eventPanel) && /event-type/.test(eventPanel)
+    && /event-date/.test(eventPanel) && /event-place/.test(eventPanel)
+    && /event-headcount/.test(eventPanel),
+    'event fields: name, type, date, place, headcount');
   // Seven since « Scénarios » joined: a plan B now has an obvious door on the
   // moment it concerns, instead of only living in the propagation bar.
-  r.check((hubUx.match(/<PanelSection/g) || []).length === 7,
-    'the moment folds into seven sections', String((hubUx.match(/<PanelSection/g) || []).length));
-  r.check(/summary=/.test(hubUx) && /summary=/.test(eventPanel),
-    'a closed section always carries a summary of its own state');
+  r.check(/data-jourj=\"moment-plus\"/.test(hubUx) && /moment-action-doc/.test(hubUx),
+    'the card + menu owns document / task / people attachment');
+  r.check(/ripple-planb/.test(studio) && !/moment-action-planb/.test(hubUx),
+    'Plan B is offered when a move has consequences — not buried in the + menu');
+  r.check(/testId=\"hub-title\"/.test(hubUx) || /hub-title/.test(hubUx),
+    'title is edited on the card itself');
 
   // The five duplicates found by the audit are gone from the composition surface.
   for (const [call, what] of [
@@ -858,7 +920,7 @@ try {
       `${what} of a moment is no longer edited in the composition surface`);
   }
   r.check(/openMoment\(/.test(canvasUx), 'it leads to the moment instead');
-  r.check(/testId="hub-title"/.test(hubUx) && /store\.setPhaseTitle\(/.test(hubUx),
+  r.check(/hub-title/.test(hubUx) && /setPhaseTitle\(/.test(hubUx),
     'and the title is edited on the moment itself');
 
   // The event's own fields have exactly one writer.

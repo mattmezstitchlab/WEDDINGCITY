@@ -1,13 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { weddingStore } from '../../../game/weddingStore';
 import { typography } from '../../../design/tokens';
-import { MOMENT_TEMPLATES } from '../../../design/momentImagery';
 import { PRODUCT_NAME } from '../../../design/productIdentity';
-import { MomentHub } from './MomentHub';
-import { EventPanel } from './EventPanel';
+import { MomentDock, MomentCardFace } from './MomentDock';
 import { SimulationBar } from './SimulationBar';
 import { Cockpit } from './Cockpit';
-import { CERTAINTY } from '../../../design/certainty';
 import './timeline.css';
 
 // ---------------------------------------------------------------------------
@@ -32,7 +29,7 @@ import './timeline.css';
 
 const MIN_PX_PER_HOUR = 42;      // the whole day on one screen
 const MAX_PX_PER_HOUR = 900;     // five-minute work
-const DEFAULT_PX_PER_HOUR = 190;
+const DEFAULT_PX_PER_HOUR = 72; // day overview by default — drag always available
 const SNAP_MINUTES = 5;
 /**
  * A moment shorter than ~30 minutes would be a sliver at normal zoom, so a card
@@ -121,18 +118,26 @@ export function TimelineStudio() {
   pxRef.current = pxPerHour;
   const [drag, setDrag] = useState<DragState | null>(null);
   const [cursorHour, setCursorHour] = useState<number | null>(null);
-  const [pinnedHour, setPinnedHour] = useState<number | null>(null);
   const [openPhaseId, setOpenPhaseId] = useState<string | null>(null);
-  const [composing, setComposing] = useState(false);
-  const [draftName, setDraftName] = useState('');
-  const [draftStart, setDraftStart] = useState('15:00');
-  const [draftDuration, setDraftDuration] = useState('60');
   const [ripple, setRipple] = useState<{ phaseId: string; delta: number; count: number } | null>(null);
-  const [eventPanelOpen, setEventPanelOpen] = useState(false);
+  // Edge resize: left = start hour, right = end hour (duration changes).
+  const [resize, setResize] = useState<null | {
+    phaseId: string;
+    edge: 'start' | 'end';
+    startHour: number;
+    endHour: number;
+  }>(null);
+  // Identity of the day edited in the head — no separate « L'événement » panel.
+  const [editIdentity, setEditIdentity] = useState<'names' | 'date' | 'place' | null>(null);
+  // Click vs drag: the card is both selection surface and drag handle.
+  const clickRef = useRef<{ phaseId: string; x: number; y: number } | null>(null);
+  const DRAG_THRESHOLD_PX = 6;
 
   // ONE DOOR, WHEREVER YOU CAME FROM. The calendar, the search, a mission or a
   // document all ask the store to open a moment; the timeline is the only thing
   // that knows how. The request is consumed once, so nothing re-opens by itself.
+  // The editor always opens INLINE under the film — never as a floating panel
+  // after the Command Center.
   useEffect(() => {
     const requested = store.focusPhaseId;
     if (!requested) return;
@@ -161,6 +166,48 @@ export function TimelineStudio() {
 
   const stripRef = useRef<HTMLDivElement>(null);
   const panRef = useRef<{ startX: number; startScroll: number } | null>(null);
+
+  const scrollEditorIntoContext = () => {
+    // The card itself is the editor — keep it centred in the film.
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        document.querySelector('[data-jourj="moment"].is-selected')
+          ?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+      });
+    });
+  };
+
+
+  // Day overview by default (same gesture space as « Toute la journée »).
+  // Fit once when the strip appears; do NOT reset zoom on every store write.
+  const didFitRef = useRef(false);
+  useEffect(() => {
+    const strip = stripRef.current;
+    if (!strip || didFitRef.current) return;
+    const fit = () => {
+      const el = stripRef.current;
+      if (!el) return;
+      const w = el.clientWidth - MIN_CARD_PX;
+      if (w <= 0) return;
+      const span = Math.max(1, DEFAULT_DAY_END - DEFAULT_DAY_START);
+      const next = Math.max(MIN_PX_PER_HOUR * 0.5, Math.min(MAX_PX_PER_HOUR, w / span));
+      pxRef.current = next;
+      setPxPerHour(next);
+      didFitRef.current = true;
+    };
+    fit();
+    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(() => {
+      if (!didFitRef.current) fit();
+    }) : null;
+    if (ro) ro.observe(strip);
+    return () => ro?.disconnect();
+  }, [phases.length]);
+
+  const openMomentEditor = (phaseId: string) => {
+    setOpenPhaseId(phaseId);
+    scrollEditorIntoContext();
+  };
+
 
   // The film always covers at least the usual day, and always covers the data.
   const DAY_START = Math.min(DEFAULT_DAY_START, ...phases.map((p) => Math.floor(p.startHour)));
@@ -220,6 +267,9 @@ export function TimelineStudio() {
   // --- moving a moment: the CARD moves, not an icon --------------------------
   const onMomentPointerDown = (e: React.PointerEvent, phaseId: string) => {
     if (e.button !== 0) return;
+    // Ignore the pointer on interactive controls inside the card (none today;
+    // kept as a safety so future actions never start a drag).
+    if ((e.target as HTMLElement).closest('button, a, input, select, textarea')) return;
     const strip = stripRef.current;
     const phase = phases.find((p) => p.id === phaseId);
     if (!strip || !phase) return;
@@ -227,6 +277,7 @@ export function TimelineStudio() {
     const pointerX = e.clientX - rect.left + strip.scrollLeft;
     const left = xForHour(phase.startHour);
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    clickRef.current = { phaseId, x: e.clientX, y: e.clientY };
     setDrag({
       phaseId,
       grabOffset: pointerX - left,
@@ -241,6 +292,13 @@ export function TimelineStudio() {
     if (!drag) return;
     const strip = stripRef.current;
     if (!strip) return;
+    // Until the pointer has moved past the click threshold, the card stays put
+    // and we treat the gesture as a potential selection click.
+    const origin = clickRef.current;
+    const dist = origin
+      ? Math.hypot(e.clientX - origin.x, e.clientY - origin.y)
+      : DRAG_THRESHOLD_PX + 1;
+    if (!drag.moved && dist < DRAG_THRESHOLD_PX) return;
     e.preventDefault();
     const rect = strip.getBoundingClientRect();
     const pointerX = e.clientX - rect.left + strip.scrollLeft;
@@ -260,14 +318,64 @@ export function TimelineStudio() {
     const phase = phases.find((p) => p.id === drag.phaseId);
     const target = drag.targetStart;
     const current = drag;
+    const wasClick = !current.moved;
     setDrag(null);
-    if (!phase || !current.moved || Math.abs(target - phase.startHour) < 1e-6) return;
+    clickRef.current = null;
+    // Simple click: select the moment (card becomes the editor). Click again to deselect.
+    if (wasClick && phase) {
+      if (openPhaseId === phase.id) setOpenPhaseId(null);
+      else openMomentEditor(phase.id);
+      return;
+    }
+    if (!phase || Math.abs(target - phase.startHour) < 1e-6) return;
     const delta = target - phase.startHour;
     const followers = store.phasesAfter(phase.id).length;
     if (store.setPhaseTime(phase.id, target)) {
       // The chain of the day is a proposal, never an automatic rewrite.
       if (followers > 0) setRipple({ phaseId: phase.id, delta, count: followers });
     }
+  };
+
+
+  // --- resize edges: stretch start / end to set hours ----------------
+  const onResizePointerDown = (e: React.PointerEvent, phaseId: string, edge: 'start' | 'end') => {
+    if (e.button !== 0) return;
+    e.stopPropagation();
+    e.preventDefault();
+    const phase = phases.find((p) => p.id === phaseId);
+    if (!phase) return;
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    setResize({ phaseId, edge, startHour: phase.startHour, endHour: phase.endHour });
+    setDrag(null);
+    clickRef.current = null;
+  };
+
+  const onResizePointerMove = (e: React.PointerEvent) => {
+    if (!resize) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const strip = stripRef.current;
+    if (!strip) return;
+    const rect = strip.getBoundingClientRect();
+    const hour = snap(hourForX(e.clientX - rect.left + strip.scrollLeft));
+    if (resize.edge === 'start') {
+      const maxStart = resize.endHour - 15 / 60; // min 15 min
+      const start = Math.max(DAY_START, Math.min(maxStart, hour));
+      setResize({ ...resize, startHour: start });
+    } else {
+      const minEnd = resize.startHour + 15 / 60;
+      const end = Math.min(DAY_END, Math.max(minEnd, hour));
+      setResize({ ...resize, endHour: end });
+    }
+  };
+
+  const onResizePointerUp = () => {
+    if (!resize) return;
+    const { phaseId, startHour, endHour } = resize;
+    setResize(null);
+    const duration = endHour - startHour;
+    if (duration < 15 / 60) return;
+    store.setPhaseTime(phaseId, startHour, endHour);
   };
 
   // --- panning the film ------------------------------------------------------
@@ -279,6 +387,7 @@ export function TimelineStudio() {
     strip.classList.add('is-panning');
   };
   const onStripPointerMove = (e: React.PointerEvent) => {
+    if (resize) { onResizePointerMove(e); return; }
     const strip = stripRef.current;
     if (strip) {
       const rect = strip.getBoundingClientRect();
@@ -287,18 +396,48 @@ export function TimelineStudio() {
     if (!panRef.current || !strip) return;
     strip.scrollLeft = panRef.current.startScroll - (e.clientX - panRef.current.startX);
   };
+  /** Empty-time click: create a moment at that hour immediately (no form). */
+  const createAtClientX = (clientX: number) => {
+    const strip = stripRef.current;
+    if (!strip) return;
+    const rect = strip.getBoundingClientRect();
+    const hour = snap(hourForX(clientX - rect.left + strip.scrollLeft));
+    const startH = normalizeNightHour(hour, phases);
+    const created = store.createPhase({
+      name: 'Nouveau moment',
+      startHour: startH,
+      durationHours: 1,
+    });
+    if (created) {
+      requestAnimationFrame(() => {
+        const s = stripRef.current;
+        if (s) s.scrollLeft = Math.max(0, xForHour(created.startHour) - 120);
+        openMomentEditor(created.id);
+      });
+    }
+  };
+
   const endPan = (e?: React.PointerEvent) => {
+    if (resize) { onResizePointerUp(); return; }
     const pan = panRef.current;
     const strip = stripRef.current;
-    // A click on empty time freezes the vertical ruler at that exact snapped
-    // minute. A real drag remains a pan and never creates an accidental mark.
-    if (e && pan && strip && Math.abs(e.clientX - pan.startX) < 4
-      && !(e.target as HTMLElement).closest('[data-jourj="moment"]')) {
-      const rect = strip.getBoundingClientRect();
-      setPinnedHour(snap(hourForX(e.clientX - rect.left + strip.scrollLeft)));
+    // Empty-time click creates a moment at that hour immediately — no form.
+    if (e && pan && strip && Math.abs(e.clientX - pan.startX) < 12
+      && !(e.target as HTMLElement).closest('[data-jourj="moment"]')
+      && !(e.target as HTMLElement).closest('button, input, select, textarea, a')) {
+      createAtClientX(e.clientX);
     }
     panRef.current = null;
     strip?.classList.remove('is-panning');
+  };
+
+  const onStripClick = (e: React.MouseEvent) => {
+    // Fallback for environments where pointer capture is flaky: a plain click
+    // on empty film still freezes the hour (especially in placement mode).
+    if (drag) return;
+    if ((e.target as HTMLElement).closest('[data-jourj="moment"]')) return;
+    if ((e.target as HTMLElement).closest('button, input, select, textarea, a')) return;
+    createAtClientX(e.clientX);
   };
 
   // --- creating a moment -----------------------------------------------------
@@ -309,35 +448,11 @@ export function TimelineStudio() {
     return Number.isFinite(h) ? h : null;
   };
 
-  const submitMoment = () => {
-    const parsed = parseClock(draftStart);
-    const minutes = Number(draftDuration);
-    if (!draftName.trim() || parsed === null || !Number.isFinite(minutes) || minutes <= 0) return;
-    const start = normalizeNightHour(parsed, phases);
-    const created = store.createPhase({
-      name: draftName.trim(),
-      startHour: start,
-      durationHours: minutes / 60,
-    });
-    if (!created) return;
-    setDraftName('');
-    setComposing(false);
-    // Bring the new moment into view — the day should never hide what you add.
-    requestAnimationFrame(() => {
-      const strip = stripRef.current;
-      if (strip) strip.scrollLeft = Math.max(0, xForHour(created.startHour) - 120);
-    });
+  const addFirstMoment = () => {
+    const created = store.createPhase({ name: 'Nouveau moment', startHour: 15, durationHours: 1 });
+    if (created) openMomentEditor(created.id);
   };
 
-  const addTemplate = (label: string, startHour: number, durationHours: number) => {
-    const created = store.createPhase({ name: label, startHour, durationHours });
-    if (created) {
-      requestAnimationFrame(() => {
-        const strip = stripRef.current;
-        if (strip) strip.scrollLeft = Math.max(0, xForHour(created.startHour) - 120);
-      });
-    }
-  };
 
   // --- the hour ruler --------------------------------------------------------
   const tickStep = pxPerHour > 420 ? 0.25 : pxPerHour > 220 ? 0.5 : pxPerHour > 90 ? 1 : 2;
@@ -345,45 +460,20 @@ export function TimelineStudio() {
   for (let h = DAY_START; h <= DAY_END; h += tickStep) ticks.push(Number(h.toFixed(4)));
 
   const project = store.currentProject;
-  const eventNavigation = (() => {
-    const eventKind = project.eventTypeId ?? 'mariage';
-    const common = [
-      { label: 'Programme', action: 'programme' },
-      { label: 'Infos pratiques', action: 'event' },
-    ];
-    if (eventKind === 'mariage') return [common[0], { label: 'RSVP', action: 'seating' }, common[1]];
-    if (['spectacle', 'concert', 'festival'].includes(eventKind)) return [common[0], { label: 'Billetterie', action: 'event' }, { label: 'Artistes', action: 'crew' }, common[1]];
-    if (['corporate', 'seminaire', 'convention', 'gala', 'associatif', 'culturel'].includes(eventKind)) return [common[0], { label: 'Participants', action: 'seating' }, { label: 'Intervenants', action: 'crew' }, common[1]];
-    if (eventKind === 'voyage') return [{ label: 'Itinéraire', action: 'programme' }, { label: 'Voyageurs', action: 'seating' }, common[1]];
-    return [common[0], { label: 'Participants', action: 'seating' }, common[1]];
-  })();
-  const openEventDestination = (action: string) => {
-    if (action === 'event') { setEventPanelOpen(true); return; }
-    if (action === 'programme') { stripRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }); return; }
-    document.getElementById('organisation')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    window.setTimeout(() => document.querySelector<HTMLButtonElement>(`[data-org-action="${action}"]`)?.click(), 450);
-  };
+  // Public mini-site navigation (Programme · RSVP · …) lives inside the
+  // MiniSiteStudio device preview — never above the working film.
   const dayLabel = project.weddingDate
     ? new Date(project.weddingDate).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
     : null;
 
-  return (
-    <section className="wc-jourj" id="jour-j" aria-label="Le Jour J">
-      {/* A public-site vocabulary above the working film. The entries adapt to
-          the event chosen at intake: RSVP for a wedding, ticketing for a show,
-          participants for a professional day. They lead to existing tools;
-          they do not create a second navigation model. */}
-      <nav className="wc-event-nav" aria-label="Navigation de l’événement" data-jourj="event-nav">
-        <span className="wc-event-nav-name">{project.coupleNames || project.title}</span>
-        <div>
-          {eventNavigation.map((entry) => (
-            <button key={`${entry.label}-${entry.action}`} onClick={() => openEventDestination(entry.action)} data-event-action={entry.action}>
-              {entry.label}
-            </button>
-          ))}
-        </div>
-      </nav>
+  // ONE DOOR — focus requests also scroll the inline editor into view.
+  useEffect(() => {
+    if (!openPhaseId) return;
+    scrollEditorIntoContext();
+  }, [openPhaseId]);
 
+  return (
+    <section className="wc-jourj wc-jourj-with-dock" id="jour-j" aria-label="Le Jour J">
       {/* MON GRAND JOUR — where the day stands, above the film it describes.
           Not a page, not a dashboard: four sentences and a ruler one can open.
           Only drawn once there is a day to say something about. */}
@@ -393,23 +483,82 @@ export function TimelineStudio() {
       <div className="wc-jourj-head">
         <div style={{ minWidth: 0 }}>
           <div style={eyebrow}>Le Jour J</div>
-          <h1 className="wc-jourj-title" style={dayTitleStyle}>
-            {project.coupleNames || 'Votre mariage'}
-          </h1>
-          <div style={{ marginTop: 12, display: 'flex', gap: 14, flexWrap: 'wrap', color: 'var(--jourj-dim)', fontSize: typography.editorial.caption }}>
-            {dayLabel && <span>{dayLabel}</span>}
-            {project.locationName && <span>{project.locationName}</span>}
+          {editIdentity === 'names' ? (
+            <input
+              className="wc-jourj-identity-input"
+              autoFocus
+              defaultValue={project.coupleNames || ''}
+              placeholder="Noms / intitulé"
+              data-jourj="event-name"
+              onBlur={(e) => {
+                const v = e.target.value.trim();
+                if (v && v !== project.coupleNames) store.updateEvent({ coupleNames: v });
+                setEditIdentity(null);
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+                if (e.key === 'Escape') setEditIdentity(null);
+              }}
+              style={{ ...dayTitleStyle, width: '100%', maxWidth: 640, background: 'transparent', border: 'none', borderBottom: '1px solid rgba(246,245,243,0.35)', color: '#f6f5f3', outline: 'none', fontFamily: 'inherit', padding: '0 0 4px' }}
+            />
+          ) : (
+            <h1 className="wc-jourj-title" style={{ ...dayTitleStyle, cursor: 'text' }}>
+              <button
+                type="button"
+                className="wc-jourj-identity-btn"
+                data-jourj="event-name-edit"
+                onClick={() => setEditIdentity('names')}
+                title="Modifier l’intitulé"
+              >
+                {project.coupleNames || 'Votre mariage'}
+              </button>
+            </h1>
+          )}
+          <div style={{ marginTop: 12, display: 'flex', gap: 14, flexWrap: 'wrap', color: 'var(--jourj-dim)', fontSize: typography.editorial.caption, alignItems: 'center' }}>
+            {editIdentity === 'date' ? (
+              <input
+                type="date"
+                autoFocus
+                defaultValue={project.weddingDate || ''}
+                data-jourj="event-date"
+                onBlur={(e) => {
+                  store.updateEvent({ weddingDate: e.target.value });
+                  setEditIdentity(null);
+                }}
+                onKeyDown={(e) => { if (e.key === 'Escape') setEditIdentity(null); }}
+                style={{ background: '#101114', color: '#f6f5f3', border: '1px solid rgba(246,245,243,0.25)', borderRadius: 6, padding: '4px 8px' }}
+              />
+            ) : (
+              <button type="button" className="wc-jourj-meta-btn" data-jourj="event-date-edit" onClick={() => setEditIdentity('date')}>
+                {dayLabel || 'Date à préciser'}
+              </button>
+            )}
+            {editIdentity === 'place' ? (
+              <input
+                autoFocus
+                defaultValue={project.locationName || ''}
+                placeholder="Lieu principal"
+                data-jourj="event-place"
+                onBlur={(e) => {
+                  store.updateEvent({ locationName: e.target.value.trim() });
+                  setEditIdentity(null);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+                  if (e.key === 'Escape') setEditIdentity(null);
+                }}
+                style={{ background: '#101114', color: '#f6f5f3', border: '1px solid rgba(246,245,243,0.25)', borderRadius: 6, padding: '4px 8px', minWidth: 160 }}
+              />
+            ) : (
+              <button type="button" className="wc-jourj-meta-btn" data-jourj="event-place-edit" onClick={() => setEditIdentity('place')}>
+                {project.locationName || 'Lieu à préciser'}
+              </button>
+            )}
             <span>{phases.length === 0 ? 'aucun moment' : phases.length === 1 ? '1 moment' : `${phases.length} moments`}</span>
           </div>
         </div>
 
         <div className="wc-jourj-tools">
-          <button onClick={() => setEventPanelOpen(true)} style={ghostBtn} data-jourj="open-event">
-            L’événement
-          </button>
-          <button onClick={() => setComposing((v) => !v)} style={primaryBtn} data-jourj="add-moment">
-            + Ajouter un moment
-          </button>
           <button
             onClick={() => {
               const next = !nowMode;
@@ -447,60 +596,9 @@ export function TimelineStudio() {
         </div>
       </div>
 
-      {/* ---- inline composer: a moment is one line, not a form ---- */}
-      {composing && (
-        <div style={composerRow}>
-          <input
-            autoFocus
-            value={draftName}
-            onChange={(e) => setDraftName(e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Enter') submitMoment(); if (e.key === 'Escape') setComposing(false); }}
-            placeholder="Nom du moment — cérémonie, cocktail, discours…"
-            style={{ ...input, flex: '1 1 260px' }}
-            data-jourj="moment-name"
-          />
-          <input
-            value={draftStart}
-            onChange={(e) => setDraftStart(e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Enter') submitMoment(); }}
-            placeholder="15:00"
-            style={{ ...input, width: 92 }}
-            aria-label="Heure de début"
-            data-jourj="moment-start"
-          />
-          <input
-            value={draftDuration}
-            onChange={(e) => setDraftDuration(e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Enter') submitMoment(); }}
-            placeholder="60"
-            style={{ ...input, width: 80 }}
-            aria-label="Durée en minutes"
-            data-jourj="moment-duration"
-          />
-          <span style={{ color: 'var(--jourj-faint)', fontSize: typography.editorial.caption }}>minutes</span>
-          <button onClick={submitMoment} style={primaryBtn} data-jourj="moment-create">Créer</button>
-          <button onClick={() => setComposing(false)} style={ghostBtn}>Annuler</button>
-          {/* The same templates as the empty day, still one click each and
-              still never injected on their own. */}
-          <span style={{ width: '100%', display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 4 }}>
-            {MOMENT_TEMPLATES.map((t) => (
-              <button
-                key={t.label}
-                onClick={() => addTemplate(t.label, t.startHour, t.durationHours)}
-                style={templateChip}
-                data-jourj="template"
-              >
-                {t.label}
-                <span style={{ color: 'var(--jourj-faint)', marginLeft: 8 }}>{formatHour(t.startHour)}</span>
-              </button>
-            ))}
-          </span>
-        </div>
-      )}
-
       {/* ---- the film. An empty day draws no scale: there is no time to read
              yet, and a ruler over nothing is decoration. ---- */}
-      {phases.length > 0 && (
+      {(phases.length > 0) && (
       <div
         ref={stripRef}
         className="wc-jourj-strip"
@@ -508,6 +606,7 @@ export function TimelineStudio() {
         onPointerMove={onStripPointerMove}
         onPointerUp={endPan}
         onPointerLeave={() => { endPan(); setCursorHour(null); }}
+        onClick={onStripClick}
         data-jourj="strip"
       >
         <div style={{ position: 'relative', width, height: '100%' }} data-jourj="scale" data-px-per-hour={pxPerHour}>
@@ -541,95 +640,54 @@ export function TimelineStudio() {
           {/* the moments */}
           {phases.map((phase) => {
             const isDragged = drag?.phaseId === phase.id;
-            const duration = phase.endHour - phase.startHour;
-            // Legacy imports sometimes stored the hour inside the title. The
-            // scale already owns time, so showing it twice is visual noise.
+            const isResizing = resize?.phaseId === phase.id;
+            const liveStart = isResizing ? resize!.startHour : phase.startHour;
+            const liveEnd = isResizing ? resize!.endHour : phase.endHour;
+            const duration = liveEnd - liveStart;
             const displayName = phase.name.replace(/^\s*\d{1,2}\s*[:h]\s*\d{2}\s*[—–-]\s*/, '').trim() || phase.name;
-            const left = isDragged ? drag!.left : xForHour(phase.startHour);
+            const left = isDragged ? drag!.left : xForHour(liveStart);
             const cardWidth = Math.max(duration * pxPerHour, MIN_CARD_PX);
-            const hub = store.getPhaseHub(phase.id);
             const dense = cardWidth < 150;
-            // What this scene is still missing, read from the same engine the
-            // whole product uses. Gaps and conflicts come first: a card should
-            // announce a problem before it announces a success.
-            const allFindings = store.phaseFindings(phase.id);
-            const findings = [
-              ...allFindings.filter((f) => f.level === 'conflict'),
-              ...allFindings.filter((f) => f.level === 'gap'),
-              ...allFindings.filter((f) => f.level === 'ok'),
-            ];
-            const extraFindings = Math.max(0, findings.length - 3);
+            const isSelected = openPhaseId === phase.id;
             return (
               <article
                 key={phase.id}
-                className={`wc-jourj-moment${isDragged ? ' is-dragging' : ''}`}
+                className={`wc-jourj-moment${isDragged ? ' is-dragging' : ''}${isResizing ? ' is-resizing' : ''}${isSelected ? ' is-selected' : ''}`}
                 style={{ left, width: cardWidth }}
                 onPointerDown={(e) => onMomentPointerDown(e, phase.id)}
-                onPointerMove={onMomentPointerMove}
-                onPointerUp={onMomentPointerUp}
-                onPointerCancel={onMomentPointerUp}
+                onPointerMove={(e) => { onMomentPointerMove(e); onResizePointerMove(e); }}
+                onPointerUp={() => { onMomentPointerUp(); onResizePointerUp(); }}
+                onPointerCancel={() => { onMomentPointerUp(); onResizePointerUp(); }}
                 data-jourj="moment"
                 data-phase-id={phase.id}
-                data-start={phase.startHour}
+                data-start={liveStart}
+                data-selected={isSelected ? 'yes' : 'no'}
+                aria-current={isSelected ? 'true' : undefined}
               >
-                <div style={momentBody}>
-                  <div style={momentHour}>
-                    {formatHour(phase.startHour)}
-                    {phase.confidence && phase.confidence !== 'confirmed' && (
-                      <span
-                        style={{ ...estimateTag, color: CERTAINTY[phase.confidence].color, borderColor: CERTAINTY[phase.confidence].color }}
-                        title={phase.confidenceNote || CERTAINTY[phase.confidence].meaning}
-                        data-jourj="moment-certainty"
-                        data-level={phase.confidence}
-                      >
-                        {CERTAINTY[phase.confidence].label}
-                      </span>
-                    )}
-                  </div>
-                  {!dense && (
-                    <>
-                      <div style={momentName}>{displayName}</div>
-                      <div style={momentMeta}>
-                        {formatDuration(duration)}
-                        {hub && hub.persons.length > 0 && ` · ${hub.persons.length} pers.`}
-                        {hub && hub.vendors.length > 0 && ` · ${hub.vendors.length} prest.`}
-                        {hub && hub.media.length > 0 && ` · ${hub.media.length} doc.`}
-                      </div>
-
-                      {/* THE STATE OF THE SCENE, on the scene itself.
-                          Derived from phaseFindings() — the same reading the
-                          hub opens on. Three lines at most: the card announces,
-                          the hub explains. */}
-                      {cardWidth >= 240 && findings.length > 0 && (
-                        <ul style={stateList} data-jourj="moment-state">
-                          {findings.slice(0, 3).map((f, i) => (
-                            <li
-                              key={i}
-                              style={{ ...stateLine, color: f.level === 'ok' ? 'rgba(246,245,243,0.72)' : f.level === 'conflict' ? '#e0736a' : '#e0a06a' }}
-                              data-jourj="moment-state-line"
-                              data-level={f.level}
-                            >
-                              {f.level === 'ok' ? '✓' : '⚠'} {f.title}
-                            </li>
-                          ))}
-                          {extraFindings > 0 && (
-                            <li style={{ ...stateLine, color: 'rgba(246,245,243,0.5)' }}>
-                              + {extraFindings} autre{extraFindings > 1 ? 's' : ''}
-                            </li>
-                          )}
-                        </ul>
-                      )}
-                    </>
-                  )}
-                </div>
                 <button
-                  onClick={(e) => { e.stopPropagation(); setOpenPhaseId(phase.id); }}
-                  onPointerDown={(e) => e.stopPropagation()}
-                  style={openBtn}
-                  data-jourj="open-moment"
-                >
-                  Ouvrir
-                </button>
+                  type="button"
+                  className="wc-moment-edge wc-moment-edge-start"
+                  data-jourj="moment-resize-start"
+                  aria-label="Étirer le début"
+                  onPointerDown={(e) => onResizePointerDown(e, phase.id, 'start')}
+                  onPointerMove={onResizePointerMove}
+                  onPointerUp={onResizePointerUp}
+                />
+                <MomentCardFace phaseId={phase.id} dense={dense} displayName={displayName} selected={isSelected} />
+                <button
+                  type="button"
+                  className="wc-moment-edge wc-moment-edge-end"
+                  data-jourj="moment-resize-end"
+                  aria-label="Étirer la fin"
+                  onPointerDown={(e) => onResizePointerDown(e, phase.id, 'end')}
+                  onPointerMove={onResizePointerMove}
+                  onPointerUp={onResizePointerUp}
+                />
+                {isResizing && (
+                  <div className="wc-moment-resize-badge" data-jourj="resize-time">
+                    {formatHour(liveStart)} → {formatHour(liveEnd)}
+                  </div>
+                )}
               </article>
             );
           })}
@@ -659,25 +717,9 @@ export function TimelineStudio() {
             </div>
           )}
 
-          {/* Where you are in the day. Clicking empty time pins the ruler and
-              turns it into an insertion point rather than a fleeting hover. */}
-          {pinnedHour !== null && (
-            <div className="wc-pinned-time" style={{ left: xForHour(pinnedHour) }} data-jourj="pinned-time">
-              <div>{formatHour(pinnedHour)}</div>
-              <button
-                onPointerDown={(event) => event.stopPropagation()}
-                onClick={(event) => {
-                  event.stopPropagation();
-                  setDraftStart(formatHour(pinnedHour));
-                  setComposing(true);
-                }}
-              >
-                + Ajouter ici
-              </button>
-              <button onPointerDown={(event) => event.stopPropagation()} onClick={() => setPinnedHour(null)} aria-label="Retirer le repère">×</button>
-            </div>
-          )}
-          {cursorHour !== null && pinnedHour === null && !drag && (
+          {/* Cursor hour guide while hovering empty film */}
+          {cursorHour !== null && !drag && !resize && (
+
             <div style={{ position: 'absolute', left: xForHour(cursorHour), top: 0, bottom: 0, width: 1, background: 'rgba(246,245,243,0.35)', pointerEvents: 'none' }}>
               <div style={cursorBadge} data-jourj="cursor-time">{formatHour(cursorHour)}</div>
             </div>
@@ -703,29 +745,12 @@ export function TimelineStudio() {
             n’a été inventé pour la remplir. Ajoutez le premier moment — tout le
             reste s’y accrochera.
           </p>
-          <button onClick={() => setComposing(true)} style={{ ...primaryBtn, marginTop: 18 }} data-jourj="empty-add">
+          <button onClick={addFirstMoment} style={{ ...primaryBtn, marginTop: 18 }} data-jourj="empty-add">
             + Ajouter le premier moment
           </button>
-          <div style={{ marginTop: 26 }}>
-            <div style={{ ...eyebrow, marginBottom: 10 }}>Ou partir d’un modèle</div>
-            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-              {MOMENT_TEMPLATES.map((t) => (
-                <button
-                  key={t.label}
-                  onClick={() => addTemplate(t.label, t.startHour, t.durationHours)}
-                  style={templateChip}
-                  data-jourj="template"
-                >
-                  {t.label}
-                  <span style={{ color: 'var(--jourj-faint)', marginLeft: 8 }}>{formatHour(t.startHour)}</span>
-                </button>
-              ))}
-            </div>
-            <p style={{ ...emptyBody, marginTop: 12, fontSize: typography.editorial.micro }}>
-              Un modèle ajoute un seul moment, à une heure que vous pourrez déplacer.
-              Rien n’est injecté sans votre clic.
-            </p>
-          </div>
+          <p style={{ ...emptyBody, marginTop: 14, fontSize: typography.editorial.micro }}>
+            Ou cliquez une heure vide sur la pellicule — le moment se crée à cet instant.
+          </p>
         </div>
       )}
 
@@ -739,7 +764,7 @@ export function TimelineStudio() {
         const minutes = Math.round(ripple.delta * 60);
         const sign = minutes > 0 ? '+' : '';
         return (
-          <div style={rippleBar} role="status" data-jourj="ripple">
+          <div className="wc-ripple-bar has-dock" role="status" data-jourj="ripple">
             <div style={{ display: 'grid', gap: 10, flex: '1 1 420px' }}>
               <span>
                 <strong>{impact?.moment.name ?? 'Ce moment'} {sign}{minutes}</strong>
@@ -811,17 +836,14 @@ export function TimelineStudio() {
         );
       })()}
 
-      {/* « ET SI… » — inside the film, because a consequence is only readable
-          next to the thing it changes. */}
-      <SimulationBar onOpenMoment={(id) => setOpenPhaseId(id)} />
-
-      {openPhaseId && (
-        <MomentHub phaseId={openPhaseId} inline onClose={() => setOpenPhaseId(null)} />
-      )}
-
       {/* Event facts are edited in the same timeline flow, never in a lateral
           panel that hides the hours being changed. */}
-      {eventPanelOpen && <EventPanel inline onClose={() => setEventPanelOpen(false)} />}
+
+      {/* « ET SI… » — inside the film, because a consequence is only readable
+          next to the thing it changes. */}
+      <MomentDock phaseId={openPhaseId} onClear={() => setOpenPhaseId(null)} />
+
+      <SimulationBar onOpenMoment={(id) => openMomentEditor(id)} />
     </section>
   );
 }
@@ -989,16 +1011,6 @@ const momentMeta: React.CSSProperties = {
   marginTop: 6, fontSize: typography.editorial.micro, color: 'rgba(246,245,243,0.72)',
 };
 
-const openBtn: React.CSSProperties = {
-  position: 'absolute', top: 10, right: 10,
-  appearance: 'none', cursor: 'pointer',
-  background: 'rgba(8,9,11,0.62)', color: '#f6f5f3',
-  border: '1px solid rgba(246,245,243,0.28)', borderRadius: 999,
-  // No control under 11px, on a phone included.
-  padding: '6px 12px', fontSize: typography.editorial.caption,
-  fontFamily: typography.family.sans,
-};
-
 const dropBadge: React.CSSProperties = {
   position: 'absolute', top: 12, zIndex: 26,
   background: '#f6f5f3', color: '#08090b', borderRadius: 999,
@@ -1078,12 +1090,3 @@ const conflictLine: React.CSSProperties = {
   borderLeft: '2px solid #e0736a', paddingLeft: 10, fontSize: 11, lineHeight: 1.5,
 };
 
-const rippleBar: React.CSSProperties = {
-  position: 'fixed', left: '50%', bottom: 24, transform: 'translateX(-50%)',
-  zIndex: 1300, display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap',
-  background: '#101114', color: '#f6f5f3',
-  border: '1px solid rgba(246,245,243,0.24)', borderRadius: 999,
-  padding: '10px 12px 10px 20px', maxWidth: 'min(92vw, 720px)',
-  fontSize: typography.editorial.caption,
-  boxShadow: '0 24px 60px rgba(0,0,0,0.6)',
-};

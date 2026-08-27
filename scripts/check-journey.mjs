@@ -140,7 +140,10 @@ try {
   const site = readFileSync(path.join(SRC, 'components', 'mirror', 'MirrorSite.tsx'), 'utf8');
   r.check(/store\.returnToLanding\(\)/.test(site),
     'the Mirror offers it too — the site is not a dead end');
-  r.check(site.indexOf('<MirrorNav') < site.indexOf('<MirrorHero'),
+  // The desk order is brand nav → timeline → organisation. The public mini-site
+  // is a separate studio; the retired magazine rail no longer sits on this path.
+  r.check(site.indexOf('ProductNav') < site.indexOf('<TimelineStudio')
+    && site.indexOf('<TimelineStudio') < site.indexOf('<OrganisationSection'),
     'imposed vertical order: navigation, then the content, then (fixed) the capsule');
 
   // -------------------------------------------------------------------------

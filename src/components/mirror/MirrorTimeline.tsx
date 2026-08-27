@@ -1,6 +1,7 @@
 import { ProgrammeMoment } from '../../projections/worldModel';
 import { momentImage } from '../../design/momentImagery';
 import { Portrait } from './MirrorPrimitives';
+import { weddingStore } from '../../game/weddingStore';
 
 // ---------------------------------------------------------------------------
 // THE PUBLIC PROGRAMME — a story, never a second editor.
@@ -9,15 +10,16 @@ import { Portrait } from './MirrorPrimitives';
 // programme is the mini-site preview: it reads the very same moments, but owns
 // no edit action and writes nothing. A real image attached to the moment wins;
 // otherwise the product illustration is resolved at render time and is never
-// persisted as wedding media.
+// persisted as wedding media. Every vertical scene always carries a visual.
 // ---------------------------------------------------------------------------
 
 export function MirrorTimeline({ moments }: { moments: ProgrammeMoment[] }) {
+  const eventTypeId = weddingStore.currentProject.eventTypeId;
   return (
     <ol className="wc-story-programme" aria-label="Programme immersif">
       {moments.map((moment, index) => {
         const ownImage = moment.media.find((media) => media.kind === 'image');
-        const image = momentImage(moment.title, ownImage?.source);
+        const image = momentImage(moment.title, ownImage?.source, eventTypeId);
 
         return (
           <li className="wc-story-scene" key={moment.phaseId} data-story-moment={moment.phaseId}>

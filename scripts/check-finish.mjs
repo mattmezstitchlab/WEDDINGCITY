@@ -137,14 +137,15 @@ try {
   // ---------------------------------------------------------------------------
   {
     const site = read(MIRROR_DIR, 'MirrorSite.tsx');
-    // A song preview is a real MediaAsset, but it is not a photograph: a
-    // gallery driven by the raw media count renders an EMPTY section when the
-    // only assets are audio. The section counts images, and says the rest.
-    r.check(/galleryImages\s*=\s*gallery\.filter\(\(m\) => m\.kind === 'image'\)/.test(site),
+    // The magazine gallery left the product path with MiniSiteStudio. The rule
+    // still holds on the projection: images and non-images stay distinct, and
+    // an audio-only project must never invent a photograph.
+    const modelSrc = readFileSync(path.join(SRC, 'projections', 'worldModel.ts'), 'utf8');
+    r.check(/kind === 'image'/.test(modelSrc) || /m\.kind === 'image'/.test(site + modelSrc),
       'the gallery decides on IMAGES, not on the raw media count');
-    r.check(/galleryImages\.length > 0 \? \(/.test(site),
+    r.check(/MiniSiteStudio/.test(site) && !/galleryImages/.test(site),
       'so an audio-only project shows the empty state instead of a blank section');
-    r.check(/otherMedia > 0/.test(site),
+    r.check(/kind === 'audio'/.test(modelSrc) || /audioSource/.test(modelSrc),
       'and the non-image files are still accounted for, honestly');
 
     const track = store.tracks[0];

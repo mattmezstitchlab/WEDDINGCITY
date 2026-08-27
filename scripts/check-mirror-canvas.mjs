@@ -180,11 +180,21 @@ try {
   // -------------------------------------------------------------------------
   {
     const site = readFileSync(path.join(SRC, 'components', 'mirror', 'MirrorSite.tsx'), 'utf8');
-    for (const idx of ['01', '02', '03', '04', '05', '06']) {
-      r.check(new RegExp(`index="${idx}"`).test(site), `section ${idx} is numbered in the Mirror`);
-    }
-    r.check(/<MirrorNav\s+sections=/.test(site), 'the Mirror renders its section navigation');
+    // The desk is timeline + organisation. Public reading lives in MiniSiteStudio.
+    r.check(/<TimelineStudio\s*\/>/.test(site), 'the desk opens on the Jour J timeline');
+    r.check(/OrganisationSection/.test(site), 'Organisation stays on the same desk');
+    r.check(/MiniSiteStudio/.test(site) && /data-jourj="open-minisite"/.test(site),
+      'the brand menu opens the Studio mini-site');
+    r.check(!/<MirrorNav\s+sections=/.test(site) && !/data-story="immersive-preview"/.test(site),
+      'the six-section magazine is no longer embedded under the desk');
 
+    const mini = readFileSync(path.join(SRC, 'components', 'mirror', 'site', 'MiniSiteStudio.tsx'), 'utf8');
+    r.check(/data-minisite="public-nav"/.test(mini), 'public navigation lives inside the device');
+    r.check(/miniSiteNavigation/.test(mini), 'public nav adapts to the event type');
+    r.check(/Ordinateur/.test(mini) && /iPad/.test(mini) && /iPhone/.test(mini),
+      'three device formats are offered');
+
+    // Historical MirrorNav still documents the intersection behaviour for archival.
     const nav = readFileSync(path.join(SRC, 'components', 'mirror', 'MirrorNav.tsx'), 'utf8');
     r.check(/IntersectionObserver/.test(nav), 'the nav highlight follows the section in view');
     r.check(/scrollIntoView/.test(nav), 'the nav scrolls smoothly to a section');
@@ -259,21 +269,19 @@ try {
     r.check(!/backdropFilter|backdrop-filter/i.test(all), 'no glassmorphism in the Mirror');
     r.check(!/rgba\(0,\s*0,\s*0,\s*0\.[6-9]/.test(all), 'no heavy opaque black shadows');
 
-    // Rhythm: the page must not be six identical blocks.
+    // Rhythm: the desk is dark film + organisation; the public programme is a
+    // vertical story inside the Studio mini-site — not six equal magazine blocks.
     const site = readFileSync(path.join(dir, 'MirrorSite.tsx'), 'utf8');
-    r.check(/scale="dominant"/.test(site), 'PROGRAMME is the dominant section');
-    // The quiet weight is now applied conditionally (an empty gallery is quiet,
-    // a full one is normal), so the literal attribute is no longer written out.
-    // The rhythm itself is measured on the RENDERED page by check-render.mjs
-    // ("sections carry unequal weight"), which is a stronger proof than this.
-    r.check(/scale=\{[^}]*'quiet'/.test(site) || /scale="quiet"/.test(site),
-      'supporting sections are quieter');
-    r.check((site.match(/tone="surface"/g) ?? []).length >= 2,
-      'sections alternate between background and paper surface');
+    r.check(/TimelineStudio/.test(site) && /MiniSiteStudio/.test(site),
+      'PROGRAMME lives in the Studio mini-site, timeline owns the desk');
+    const miniCss = readFileSync(path.join(dir, 'site', 'mini-site-studio.css'), 'utf8');
+    r.check(/wc-minisite-device/.test(miniCss) && /wc-minisite-screen/.test(miniCss),
+      'device frames give the public surface a distinct reading rhythm');
+    r.check(/wc-minisite-public-nav/.test(miniCss),
+      'public navigation is styled only inside the device');
 
-    // The embedded programme is now the public reading projection. It keeps
-    // stable moment ids but deliberately exposes no World/Canvas edit doors;
-    // editing belongs to the horizontal timeline above it.
+    // The public programme keeps stable moment ids and deliberately exposes no
+    // World/Canvas edit doors; editing belongs to the horizontal timeline.
     const timeline = readFileSync(path.join(dir, 'MirrorTimeline.tsx'), 'utf8');
     r.check(/data-story-moment=\{moment\.phaseId\}/.test(timeline), 'public moments keep their stable phaseId');
     r.check(!/showEventInWorld|showVendorInWorld/.test(timeline), 'the public programme does not open the internal World');
