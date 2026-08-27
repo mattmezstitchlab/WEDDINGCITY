@@ -1346,3 +1346,94 @@
   text-transform: none;
   letter-spacing: 0;
 }
+
+/* --- Edge resize handles (always-on day mode) ----------------------------- */
+.wc-jourj-moment { touch-action: none; }
+.wc-moment-edge {
+  appearance: none;
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 10px;
+  border: 0;
+  padding: 0;
+  margin: 0;
+  background: transparent;
+  cursor: ew-resize;
+  z-index: 6;
+  pointer-events: auto;
+}
+.wc-moment-edge::after {
+  content: '';
+  position: absolute;
+  top: 18%;
+  bottom: 18%;
+  width: 3px;
+  border-radius: 2px;
+  background: rgba(246, 245, 243, 0.28);
+  transition: background 120ms ease, opacity 120ms ease;
+  opacity: 0;
+}
+.wc-jourj-moment:hover .wc-moment-edge::after,
+.wc-jourj-moment.is-selected .wc-moment-edge::after,
+.wc-jourj-moment.is-resizing .wc-moment-edge::after {
+  opacity: 1;
+}
+.wc-moment-edge:hover::after,
+.wc-jourj-moment.is-resizing .wc-moment-edge::after {
+  background: rgba(246, 245, 243, 0.85);
+}
+.wc-moment-edge-start { left: 0; }
+.wc-moment-edge-start::after { left: 3px; }
+.wc-moment-edge-end { right: 0; }
+.wc-moment-edge-end::after { right: 3px; }
+.wc-moment-resize-badge {
+  position: absolute;
+  top: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 8;
+  background: #f6f5f3;
+  color: #08090b;
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-family: ui-monospace, monospace;
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+  pointer-events: none;
+}
+.wc-jourj-moment.is-resizing {
+  z-index: 32;
+  border-color: rgba(246, 245, 243, 0.55);
+}
+
+/* Identity editable in the day head */
+.wc-jourj-identity-btn,
+.wc-jourj-meta-btn {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  padding: 0;
+  margin: 0;
+  cursor: text;
+  text-align: left;
+}
+.wc-jourj-identity-btn:hover,
+.wc-jourj-meta-btn:hover {
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+.wc-jourj-meta-btn {
+  color: var(--jourj-dim);
+  font-size: inherit;
+}
+.wc-jourj-meta-btn:hover { color: #f6f5f3; }
+
+/* Face menu icons */
+.wc-moment-face-menu button svg {
+  flex: 0 0 auto;
+  opacity: 0.9;
+}

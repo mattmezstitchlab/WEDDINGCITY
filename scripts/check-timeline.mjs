@@ -249,9 +249,14 @@ try {
     'no separate « Ouvrir » button — the card click is the only door');
   r.check(/DRAG_THRESHOLD_PX/.test(studio) && /wasClick/.test(studio),
     'click and drag are distinguished by a movement threshold');
-  r.check(/data-jourj=\"pinned-time\"/.test(studio) && /data-jourj=\"add-moment\"/.test(studio)
-    && !/create-capsule/.test(studio) && !/draftName/.test(studio),
-    'adding a moment is pin + instant « Ajouter un moment » — no create capsule');
+  r.check(/createAtClientX/.test(studio) && /data-jourj=\"empty-add\"/.test(studio)
+    && !/create-capsule/.test(studio) && !/draftName/.test(studio) && !/pinned-time/.test(studio),
+    'adding a moment is an empty-time click (instant create) — no pin capsule');
+  r.check(/moment-resize-start/.test(studio) && /moment-resize-end/.test(studio)
+    && /onResizePointerDown/.test(studio),
+    'moment edges can be stretched to set start/end hours');
+  r.check(!/data-jourj=\"open-event\"/.test(studio) && /event-name-edit/.test(studio),
+    'day identity is edited in the head — no L\u2019événement button');
   r.check(!/\.wc-jourj-tools[\s\S]{0,800}data-jourj=\"add-moment\"/.test(studio),
     'no Ajouter button in the day header tools');
   r.check(!/setComposing/.test(studio),
@@ -280,7 +285,8 @@ try {
   // The drag surface is the CARD, not a handle — the reported bug.
   r.check(/className={`wc-jourj-moment/.test(studio) && /onPointerDown={\(e\) => onMomentPointerDown\(e, phase\.id\)}/.test(studio),
     'the whole card is the drag surface, so an icon can never travel alone');
-  r.check(/const left = isDragged \? drag!\.left : xForHour\(phase\.startHour\)/.test(studio),
+  r.check(/const left = isDragged \? drag!\.left : xForHour\(liveStart\)/.test(studio)
+    || /isDragged \? drag!\.left/.test(studio),
     'and the card itself is repositioned during the drag');
   r.check(/data-jourj="drop-time"/.test(studio), 'the target hour is shown while dragging');
 
@@ -899,7 +905,9 @@ try {
   // Seven since « Scénarios » joined: a plan B now has an obvious door on the
   // moment it concerns, instead of only living in the propagation bar.
   r.check(/data-jourj=\"moment-plus\"/.test(hubUx) && /moment-action-doc/.test(hubUx),
-    'the card + menu owns document / task / plan B creation');
+    'the card + menu owns document / task / people attachment');
+  r.check(/ripple-planb/.test(studio) && !/moment-action-planb/.test(hubUx),
+    'Plan B is offered when a move has consequences — not buried in the + menu');
   r.check(/testId=\"hub-title\"/.test(hubUx) || /hub-title/.test(hubUx),
     'title is edited on the card itself');
 

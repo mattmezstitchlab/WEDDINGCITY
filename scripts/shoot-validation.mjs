@@ -132,6 +132,8 @@ const editor = await page.evaluate(() => {
   const closeBtn = document.querySelector('[data-jourj="hub-close"]');
   const idleDup = /Moment sélectionné/.test(dock?.textContent || '');
   const capsule = !!document.querySelector('[data-jourj="create-capsule"]');
+  const openEvent = !!document.querySelector('[data-jourj="open-event"]');
+  const edge = !!document.querySelector('[data-jourj="moment"].is-selected [data-jourj="moment-resize-start"]');
   return {
     dock: !!dock,
     dockAlways: dock?.getAttribute('data-active') != null,
@@ -147,13 +149,16 @@ const editor = await page.evaluate(() => {
     noClose: !closeBtn,
     noDupLabel: !idleDup,
     noCapsule: !capsule,
+    noEventBtn: !openEvent,
+    edge,
   };
 });
 console.log('editor', JSON.stringify(editor));
 if (!editor.dock || !editor.selected || !editor.plus || !editor.hourBtn || !editor.titleBtn
   || !editor.faceOnFilm || !editor.noHubUnder || !editor.noHeaderAdd || !editor.dockFixed
-  || !editor.durationWheel || !editor.noClose || !editor.noDupLabel || !editor.noCapsule) {
-  console.error('FAIL: card hour/title/+ ; dock secondary; no capsule/Fermer');
+  || !editor.durationWheel || !editor.noClose || !editor.noDupLabel || !editor.noCapsule
+  || !editor.noEventBtn || !editor.edge) {
+  console.error('FAIL: card hour/title/+/edges ; dock secondary; no capsule/event/Fermer');
   process.exit(1);
 }
 // Compose a shot that keeps the strip + the top of the editor together.
@@ -173,69 +178,62 @@ await shot(page, '02b-moment-plus-menu');
 await page.keyboard.press('Escape');
 await settle(200);
 
-// --- Pin: click empty film → clean hour + Ajouter (no capsule) -------------
-// Deselect current moment first so the strip receives the empty-time click.
+// --- Empty-time create (no capsule / no pin form) --------------------------
 await page.evaluate(() => {
   const sel = document.querySelector('[data-jourj="moment"].is-selected');
   sel?.click();
 });
 await settle(400);
-const pinPoint = await page.evaluate(() => {
+const beforeCount = await page.evaluate(() => document.querySelectorAll('[data-jourj="moment"]').length);
+const createPoint = await page.evaluate(() => {
   const strip = document.querySelector('[data-jourj="strip"]');
   if (!strip) return null;
   strip.scrollIntoView({ behavior: 'instant', block: 'center' });
   const r = strip.getBoundingClientRect();
-  // The hour ruler band (top ~40px) is always empty of cards — pin there.
   const y = r.top + 28;
-  for (let t = 0.35; t <= 0.9; t += 0.08) {
+  for (let t = 0.2; t <= 0.45; t += 0.05) {
     const x = r.left + r.width * t;
     const el = document.elementFromPoint(x, y);
     if (!el) continue;
     if (el.closest('[data-jourj="moment"]')) continue;
-    if (el.closest('button, input, select, a, [data-jourj="pinned-time"]')) continue;
-    if (el.closest('[data-jourj="strip"]') || el.closest('[data-jourj="scale"]')) {
-      return { x, y };
-    }
+    if (el.closest('button, input, select, a')) continue;
+    if (el.closest('[data-jourj="strip"]') || el.closest('[data-jourj="scale"]')) return { x, y };
   }
-  return { x: r.left + r.width * 0.42, y };
+  return { x: r.left + r.width * 0.25, y };
 });
-console.log('pinPoint', JSON.stringify(pinPoint));
-if (!pinPoint) {
-  console.error('FAIL: could not find empty film point');
-  process.exit(1);
-}
-await page.mouse.click(pinPoint.x, pinPoint.y);
-await settle(700);
-const pin = await page.evaluate(() => {
-  const p = document.querySelector('[data-jourj="pinned-time"]');
-  const add = document.querySelector('[data-jourj="pinned-time"] [data-jourj="add-moment"]');
-  const clear = document.querySelector('[data-jourj="pin-clear"]');
+console.log('createPoint', JSON.stringify(createPoint));
+if (!createPoint) { console.error('FAIL: no empty point'); process.exit(1); }
+await page.mouse.click(createPoint.x, createPoint.y);
+await settle(900);
+const afterCreate = await page.evaluate((before) => {
+  const moments = document.querySelectorAll('[data-jourj="moment"]');
   const capsule = document.querySelector('[data-jourj="create-capsule"]');
-  const nameInput = document.querySelector('[data-jourj="pinned-time"] input');
-  const stack = document.querySelector('.wc-pin-stack');
+  const pin = document.querySelector('[data-jourj="pinned-time"]');
+  const openEvent = document.querySelector('[data-jourj="open-event"]');
+  const edges = document.querySelectorAll('[data-jourj="moment-resize-start"]').length;
+  const identity = document.querySelector('[data-jourj="event-name-edit"]');
   return {
-    pin: !!p,
-    add: !!add && /Ajouter un moment/.test(add.textContent || ''),
-    clear: !!clear,
+    grew: moments.length > before,
     noCapsule: !capsule,
-    noNameField: !nameInput,
-    stack: !!stack,
+    noPin: !pin,
+    noEventBtn: !openEvent,
+    edges,
+    identity: !!identity,
   };
-});
-console.log('pin', JSON.stringify(pin));
-if (!pin.pin || !pin.add || !pin.clear || !pin.noCapsule || !pin.noNameField) {
-  console.error('FAIL: pin should be hour + dismiss + Ajouter only (no capsule)');
+}, beforeCount);
+console.log('create', JSON.stringify(afterCreate));
+if (!afterCreate.grew || !afterCreate.noCapsule || !afterCreate.noPin || !afterCreate.noEventBtn
+  || afterCreate.edges < 1 || !afterCreate.identity) {
+  console.error('FAIL: instant create on empty click; no capsule/pin/event button; edges + identity');
   process.exit(1);
 }
 await page.evaluate(() => {
-  document.querySelector('[data-jourj="pinned-time"]')?.scrollIntoView({ inline: 'center', block: 'nearest' });
+  document.querySelector('[data-jourj="strip"]')?.scrollIntoView({ behavior: 'instant', block: 'start' });
 });
 await settle(400);
 await shot(page, '06-placement-pin');
-// cleanup pin so later steps are clean
-await page.click('[data-jourj="pin-clear"]').catch(() => {});
-await settle(300);
 
+// --- 3. Studio mini-site desktop -------------------------------------------
 // --- 3. Studio mini-site desktop -------------------------------------------
 await page.click('[data-jourj="brand-menu"]');
 await settle(400);

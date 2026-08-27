@@ -8,6 +8,9 @@ import {
   type PartyLookupResult,
 } from '../../../design/momentDocs';
 import { formatHour, normalizeNightHour } from './TimelineStudio';
+import {
+  IconDocument, IconTask, IconBranch, IconUser, IconVendor, IconTrash, IconPlus, IconSun,
+} from '../../ui/Icons';
 
 // ---------------------------------------------------------------------------
 // MOMENT TOOLBAR — permanent bottom bar on Jour J.
@@ -114,7 +117,7 @@ export function MomentDock({
                   onChange={(e) => store.setPhaseOutdoor(phaseId, e.target.checked)}
                   data-jourj="hub-outdoor"
                 />
-                <span aria-hidden>☀</span>
+                <IconSun size={14} color="currentColor" />
               </label>
               <input
                 className="wc-moment-dock-input wc-moment-dock-num"
@@ -401,13 +404,13 @@ export function MomentCardFace({
               aria-expanded={menuOpen}
               onClick={() => { setMenuOpen((v) => !v); setDocOpen(false); }}
             >
-              +
+              <IconPlus size={16} color="currentColor" />
             </button>
             {menuOpen && !docOpen && (
               <ul className="wc-moment-face-menu" role="menu" data-jourj="moment-plus-menu">
                 <li>
                   <button type="button" role="menuitem" data-jourj="moment-action-doc" onClick={() => setDocOpen(true)}>
-                    <span aria-hidden>📄</span> Document
+                    <IconDocument size={15} color="currentColor" /> Document
                   </button>
                 </li>
                 <li>
@@ -421,21 +424,7 @@ export function MomentCardFace({
                       setMenuOpen(false);
                     }}
                   >
-                    <span aria-hidden>✓</span> Tâche
-                  </button>
-                </li>
-                <li>
-                  <button
-                    type="button"
-                    role="menuitem"
-                    data-jourj="moment-action-planb"
-                    onClick={() => {
-                      const scenario = store.createScenario(`Plan B — ${phase.name}`);
-                      if (scenario) store.setActiveScenario(scenario.id);
-                      setMenuOpen(false);
-                    }}
-                  >
-                    <span aria-hidden>⎇</span> Plan B
+                    <IconTask size={15} color="currentColor" /> Tâche
                   </button>
                 </li>
                 <li>
@@ -451,7 +440,7 @@ export function MomentCardFace({
                       setMenuOpen(false);
                     }}
                   >
-                    <span aria-hidden>👤</span> Personne
+                    <IconUser size={15} color="currentColor" /> Personne
                   </button>
                 </li>
                 <li>
@@ -467,7 +456,7 @@ export function MomentCardFace({
                       setMenuOpen(false);
                     }}
                   >
-                    <span aria-hidden>🏢</span> Presta
+                    <IconVendor size={15} color="currentColor" /> Presta
                   </button>
                 </li>
                 <li className="is-danger">
@@ -477,7 +466,7 @@ export function MomentCardFace({
                     data-jourj="moment-action-delete"
                     onClick={() => { store.deletePhase(phaseId); setMenuOpen(false); }}
                   >
-                    Supprimer
+                    <IconTrash size={15} color="currentColor" /> Supprimer
                   </button>
                 </li>
               </ul>
