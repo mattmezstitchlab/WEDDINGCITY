@@ -59,7 +59,7 @@ export function Manifesto() {
             Et s’ils pouvaient transformer cette intention en contexte, en possibilités puis en actions ?
           </p>
 
-          <p style={{ marginTop: 14 }}><strong>WEDDINGCITY</strong> est un terrain d’expérimentation pour une idée plus vaste : passer de l’interface qui impose une structure à l’interface qui comprend une intention.</p>
+          <p style={{ marginTop: 14 }}><strong>AIME</strong> est un terrain d’expérimentation pour une idée plus vaste : passer de l’interface qui impose une structure à l’interface qui comprend une intention.</p>
 
           <p style={{ marginTop: 18, fontWeight: 700 }}>Vous n’avez pas besoin de savoir comment organiser votre monde. Commencez simplement par nous dire ce qui est vivant.</p>
         </div>
