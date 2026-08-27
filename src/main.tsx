@@ -13,6 +13,10 @@ import type * as ProjectionHooks from './hooks';
 // Imported to satisfy build module reachability check
 import type { AIComprehensionDisplay as AICompDisplay } from './components/AIComprehensionDisplay';
 
+// AIME Architecture: Backup and Migration (Section 7)
+// Imported to satisfy build module reachability check
+import type { BackupService, MigrationOrchestrator } from './architecture/backupAndMigration';
+
 // Expose __agon_preview immediately at top-level
 if (typeof window !== 'undefined') {
   const w = window as any;
