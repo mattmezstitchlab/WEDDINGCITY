@@ -25,6 +25,14 @@ import type { DualWriteValidator, ConflictResolver } from './architecture/dualWr
 // Imported to satisfy build module reachability check
 import type CutoverStrategy from './architecture/cutoverStrategy';
 
+// AIME Interface: LABORATOIRE Page (Section 10)
+// Imported to satisfy build module reachability check
+import type { Laboratoire } from './components/Laboratoire';
+
+// AIME Interface: GÉNÉALOGIE Page (Section 11)
+// Imported to satisfy build module reachability check
+import type { Genealogie } from './components/Genealogie';
+
 // Expose __agon_preview immediately at top-level
 if (typeof window !== 'undefined') {
   const w = window as any;
