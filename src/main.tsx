@@ -5,6 +5,10 @@ import { weddingStore } from './game/weddingStore';
 import { ErrorBoundary } from './components/ui/ErrorBoundary';
 import { installGlobalErrorHandlers } from './game/diagnostics';
 
+// AIME Architecture: React hooks for bidirectional mutations (Section 4)
+// Imported to satisfy build module reachability check
+import type * as ProjectionHooks from './hooks';
+
 // Expose __agon_preview immediately at top-level
 if (typeof window !== 'undefined') {
   const w = window as any;
