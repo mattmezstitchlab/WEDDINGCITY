@@ -10,6 +10,7 @@ import { CalendarStudio } from './calendar/CalendarStudio';
 import { MiniSiteStudio } from './site/MiniSiteStudio';
 import { GuideMode } from './GuideMode';
 import { Manifesto } from './Manifesto';
+import { FinancialHub } from './FinancialHub';
 import './mirror.css';
 
 // ---------------------------------------------------------------------------
@@ -36,6 +37,7 @@ export function MirrorSite() {
       <ProductNav />
       <TimelineStudio />
       <OrganisationSection />
+      <FinancialHub />
       <GuideMode />
       <Manifesto />
     </div>
@@ -78,6 +80,7 @@ function ProductNav() {
               <button role="menuitem" onClick={() => { go('jour-j'); setProjectMenuOpen(false); }}>La timeline</button>
               <button role="menuitem" onClick={() => { document.querySelector('[data-jourj="simulation"]')?.scrollIntoView({ behavior: 'smooth' }); setProjectMenuOpen(false); }}>Command center</button>
               <button role="menuitem" onClick={() => { go('organisation'); setProjectMenuOpen(false); }}>Que voulez-vous faire ?</button>
+              <button role="menuitem" onClick={() => { go('financial-hub'); setProjectMenuOpen(false); }}>Bureau Financier</button>
               <button
                 role="menuitem"
                 onClick={() => { setMiniSiteOpen(true); setProjectMenuOpen(false); }}
