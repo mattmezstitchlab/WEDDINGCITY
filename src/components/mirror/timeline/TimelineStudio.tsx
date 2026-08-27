@@ -3,7 +3,7 @@ import { weddingStore } from '../../../game/weddingStore';
 import { typography } from '../../../design/tokens';
 import { MOMENT_TEMPLATES } from '../../../design/momentImagery';
 import { PRODUCT_NAME } from '../../../design/productIdentity';
-import { MomentHub } from './MomentHub';
+import { MomentCardChrome, MomentCardFace } from './MomentCard';
 import { EventPanel } from './EventPanel';
 import { SimulationBar } from './SimulationBar';
 import { Cockpit } from './Cockpit';
@@ -152,8 +152,6 @@ export function TimelineStudio() {
     requestAnimationFrame(() => {
       document.querySelector(`[data-phase-id="${requested}"]`)
         ?.scrollIntoView({ inline: 'center', block: 'nearest' });
-      document.querySelector('[data-jourj="hub"]')
-        ?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     });
   }, [store.focusPhaseId, store.version]);
 
@@ -174,15 +172,11 @@ export function TimelineStudio() {
   const panRef = useRef<{ startX: number; startScroll: number } | null>(null);
 
   const scrollEditorIntoContext = () => {
-    // Bring the selected film card and the inline hub into the same viewport:
-    // the strip stays visible above, the editor opens under it, before Command
-    // Center. 'nearest' avoids jumping so far that the film leaves the screen.
+    // The card itself is the editor — keep it centred in the film.
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
-        const selected = document.querySelector('[data-jourj="moment"].is-selected');
-        const hub = document.querySelector('[data-jourj="hub"]');
-        selected?.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
-        hub?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        document.querySelector('[data-jourj="moment"].is-selected')
+          ?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
       });
     });
   };
@@ -307,9 +301,10 @@ export function TimelineStudio() {
     const wasClick = !current.moved;
     setDrag(null);
     clickRef.current = null;
-    // Simple click: select the moment and open its ONE contextual surface.
+    // Simple click: select the moment (card becomes the editor). Click again to deselect.
     if (wasClick && phase) {
-      openMomentEditor(phase.id);
+      if (openPhaseId === phase.id) setOpenPhaseId(null);
+      else openMomentEditor(phase.id);
       return;
     }
     if (!phase || Math.abs(target - phase.startHour) < 1e-6) return;
@@ -495,17 +490,6 @@ export function TimelineStudio() {
           </button>
           <button
             onClick={() => {
-              if (placing) cancelPlacement();
-              else beginPlacement();
-            }}
-            style={primaryBtn}
-            data-jourj="add-moment"
-            aria-pressed={placing}
-          >
-            {placing ? 'Choisir l’heure sur la pellicule' : '+ Ajouter un moment'}
-          </button>
-          <button
-            onClick={() => {
               const next = !nowMode;
               setNowMode(next);
               if (next) {
@@ -540,16 +524,6 @@ export function TimelineStudio() {
           </button>
         </div>
       </div>
-
-      {/* ---- placement mode: one add flow, no second form above the film ---- */}
-      {placing && pinnedHour === null && (
-        <div style={composerRow} data-jourj="placement-hint" role="status">
-          <span style={{ color: 'var(--jourj-dim)', fontSize: typography.editorial.caption }}>
-            Cliquez sur la pellicule pour figer l’heure du nouveau moment.
-          </span>
-          <button onClick={cancelPlacement} style={ghostBtn} data-jourj="placement-cancel">Annuler</button>
-        </div>
-      )}
 
       {/* ---- the film. An empty day draws no scale: there is no time to read
              yet, and a ruler over nothing is decoration. ---- */}
@@ -607,18 +581,7 @@ export function TimelineStudio() {
             const displayName = phase.name.replace(/^\s*\d{1,2}\s*[:h]\s*\d{2}\s*[—–-]\s*/, '').trim() || phase.name;
             const left = isDragged ? drag!.left : xForHour(phase.startHour);
             const cardWidth = Math.max(duration * pxPerHour, MIN_CARD_PX);
-            const hub = store.getPhaseHub(phase.id);
             const dense = cardWidth < 150;
-            // What this scene is still missing, read from the same engine the
-            // whole product uses. Gaps and conflicts come first: a card should
-            // announce a problem before it announces a success.
-            const allFindings = store.phaseFindings(phase.id);
-            const findings = [
-              ...allFindings.filter((f) => f.level === 'conflict'),
-              ...allFindings.filter((f) => f.level === 'gap'),
-              ...allFindings.filter((f) => f.level === 'ok'),
-            ];
-            const extraFindings = Math.max(0, findings.length - 3);
             const isSelected = openPhaseId === phase.id;
             return (
               <article
@@ -635,56 +598,11 @@ export function TimelineStudio() {
                 data-selected={isSelected ? 'yes' : 'no'}
                 aria-current={isSelected ? 'true' : undefined}
               >
-                <div style={momentBody}>
-                  <div style={momentHour}>
-                    {formatHour(phase.startHour)}
-                    {phase.confidence && phase.confidence !== 'confirmed' && (
-                      <span
-                        style={{ ...estimateTag, color: CERTAINTY[phase.confidence].color, borderColor: CERTAINTY[phase.confidence].color }}
-                        title={phase.confidenceNote || CERTAINTY[phase.confidence].meaning}
-                        data-jourj="moment-certainty"
-                        data-level={phase.confidence}
-                      >
-                        {CERTAINTY[phase.confidence].label}
-                      </span>
-                    )}
-                  </div>
-                  {!dense && (
-                    <>
-                      <div style={momentName}>{displayName}</div>
-                      <div style={momentMeta}>
-                        {formatDuration(duration)}
-                        {hub && hub.persons.length > 0 && ` · ${hub.persons.length} pers.`}
-                        {hub && hub.vendors.length > 0 && ` · ${hub.vendors.length} prest.`}
-                        {hub && hub.media.length > 0 && ` · ${hub.media.length} doc.`}
-                      </div>
-
-                      {/* THE STATE OF THE SCENE, on the scene itself.
-                          Derived from phaseFindings() — the same reading the
-                          hub opens on. Three lines at most: the card announces,
-                          the hub explains. */}
-                      {cardWidth >= 240 && findings.length > 0 && (
-                        <ul style={stateList} data-jourj="moment-state">
-                          {findings.slice(0, 3).map((f, i) => (
-                            <li
-                              key={i}
-                              style={{ ...stateLine, color: f.level === 'ok' ? 'rgba(246,245,243,0.72)' : f.level === 'conflict' ? '#e0736a' : '#e0a06a' }}
-                              data-jourj="moment-state-line"
-                              data-level={f.level}
-                            >
-                              {f.level === 'ok' ? '✓' : '⚠'} {f.title}
-                            </li>
-                          ))}
-                          {extraFindings > 0 && (
-                            <li style={{ ...stateLine, color: 'rgba(246,245,243,0.5)' }}>
-                              + {extraFindings} autre{extraFindings > 1 ? 's' : ''}
-                            </li>
-                          )}
-                        </ul>
-                      )}
-                    </>
-                  )}
-                </div>
+                {isSelected ? (
+                  <MomentCardChrome phaseId={phase.id} dense={dense} displayName={displayName} />
+                ) : (
+                  <MomentCardFace phaseId={phase.id} dense={dense} displayName={displayName} />
+                )}
               </article>
             );
           })}
@@ -781,9 +699,9 @@ export function TimelineStudio() {
                     event.stopPropagation();
                     beginPlacement(pinnedHour);
                   }}
-                  data-jourj="add-here"
+                  data-jourj="add-moment"
                 >
-                  + Ajouter ici
+                  + Ajouter un moment
                 </button>
               )}
               <button
@@ -916,12 +834,6 @@ export function TimelineStudio() {
           </div>
         );
       })()}
-
-      {/* The moment editor opens IMMEDIATELY under the film. Nothing is parked
-          after the Command Center, and no lateral panel is reintroduced. */}
-      {openPhaseId && (
-        <MomentHub phaseId={openPhaseId} inline onClose={() => setOpenPhaseId(null)} />
-      )}
 
       {/* Event facts are edited in the same timeline flow, never in a lateral
           panel that hides the hours being changed. */}

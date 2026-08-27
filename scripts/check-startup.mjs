@@ -231,7 +231,14 @@ function checkDeadModules() {
     // a dedicated archival pass; MiniSiteStudio reuses Hero + Timeline only.
     'components/mirror/MirrorNav.tsx',
     'components/mirror/MirrorPeople.tsx',
-    'components/mirror/MirrorSections.tsx'];
+    'components/mirror/MirrorSections.tsx',
+    // The moment edits on its own film card (MomentCard). The former under-strip
+    // hub and its folding sections stay inventoried until archival; TrackArt and
+    // the music player were only reached through that hub / magazine path.
+    'components/mirror/timeline/MomentHub.tsx',
+    'components/mirror/timeline/PanelSection.tsx',
+    'components/mirror/TrackArt.tsx',
+    'game/musicPlayer.ts'];
   const unexpected = dead.filter((f) => !KNOWN_DEAD.includes(f));
   const revived = KNOWN_DEAD.filter((f) => !dead.includes(f));
 

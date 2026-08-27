@@ -201,7 +201,10 @@ const s2 = await state();
 check('et il écrit sur le bon moment',
   s2.phases.some((x) => x.name === 'COCKTAIL AU JARDIN'),
   s2.phases.map((x) => x.name).join(', '));
-await click('jourj', 'hub-close');
+await page.evaluate(() => {
+  const selected = document.querySelector('[data-jourj="moment"].is-selected');
+  selected?.click(); // second click deselects
+});
 await wait(600);
 
 // --- 4. the event has its own identity surface under the day head -----------
@@ -254,7 +257,10 @@ await wait(900);
 check('un clic sur la carte ouvre la surface contextuelle du moment',
   await p.evaluate(() => !!document.querySelector('[data-jourj="hub"]')
     && !!document.querySelector('[data-jourj="moment"].is-selected')));
-await click('jourj', 'hub-close');
+await page.evaluate(() => {
+  const selected = document.querySelector('[data-jourj="moment"].is-selected');
+  selected?.click(); // second click deselects
+});
 await wait(500);
 
 // --- 5. no duplicate editing in the composition surface ---------------------
@@ -292,7 +298,10 @@ await p.evaluate(() => {
 await wait(1200);
 check('depuis la recherche, le moment s’ouvre',
   await p.evaluate(() => !!document.querySelector('[data-jourj="hub"]')));
-await click('jourj', 'hub-close');
+await page.evaluate(() => {
+  const selected = document.querySelector('[data-jourj="moment"].is-selected');
+  selected?.click(); // second click deselects
+});
 await wait(500);
 
 await p.evaluate(() => document.getElementById('wc-mirror')?.scrollTo({ top: 0 }));
@@ -313,7 +322,10 @@ if (calMoments > 0) {
     await p.evaluate(() => !!document.querySelector('[data-jourj="hub"]')));
   check('le calendrier s’est refermé — on ne se perd pas entre deux surfaces',
     await p.evaluate(() => !document.querySelector('[data-cal="studio"]')));
-  await click('jourj', 'hub-close');
+  await page.evaluate(() => {
+  const selected = document.querySelector('[data-jourj="moment"].is-selected');
+  selected?.click(); // second click deselects
+});
   await wait(500);
 } else {
   await click('cal', 'close');

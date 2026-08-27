@@ -263,7 +263,10 @@ const attach = async (phaseName, personName) => {
     return true;
   }, personName);
   await wait(700);
-  await click('jourj', 'hub-close');
+  await page.evaluate(() => {
+  const selected = document.querySelector('[data-jourj="moment"].is-selected');
+  selected?.click(); // second click deselects
+});
   await wait(500);
   return ok;
 };
@@ -380,7 +383,10 @@ await p.evaluate(() => {
 });
 await wait(600);
 await commit('jourj', 'hub-start', fmt((await state()).phases.find((x) => x.name === 'Cocktail').start + 0.25));
-await click('jourj', 'hub-close'); await wait(600);
+await page.evaluate(() => {
+  const selected = document.querySelector('[data-jourj="moment"].is-selected');
+  selected?.click(); // second click deselects
+}); await wait(600);
 await click('jourj', 'nav-crew'); await wait(900);
 const conflicts = await p.evaluate(() => [...document.querySelectorAll('[data-crew="finding"][data-level="conflict"]')]
   .map((f) => f.textContent.replace(/\s+/g, ' ').trim().slice(0, 100)));
@@ -409,7 +415,10 @@ await unfoldHub();
 await wait(900);
 const fileInput = await p.$('[data-jourj="hub-file"]');
 if (fileInput) { await fileInput.uploadFile(DOC); await wait(1600); }
-await click('jourj', 'hub-close'); await wait(600);
+await page.evaluate(() => {
+  const selected = document.querySelector('[data-jourj="moment"].is-selected');
+  selected?.click(); // second click deselects
+}); await wait(600);
 s = await state();
 check('le contrat est rattaché au moment',
   s.media.some((m) => m.owner === 'event' && /contrat-saxophoniste/.test(m.name || '')),

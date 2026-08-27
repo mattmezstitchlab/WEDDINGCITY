@@ -118,33 +118,26 @@ await card.click();
 await settle(1400);
 
 const editor = await page.evaluate(() => {
-  const hub = document.querySelector('[data-jourj="hub"]');
+  const card = document.querySelector('[data-jourj="moment-card"]');
   const selected = document.querySelector('[data-jourj="moment"].is-selected, [data-selected="yes"]');
+  const plus = document.querySelector('[data-jourj="moment-plus"]');
+  const hub = document.querySelector('[data-jourj="hub"]');
   const strip = document.querySelector('[data-jourj="strip"]');
-  const cover = hub?.querySelector('.wc-hub-cover');
-  const coverDisplay = cover ? getComputedStyle(cover).display : 'none';
-  const inlineHead = !!document.querySelector('[data-jourj="hub-inline-head"]');
-  const sim = document.querySelector('[data-jourj="simulation"]');
-  const hubTop = hub?.getBoundingClientRect().top ?? null;
-  const simTop = sim?.getBoundingClientRect().top ?? null;
-  const stripBottom = strip?.getBoundingClientRect().bottom ?? null;
-  const lateral = getComputedStyle(hub || document.body).position === 'fixed'
-    && (hub?.getBoundingClientRect().right ?? 0) > window.innerWidth - 20
-    && (hub?.getBoundingClientRect().width ?? 0) < window.innerWidth * 0.5;
+  const headerAdd = [...document.querySelectorAll('[data-jourj="add-moment"]')]
+    .filter((el) => el.closest('.wc-jourj-tools'));
   return {
-    hub: !!hub,
+    card: !!card,
     selected: !!selected,
-    coverDisplay,
-    inlineHead,
-    hubBeforeCommand: hubTop !== null && simTop !== null ? hubTop < simTop : null,
-    hubUnderStrip: hubTop !== null && stripBottom !== null ? hubTop >= stripBottom - 8 : null,
-    lateral,
-    editorLocation: hub?.getAttribute('data-editor-location') || null,
+    plus: !!plus,
+    noHubUnder: !hub,
+    noHeaderAdd: headerAdd.length === 0,
+    titleField: !!document.querySelector('[data-jourj="hub-title"]'),
+    inStrip: !!(card && strip && strip.contains(card)),
   };
 });
 console.log('editor', JSON.stringify(editor));
-if (!editor.hub || !editor.selected || editor.coverDisplay !== 'none' || !editor.inlineHead || editor.lateral) {
-  console.error('FAIL: moment editor not inline under the film as required');
+if (!editor.card || !editor.selected || !editor.plus || !editor.noHubUnder || !editor.noHeaderAdd || !editor.inStrip) {
+  console.error('FAIL: moment editor must be the selected card with +, no hub under strip, no header add');
   process.exit(1);
 }
 // Compose a shot that keeps the strip + the top of the editor together.
