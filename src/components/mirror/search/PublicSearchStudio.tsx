@@ -169,7 +169,7 @@ export function PublicSearchResults({
         setStatus('searching');
       }
 
-      const viewbox = position != null
+      const viewbox = position != null && lat != null && lon != null
         ? `${lon - radius / 111},${lat + radius / 111},${lon + radius / 111},${lat - radius / 111}`
         : HAVRE_DEFAULT_VIEWBOX;
 
@@ -336,7 +336,7 @@ export function PublicSearchResults({
               </b>
             </div>
 
-            {status === 'no-position' && cards.length > 0 && (
+            {cards.length > 0 && cards[0]?.distanceKm === null && (
               <p className="wc-public-status-note">
                 Sans position détectée, les résultats sont listés sans filtre de
                 distance. Autorisez la géolocalisation pour affiner par rayon.

@@ -422,11 +422,11 @@ try {
     r.check(handles.every((h) => /Flèches haut et bas/.test(h.getAttribute('aria-label'))),
       'and the keyboard alternative is announced, not mouse-only');
 
-    const hubSource = readFileSync(
-      path.join(SRC, 'components', 'mirror', 'timeline', 'MomentDock.tsx'), 'utf8');
-    r.check(/data-jourj="hub-move-earlier"/.test(hubSource) && /data-jourj="hub-move-later"/.test(hubSource),
+    const canvasSource = readFileSync(
+      path.join(SRC, 'components', 'canvas', 'CanvasCore.tsx'), 'utf8');
+    r.check(/Déplacer.*dans le programme/.test(canvasSource) && /Flèches haut et bas/.test(canvasSource),
       'a moment can still be reordered — on the moment itself');
-    r.check(/aria-label={`Avancer/.test(hubSource) && /aria-label={`Retarder/.test(hubSource),
+    r.check(/aria-label.*Flèches haut et bas/.test(canvasSource),
       'and those controls are announced, so reordering never became mouse-only');
 
     const rail = [...doc.querySelectorAll('nav button')].map((b) => b.textContent);
