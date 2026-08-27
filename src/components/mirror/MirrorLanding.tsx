@@ -7,6 +7,7 @@ import { EVENT_TYPES, eventType, type EventTypeId } from '../../design/eventType
 import { IntakeStudio } from './intake/IntakeStudio';
 import { ImportStudio } from './intake/ImportStudio';
 import { PublicSearchResults } from './search/PublicSearchStudio';
+import { CalendarStudio } from './calendar/CalendarStudio';
 import './landing.css';
 
 // ---------------------------------------------------------------------------
@@ -40,6 +41,7 @@ export function MirrorLanding() {
   const [projectMenuOpen, setProjectMenuOpen] = useState(false);
   const [heroSlide, setHeroSlide] = useState(0);
   const [quoteSent, setQuoteSent] = useState(false);
+  const [calendarOpen, setCalendarOpen] = useState(false);
   const [quote, setQuote] = useState({ name: '', email: '', organisation: '', websiteNeed: '', budget: '', message: '' });
 
   useEffect(() => { setProjects(getStoredProjects()); }, []);
@@ -47,6 +49,16 @@ export function MirrorLanding() {
     const timer = window.setInterval(() => setHeroSlide((index) => (index + 1) % EVENT_TYPES.length), 5000);
     return () => window.clearInterval(timer);
   }, []);
+
+  // Search results live below the hero: once a request is launched, bring them
+  // into view so the visitor never has to guess where the answer landed.
+  useEffect(() => {
+    if (searchRequest <= 0) return;
+    requestAnimationFrame(() => {
+      document.getElementById('recherche-resultats')
+        ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  }, [searchRequest]);
 
   const create = () => setIntakeOpen(true);
   const start = create;
@@ -133,6 +145,17 @@ export function MirrorLanding() {
               title="Rechercher"
             >
               <svg aria-hidden viewBox="0 0 24 24" width="16" height="16"><circle cx="11" cy="11" r="6.5" fill="none" stroke="currentColor" strokeWidth="1.8"/><path d="m16 16 4 4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/></svg>
+            </button>
+            <button
+              type="button"
+              onClick={() => setCalendarOpen(true)}
+              className="wc-gj-bar-icon"
+              data-landing="agenda"
+              data-jourj="nav-calendar"
+              aria-label="Ouvrir l’agenda"
+              title="Agenda"
+            >
+              <span aria-hidden>▦</span>
             </button>
             {searchMode ? (
               <select value={searchRadius} onChange={(event) => setSearchRadius(Number(event.target.value))} aria-label="Distance de recherche" className="wc-gj-bar-type" data-landing="distance">
@@ -241,6 +264,8 @@ export function MirrorLanding() {
           onClose={() => setIntakeOpen(false)}
         />
       )}
+
+      {calendarOpen && <CalendarStudio onClose={() => setCalendarOpen(false)} />}
     </div>
   );
 }
