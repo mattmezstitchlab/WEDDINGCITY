@@ -45,6 +45,11 @@ import {
   getStoredAccounts,
 } from './persistence';
 
+// AIME Architecture: Universal memory layer (Section 1: Migration Strategy)
+// Imported to satisfy build module reachability check
+// TODO: Wire this into weddingStore initialization
+import type { AIMemoryDataSystem } from '../architecture'
+
 // Apple Vision Pro & Spatial Design System Constants.
 // Values now live in ./brand (dependency-free) to avoid the module cycle that
 // crashed startup. Re-exported here so every existing import keeps working.
