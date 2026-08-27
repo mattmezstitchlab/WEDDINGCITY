@@ -456,7 +456,7 @@ export function TimelineStudio() {
   }, [openPhaseId]);
 
   return (
-    <section className="wc-jourj" id="jour-j" aria-label="Le Jour J">
+    <section className="wc-jourj wc-jourj-with-dock" id="jour-j" aria-label="Le Jour J">
       {/* MON GRAND JOUR — where the day stands, above the film it describes.
           Not a page, not a dashboard: four sentences and a ruler one can open.
           Only drawn once there is a day to say something about. */}
@@ -759,7 +759,7 @@ export function TimelineStudio() {
         const minutes = Math.round(ripple.delta * 60);
         const sign = minutes > 0 ? '+' : '';
         return (
-          <div className={`wc-ripple-bar${openPhaseId ? " has-dock" : ""}`} role="status" data-jourj="ripple">
+          <div className="wc-ripple-bar has-dock" role="status" data-jourj="ripple">
             <div style={{ display: 'grid', gap: 10, flex: '1 1 420px' }}>
               <span>
                 <strong>{impact?.moment.name ?? 'Ce moment'} {sign}{minutes}</strong>
@@ -836,9 +836,7 @@ export function TimelineStudio() {
 
       {/* « ET SI… » — inside the film, because a consequence is only readable
           next to the thing it changes. */}
-      {openPhaseId && (
-        <MomentDock phaseId={openPhaseId} onClose={() => setOpenPhaseId(null)} />
-      )}
+      <MomentDock phaseId={openPhaseId} onClear={() => setOpenPhaseId(null)} />
 
       <SimulationBar onOpenMoment={(id) => openMomentEditor(id)} />
     </section>

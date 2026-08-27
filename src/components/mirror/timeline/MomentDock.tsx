@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { weddingStore } from '../../../game/weddingStore';
 import { CERTAINTY } from '../../../design/certainty';
 import {
@@ -7,48 +7,63 @@ import {
   suggestedDocKinds,
   type PartyLookupResult,
 } from '../../../design/momentDocs';
-import { formatHour, formatHourWithDay, normalizeNightHour } from './TimelineStudio';
+import { formatHour, normalizeNightHour } from './TimelineStudio';
 
 // ---------------------------------------------------------------------------
-// MOMENT DOCK — bottom capsule editor.
+// MOMENT TOOLBAR — permanent bottom bar on Jour J.
 // ---------------------------------------------------------------------------
-// The film card stays a clean block (time + title + signal). All editing lives
-// in this fixed bottom toolbar: micro-fields, + actions, doc composer. One
-// place, always where the thumbs are, never crushing the timeline.
+// Always on screen. Idle until a film card is selected; then the same bar
+// fills with controls. No duplicate identity text (the card already says
+// who/when). No close button — deselect by tapping the card again or Esc.
+// Hours use a wheel-style picker (HH · MM), not a free-text field.
 // ---------------------------------------------------------------------------
 
-function formatDuration(hours: number): string {
-  const total = Math.round(hours * 60);
-  const h = Math.floor(total / 60);
-  const m = total % 60;
-  if (h === 0) return `${m} min`;
-  if (m === 0) return `${h} h`;
-  return `${h} h ${String(m).padStart(2, '0')}`;
+const HOURS = Array.from({ length: 24 }, (_, i) => i);
+const MINS = Array.from({ length: 12 }, (_, i) => i * 5); // 5-min snap
+
+function splitHour(h: number): { hh: number; mm: number } {
+  const total = Math.round(h * 60);
+  return { hh: Math.floor(total / 60) % 24, mm: total % 60 };
+}
+
+/** Snap minutes to nearest 5 for the wheel. */
+function snapMin(m: number): number {
+  return Math.round(m / 5) * 5 % 60;
+}
+
+function joinHour(hh: number, mm: number, nightBias: boolean): number {
+  let h = hh + mm / 60;
+  // Night hours (0–5) after a daytime programme → +24, same rule as the film.
+  if (nightBias && h < 6) h += 24;
+  return h;
 }
 
 export function MomentDock({
   phaseId,
-  onClose,
+  onClear,
 }: {
-  phaseId: string;
-  onClose: () => void;
+  phaseId: string | null;
+  onClear: () => void;
 }) {
   const store = weddingStore;
-  const hub = store.getPhaseHub(phaseId);
+  const hub = phaseId ? store.getPhaseHub(phaseId) : null;
   const [menuOpen, setMenuOpen] = useState(false);
   const [docOpen, setDocOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+  const active = Boolean(hub && phaseId);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
+      if (e.key === 'Escape' && phaseId) {
         e.preventDefault();
-        onClose();
+        onClear();
+        setMenuOpen(false);
+        setDocOpen(false);
       }
     };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
-  }, [onClose]);
+  }, [phaseId, onClear]);
 
   useEffect(() => {
     if (!menuOpen && !docOpen) return;
@@ -62,142 +77,145 @@ export function MomentDock({
     return () => document.removeEventListener('pointerdown', onDoc);
   }, [menuOpen, docOpen]);
 
-  // Close dock if the moment was deleted.
+  // If the selected moment disappears, clear selection.
   useEffect(() => {
-    if (!hub) onClose();
-  }, [hub, onClose]);
+    if (phaseId && !hub) onClear();
+  }, [phaseId, hub, onClear]);
 
-  if (!hub) return null;
-  const { phase, persons, vendors, media, place } = hub;
-  const duration = phase.endHour - phase.startHour;
-  const findings = store.phaseFindings(phaseId);
-  const gaps = findings.filter((f) => f.level !== 'ok');
-  const displayName = phase.name.replace(/^\s*\d{1,2}\s*[:h]\s*\d{2}\s*[—–-]\s*/, '').trim() || phase.name;
+  useEffect(() => {
+    setMenuOpen(false);
+    setDocOpen(false);
+  }, [phaseId]);
+
+  const phase = hub?.phase;
+  const persons = hub?.persons ?? [];
+  const vendors = hub?.vendors ?? [];
+  const duration = phase ? phase.endHour - phase.startHour : 0;
+  const gaps = phaseId ? store.phaseFindings(phaseId).filter((f) => f.level !== 'ok') : [];
+  const nightBias = store.phases.some((p) => p.endHour > 12);
 
   return (
-    <div className="wc-moment-dock" role="dialog" aria-label={`Édition · ${displayName}`} data-jourj="moment-dock">
+    <div
+      className={`wc-moment-dock${active ? ' is-active' : ' is-idle'}`}
+      role="toolbar"
+      aria-label="Barre d’édition du moment"
+      data-jourj="moment-dock"
+      data-active={active ? 'yes' : 'no'}
+    >
       <div className="wc-moment-dock-inner" data-jourj="moment-card">
-        {/* Identity strip */}
-        <div className="wc-moment-dock-id">
-          <div className="wc-moment-dock-kicker">Moment sélectionné</div>
-          <div className="wc-moment-dock-name">{displayName}</div>
-          <div className="wc-moment-dock-range">
-            {formatHourWithDay(phase.startHour)} → {formatHourWithDay(phase.endHour)}
-            <span> · {formatDuration(duration)}</span>
-            {place ? <span> · {place.name}</span> : null}
+        {!active && (
+          <div className="wc-moment-dock-idle" data-jourj="dock-idle">
+            <span className="wc-moment-dock-idle-mark" aria-hidden />
+            <span>Sélectionnez un moment sur la pellicule</span>
           </div>
-        </div>
+        )}
 
-        {/* Micro fields — horizontal capsule */}
-        <div className="wc-moment-dock-fields">
-          <MicroClock
-            value={formatHour(phase.startHour)}
-            onCommit={(h) => store.setPhaseTime(phaseId, normalizeNightHour(h, store.phases))}
-            testId="hub-start"
-          />
-          <span className="wc-moment-dock-sep">→</span>
-          <span className="wc-moment-dock-end" title={formatHourWithDay(phase.endHour)}>
-            {formatHour(phase.endHour)}
-          </span>
-          <MicroNumber
-            value={Math.round(duration * 60)}
-            suffix="min"
-            onCommit={(m) => store.setPhaseDuration(phaseId, m / 60)}
-            testId="hub-duration"
-          />
-          <MicroText
-            value={phase.name}
-            placeholder="Nom"
-            onCommit={(v) => store.setPhaseTitle(phaseId, v)}
-            testId="hub-title"
-            className="wc-moment-dock-title"
-          />
-          <MicroText
-            value={phase.subtitle || ''}
-            placeholder="Sous-titre"
-            onCommit={(v) => store.setPhaseSubtitle(phaseId, v)}
-            testId="hub-subtitle"
-          />
-          <select
-            className="wc-moment-dock-select"
-            value={phase.primaryPlaceId || ''}
-            onChange={(e) => store.setPhasePlace(phaseId, e.target.value || null)}
-            data-jourj="hub-place-select"
-            aria-label="Lieu"
-          >
-            <option value="">Lieu…</option>
-            {store.places.map((p) => (
-              <option key={p.id} value={p.id}>{p.name}</option>
-            ))}
-          </select>
-          <label className="wc-moment-dock-check" title="En extérieur">
-            <input
-              type="checkbox"
-              checked={Boolean(phase.outdoor)}
-              onChange={(e) => store.setPhaseOutdoor(phaseId, e.target.checked)}
-              data-jourj="hub-outdoor"
-            />
-            <span>dehors</span>
-          </label>
-          <MicroNumber
-            value={phase.budget?.amount}
-            placeholder="€"
-            onCommit={(n) => store.setPhaseBudget(phaseId, { amount: n })}
-            testId="hub-cost"
-          />
-          <MicroText
-            value={phase.notes || ''}
-            placeholder="Note"
-            onCommit={(v) => store.setPhaseNotes(phaseId, v)}
-            testId="hub-notes"
-            className="wc-moment-dock-note"
-          />
-        </div>
+        {active && phase && phaseId && (
+          <>
+            <div className="wc-moment-dock-fields">
+              <TimeWheel
+                value={phase.startHour}
+                nightBias={nightBias}
+                onCommit={(h) => store.setPhaseTime(phaseId, normalizeNightHour(h, store.phases))}
+                testId="hub-start"
+                ariaLabel="Heure de début"
+              />
+              <DurationWheel
+                minutes={Math.round(duration * 60)}
+                onCommit={(m) => store.setPhaseDuration(phaseId, m / 60)}
+                testId="hub-duration"
+              />
+              <input
+                className="wc-moment-dock-input wc-moment-dock-title"
+                key={`title-${phaseId}-${phase.name}`}
+                defaultValue={phase.name}
+                placeholder="Nom"
+                onBlur={(e) => {
+                  const v = e.target.value.trim();
+                  if (v && v !== phase.name) store.setPhaseTitle(phaseId, v);
+                }}
+                onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
+                data-jourj="hub-title"
+                aria-label="Nom du moment"
+              />
+              <select
+                className="wc-moment-dock-select"
+                value={phase.primaryPlaceId || ''}
+                onChange={(e) => store.setPhasePlace(phaseId, e.target.value || null)}
+                data-jourj="hub-place-select"
+                aria-label="Lieu"
+              >
+                <option value="">Lieu</option>
+                {store.places.map((p) => (
+                  <option key={p.id} value={p.id}>{p.name}</option>
+                ))}
+              </select>
+              <label className="wc-moment-dock-check" title="En extérieur">
+                <input
+                  type="checkbox"
+                  checked={Boolean(phase.outdoor)}
+                  onChange={(e) => store.setPhaseOutdoor(phaseId, e.target.checked)}
+                  data-jourj="hub-outdoor"
+                />
+                <span aria-hidden>☀</span>
+              </label>
+              <input
+                className="wc-moment-dock-input wc-moment-dock-num"
+                key={`€-${phaseId}-${phase.budget?.amount ?? ''}`}
+                defaultValue={phase.budget?.amount !== undefined ? String(phase.budget.amount) : ''}
+                placeholder="€"
+                inputMode="decimal"
+                onBlur={(e) => {
+                  const n = Number(e.target.value);
+                  if (Number.isFinite(n) && n >= 0) store.setPhaseBudget(phaseId, { amount: n });
+                }}
+                onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
+                data-jourj="hub-cost"
+                aria-label="Budget"
+              />
+            </div>
 
-        {/* Who + gaps */}
-        <div className="wc-moment-dock-meta">
-          <div className="wc-moment-dock-chips" data-jourj="moment-who">
-            {persons.slice(0, 6).map((p) => (
-              <span key={p!.id} className="wc-moment-dock-chip" title={p!.craft?.role || ''}>
-                {(p!.displayName || '?').split(/\s+/)[0]}
-                <button
-                  type="button"
-                  aria-label={`Retirer ${p!.displayName}`}
-                  onClick={() => store.detachPersonFromPhase(phaseId, p!.id)}
+            <div className="wc-moment-dock-meta">
+              <div className="wc-moment-dock-chips" data-jourj="moment-who">
+                {persons.slice(0, 5).map((p) => (
+                  <span key={p!.id} className="wc-moment-dock-chip" title={p!.craft?.role || p!.displayName}>
+                    {(p!.displayName || '?').split(/\s+/)[0]}
+                    <button
+                      type="button"
+                      aria-label={`Retirer ${p!.displayName}`}
+                      onClick={() => store.detachPersonFromPhase(phaseId, p!.id)}
+                    >
+                      ×
+                    </button>
+                  </span>
+                ))}
+                {vendors.slice(0, 3).map((v) => (
+                  <span key={v!.id} className="wc-moment-dock-chip is-vendor" title={v!.companyName}>
+                    {(v!.companyName || '?').slice(0, 12)}
+                    <button
+                      type="button"
+                      aria-label={`Retirer ${v!.companyName}`}
+                      onClick={() => store.detachVendorFromPhase(phaseId, v!.id)}
+                    >
+                      ×
+                    </button>
+                  </span>
+                ))}
+              </div>
+
+              {gaps.slice(0, 2).map((f, i) => (
+                <span
+                  key={i}
+                  className="wc-moment-dock-gap"
+                  data-level={f.level}
+                  data-jourj="moment-state-line"
+                  title={f.detail}
                 >
-                  ×
-                </button>
-              </span>
-            ))}
-            {vendors.slice(0, 4).map((v) => (
-              <span key={v!.id} className="wc-moment-dock-chip is-vendor">
-                {(v!.companyName || '?').slice(0, 14)}
-                <button
-                  type="button"
-                  aria-label={`Retirer ${v!.companyName}`}
-                  onClick={() => store.detachVendorFromPhase(phaseId, v!.id)}
-                >
-                  ×
-                </button>
-              </span>
-            ))}
-            {persons.length === 0 && vendors.length === 0 && (
-              <span className="wc-moment-dock-muted">qui · via +</span>
-            )}
-            {media.length > 0 && (
-              <span className="wc-moment-dock-muted">{media.length} doc.</span>
-            )}
-          </div>
-
-          {gaps.length > 0 && (
-            <ul className="wc-moment-dock-gaps" data-jourj="moment-state">
-              {gaps.slice(0, 3).map((f, i) => (
-                <li key={i} data-level={f.level} data-jourj="moment-state-line">
-                  <span>⚠ {f.title}</span>
+                  ⚠
                   {f.docKind && (
                     <button
                       type="button"
-                      className="wc-moment-dock-composer"
+                      className="wc-moment-dock-doc-btn"
                       title={`Générer ${f.docKind}`}
                       aria-label={`Générer ${f.docKind}`}
                       data-jourj="hub-generate-missing"
@@ -219,166 +237,245 @@ export function MomentDock({
                       📄
                     </button>
                   )}
-                </li>
+                </span>
               ))}
-            </ul>
-          )}
 
-          {phase.confidence && phase.confidence !== 'confirmed' && (
-            <span
-              className="wc-moment-dock-cert"
-              style={{ color: CERTAINTY[phase.confidence].color }}
-              title={phase.confidenceNote || CERTAINTY[phase.confidence].meaning}
-              data-jourj="moment-certainty"
-            >
-              {CERTAINTY[phase.confidence].label}
-            </span>
-          )}
-        </div>
+              {phase.confidence && phase.confidence !== 'confirmed' && (
+                <span
+                  className="wc-moment-dock-cert"
+                  style={{ color: CERTAINTY[phase.confidence].color }}
+                  data-jourj="moment-certainty"
+                >
+                  {CERTAINTY[phase.confidence].label}
+                </span>
+              )}
+            </div>
 
-        {/* Actions: + menu + close */}
-        <div className="wc-moment-dock-actions" ref={menuRef}>
-          <button
-            type="button"
-            className="wc-moment-dock-plus"
-            data-jourj="moment-plus"
-            aria-label="Actions du moment"
-            aria-expanded={menuOpen}
-            onClick={() => {
-              setMenuOpen((v) => !v);
-              setDocOpen(false);
-            }}
-          >
-            +
-          </button>
-          {menuOpen && !docOpen && (
-            <ul className="wc-moment-dock-menu" role="menu" data-jourj="moment-plus-menu">
-              <li>
-                <button type="button" role="menuitem" data-jourj="moment-action-doc" onClick={() => setDocOpen(true)}>
-                  <span aria-hidden>📄</span> Document…
-                </button>
-              </li>
-              <li>
-                <button
-                  type="button"
-                  role="menuitem"
-                  data-jourj="moment-action-task"
-                  onClick={() => {
-                    const title = window.prompt('Tâche pour ce moment ?');
-                    if (title?.trim()) store.createTaskForPhase(phaseId, title.trim());
-                    setMenuOpen(false);
-                  }}
-                >
-                  <span aria-hidden>✓</span> Tâche
-                </button>
-              </li>
-              <li>
-                <button
-                  type="button"
-                  role="menuitem"
-                  data-jourj="moment-action-planb"
-                  onClick={() => {
-                    const scenario = store.createScenario(`Plan B — ${phase.name}`);
-                    if (scenario) store.setActiveScenario(scenario.id);
-                    setMenuOpen(false);
-                  }}
-                >
-                  <span aria-hidden>⎇</span> Plan B
-                </button>
-              </li>
-              <li>
-                <button
-                  type="button"
-                  role="menuitem"
-                  data-jourj="hub-move-earlier"
-                  aria-label={`Avancer ${phase.name} dans la journée`}
-                  onClick={() => {
-                    const order = [...store.phases].sort((a, b) => a.startHour - b.startHour).findIndex((x) => x.id === phaseId);
-                    store.movePhaseToIndex(phaseId, order - 1);
-                    setMenuOpen(false);
-                  }}
-                >
-                  <span aria-hidden>↑</span> Plus tôt
-                </button>
-              </li>
-              <li>
-                <button
-                  type="button"
-                  role="menuitem"
-                  data-jourj="hub-move-later"
-                  aria-label={`Retarder ${phase.name} dans la journée`}
-                  onClick={() => {
-                    const order = [...store.phases].sort((a, b) => a.startHour - b.startHour).findIndex((x) => x.id === phaseId);
-                    store.movePhaseToIndex(phaseId, order + 1);
-                    setMenuOpen(false);
-                  }}
-                >
-                  <span aria-hidden>↓</span> Plus tard
-                </button>
-              </li>
-              <li>
-                <button
-                  type="button"
-                  role="menuitem"
-                  data-jourj="moment-action-person"
-                  onClick={() => {
-                    const name = window.prompt('Personne (Prénom Nom) ?');
-                    if (!name?.trim()) return;
-                    const person = store.createPerson({ displayName: name.trim(), asGuest: true, rsvp: 'pending' });
-                    if (person) store.attachPersonToPhase(phaseId, person.id);
-                    setMenuOpen(false);
-                  }}
-                >
-                  <span aria-hidden>👤</span> Personne
-                </button>
-              </li>
-              <li>
-                <button
-                  type="button"
-                  role="menuitem"
-                  data-jourj="moment-action-vendor"
-                  onClick={() => {
-                    const name = window.prompt('Prestataire ?');
-                    if (!name?.trim()) return;
-                    const vendor = store.createVendor({ companyName: name.trim(), category: 'autre' });
-                    if (vendor) store.attachVendorToPhase(phaseId, vendor.id);
-                    setMenuOpen(false);
-                  }}
-                >
-                  <span aria-hidden>🏢</span> Prestataire
-                </button>
-              </li>
-              <li className="is-danger">
-                <button
-                  type="button"
-                  role="menuitem"
-                  data-jourj="moment-action-delete"
-                  onClick={() => {
-                    if (store.deletePhase(phaseId)) onClose();
-                  }}
-                >
-                  Supprimer
-                </button>
-              </li>
-            </ul>
-          )}
-          {docOpen && (
-            <DocComposer
-              phaseId={phaseId}
-              onClose={() => { setDocOpen(false); setMenuOpen(false); }}
-            />
-          )}
-          <button
-            type="button"
-            className="wc-moment-dock-close"
-            data-jourj="hub-close"
-            aria-label="Fermer l’édition"
-            onClick={onClose}
-          >
-            Fermer
-          </button>
-        </div>
+            <div className="wc-moment-dock-actions" ref={menuRef}>
+              <button
+                type="button"
+                className="wc-moment-dock-plus"
+                data-jourj="moment-plus"
+                aria-label="Actions"
+                aria-expanded={menuOpen}
+                onClick={() => {
+                  setMenuOpen((v) => !v);
+                  setDocOpen(false);
+                }}
+              >
+                +
+              </button>
+              {menuOpen && !docOpen && (
+                <ul className="wc-moment-dock-menu" role="menu" data-jourj="moment-plus-menu">
+                  <li>
+                    <button type="button" role="menuitem" data-jourj="moment-action-doc" onClick={() => setDocOpen(true)}>
+                      <span aria-hidden>📄</span> Document
+                    </button>
+                  </li>
+                  <li>
+                    <button
+                      type="button"
+                      role="menuitem"
+                      data-jourj="moment-action-task"
+                      onClick={() => {
+                        const title = window.prompt('Tâche ?');
+                        if (title?.trim()) store.createTaskForPhase(phaseId, title.trim());
+                        setMenuOpen(false);
+                      }}
+                    >
+                      <span aria-hidden>✓</span> Tâche
+                    </button>
+                  </li>
+                  <li>
+                    <button
+                      type="button"
+                      role="menuitem"
+                      data-jourj="moment-action-planb"
+                      onClick={() => {
+                        const scenario = store.createScenario(`Plan B — ${phase.name}`);
+                        if (scenario) store.setActiveScenario(scenario.id);
+                        setMenuOpen(false);
+                      }}
+                    >
+                      <span aria-hidden>⎇</span> Plan B
+                    </button>
+                  </li>
+                  <li>
+                    <button
+                      type="button"
+                      role="menuitem"
+                      data-jourj="hub-move-earlier"
+                      aria-label={`Avancer ${phase.name} dans la journée`}
+                      onClick={() => {
+                        const order = [...store.phases].sort((a, b) => a.startHour - b.startHour).findIndex((x) => x.id === phaseId);
+                        store.movePhaseToIndex(phaseId, order - 1);
+                        setMenuOpen(false);
+                      }}
+                    >
+                      <span aria-hidden>↑</span> Plus tôt
+                    </button>
+                  </li>
+                  <li>
+                    <button
+                      type="button"
+                      role="menuitem"
+                      data-jourj="hub-move-later"
+                      aria-label={`Retarder ${phase.name} dans la journée`}
+                      onClick={() => {
+                        const order = [...store.phases].sort((a, b) => a.startHour - b.startHour).findIndex((x) => x.id === phaseId);
+                        store.movePhaseToIndex(phaseId, order + 1);
+                        setMenuOpen(false);
+                      }}
+                    >
+                      <span aria-hidden>↓</span> Plus tard
+                    </button>
+                  </li>
+                  <li>
+                    <button
+                      type="button"
+                      role="menuitem"
+                      data-jourj="moment-action-person"
+                      onClick={() => {
+                        const name = window.prompt('Prénom Nom ?');
+                        if (!name?.trim()) return;
+                        const person = store.createPerson({ displayName: name.trim(), asGuest: true, rsvp: 'pending' });
+                        if (person) store.attachPersonToPhase(phaseId, person.id);
+                        setMenuOpen(false);
+                      }}
+                    >
+                      <span aria-hidden>👤</span> Personne
+                    </button>
+                  </li>
+                  <li>
+                    <button
+                      type="button"
+                      role="menuitem"
+                      data-jourj="moment-action-vendor"
+                      onClick={() => {
+                        const name = window.prompt('Prestataire ?');
+                        if (!name?.trim()) return;
+                        const vendor = store.createVendor({ companyName: name.trim(), category: 'autre' });
+                        if (vendor) store.attachVendorToPhase(phaseId, vendor.id);
+                        setMenuOpen(false);
+                      }}
+                    >
+                      <span aria-hidden>🏢</span> Presta
+                    </button>
+                  </li>
+                  <li className="is-danger">
+                    <button
+                      type="button"
+                      role="menuitem"
+                      data-jourj="moment-action-delete"
+                      onClick={() => {
+                        if (store.deletePhase(phaseId)) onClear();
+                      }}
+                    >
+                      Supprimer
+                    </button>
+                  </li>
+                </ul>
+              )}
+              {docOpen && (
+                <DocComposer
+                  phaseId={phaseId}
+                  onClose={() => { setDocOpen(false); setMenuOpen(false); }}
+                />
+              )}
+            </div>
+          </>
+        )}
       </div>
+    </div>
+  );
+}
+
+/** iOS-style dual wheel: hours · minutes (5-min). */
+function TimeWheel({
+  value,
+  nightBias,
+  onCommit,
+  testId,
+  ariaLabel,
+}: {
+  value: number;
+  nightBias: boolean;
+  onCommit: (h: number) => void;
+  testId?: string;
+  ariaLabel: string;
+}) {
+  const { hh, mm } = useMemo(() => {
+    const s = splitHour(value);
+    return { hh: s.hh, mm: snapMin(s.mm) };
+  }, [value]);
+
+  const commit = (nextH: number, nextM: number) => {
+    onCommit(joinHour(nextH, nextM, nightBias));
+  };
+
+  return (
+    <div className="wc-time-wheel" data-jourj={testId} role="group" aria-label={ariaLabel}>
+      <select
+        className="wc-time-wheel-col"
+        value={hh}
+        aria-label="Heure"
+        onChange={(e) => commit(Number(e.target.value), mm)}
+      >
+        {HOURS.map((h) => (
+          <option key={h} value={h}>{String(h).padStart(2, '0')}</option>
+        ))}
+      </select>
+      <span className="wc-time-wheel-colon" aria-hidden>:</span>
+      <select
+        className="wc-time-wheel-col"
+        value={mm}
+        aria-label="Minutes"
+        onChange={(e) => commit(hh, Number(e.target.value))}
+      >
+        {MINS.map((m) => (
+          <option key={m} value={m}>{String(m).padStart(2, '0')}</option>
+        ))}
+      </select>
+    </div>
+  );
+}
+
+/** Duration as H + M wheels (total minutes under the hood). */
+function DurationWheel({
+  minutes,
+  onCommit,
+  testId,
+}: {
+  minutes: number;
+  onCommit: (m: number) => void;
+  testId?: string;
+}) {
+  const h = Math.floor(Math.max(0, minutes) / 60);
+  const m = snapMin(Math.max(0, minutes) % 60);
+  const hoursOpts = useMemo(() => Array.from({ length: 13 }, (_, i) => i), []);
+
+  return (
+    <div className="wc-time-wheel wc-duration-wheel" data-jourj={testId} role="group" aria-label="Durée">
+      <select
+        className="wc-time-wheel-col"
+        value={h}
+        aria-label="Heures de durée"
+        onChange={(e) => onCommit(Number(e.target.value) * 60 + m)}
+      >
+        {hoursOpts.map((x) => (
+          <option key={x} value={x}>{x} h</option>
+        ))}
+      </select>
+      <select
+        className="wc-time-wheel-col"
+        value={m}
+        aria-label="Minutes de durée"
+        onChange={(e) => onCommit(h * 60 + Number(e.target.value))}
+      >
+        {MINS.map((x) => (
+          <option key={x} value={x}>{String(x).padStart(2, '0')}</option>
+        ))}
+      </select>
     </div>
   );
 }
@@ -472,17 +569,15 @@ function DocComposer({ phaseId, onClose }: { phaseId: string; onClose: () => voi
   const kinds = suggestedDocKinds({ status: selected?.status, role: selected?.role });
 
   const runLookup = () => {
-    const result = lookupPartyInProject(lookupQ || selected?.label || '', {
+    setLookup(lookupPartyInProject(lookupQ || selected?.label || '', {
       persons: store.persons,
       vendors: store.vendors,
       locationName: store.currentProject.locationName,
-    });
-    setLookup(result);
+    }));
   };
 
   return (
-    <div className="wc-moment-dock-doc" data-jourj="moment-doc-composer">
-      <div className="wc-moment-dock-composer-title">Document</div>
+    <div className="wc-moment-dock-composer" data-jourj="moment-doc-composer">
       <label>
         <span>Type</span>
         <select value={docKind} onChange={(e) => setDocKind(e.target.value)} data-jourj="hub-generate-kind">
@@ -512,16 +607,16 @@ function DocComposer({ phaseId, onClose }: { phaseId: string; onClose: () => voi
         <input
           value={lookupQ}
           onChange={(e) => setLookupQ(e.target.value)}
-          placeholder="Asso, structure, SIRET…"
+          placeholder="Asso, SIRET…"
           data-jourj="hub-generate-lookup"
           onKeyDown={(e) => { if (e.key === 'Enter') runLookup(); }}
         />
-        <button type="button" onClick={runLookup} data-jourj="hub-generate-lookup-run">Chercher</button>
+        <button type="button" onClick={runLookup} data-jourj="hub-generate-lookup-run">OK</button>
       </div>
       {lookup && (
         <p className="wc-moment-dock-lookup-note" data-jourj="hub-generate-lookup-result">
           {lookup.found
-            ? `${lookup.legalName}${lookup.email ? ` · ${lookup.email}` : ''} — ${lookup.note}`
+            ? `${lookup.legalName}${lookup.email ? ` · ${lookup.email}` : ''}`
             : lookup.note}
         </p>
       )}
@@ -548,7 +643,7 @@ function DocComposer({ phaseId, onClose }: { phaseId: string; onClose: () => voi
             });
             if (asset) {
               setToast(asset.title || docKind);
-              window.setTimeout(onClose, 600);
+              window.setTimeout(onClose, 500);
             }
           }}
         >
@@ -557,81 +652,6 @@ function DocComposer({ phaseId, onClose }: { phaseId: string; onClose: () => voi
         <button type="button" onClick={onClose}>annuler</button>
       </div>
       {toast && <p className="wc-moment-dock-toast" data-jourj="hub-generated">{toast}</p>}
-      {targets.length === 0 && (
-        <p className="wc-moment-dock-muted">Ajoutez d’abord une personne ou un presta via +.</p>
-      )}
     </div>
-  );
-}
-
-function MicroText({
-  value, placeholder, onCommit, testId, className,
-}: {
-  value: string; placeholder: string; onCommit: (v: string) => void; testId?: string; className?: string;
-}) {
-  const [draft, setDraft] = useState(value);
-  useEffect(() => { setDraft(value); }, [value]);
-  return (
-    <input
-      className={`wc-moment-dock-input${className ? ` ${className}` : ''}`}
-      value={draft}
-      placeholder={placeholder}
-      onChange={(e) => setDraft(e.target.value)}
-      onBlur={() => { if (draft !== value) onCommit(draft); }}
-      onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
-      data-jourj={testId}
-    />
-  );
-}
-
-function MicroClock({
-  value, onCommit, testId,
-}: {
-  value: string; onCommit: (h: number) => void; testId?: string;
-}) {
-  const [draft, setDraft] = useState(value);
-  useEffect(() => { setDraft(value); }, [value]);
-  const commit = () => {
-    const m = /^(\d{1,2})\s*[:h]\s*(\d{2})?$/.exec(draft.trim());
-    if (!m) { setDraft(value); return; }
-    onCommit(Number(m[1]) + (m[2] ? Number(m[2]) / 60 : 0));
-  };
-  return (
-    <input
-      className="wc-moment-dock-input wc-moment-dock-clock"
-      value={draft}
-      onChange={(e) => setDraft(e.target.value)}
-      onBlur={commit}
-      onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
-      data-jourj={testId}
-      aria-label="Début"
-    />
-  );
-}
-
-function MicroNumber({
-  value, onCommit, testId, placeholder, suffix,
-}: {
-  value?: number; onCommit: (n: number) => void; testId?: string; placeholder?: string; suffix?: string;
-}) {
-  const [draft, setDraft] = useState(value !== undefined ? String(value) : '');
-  useEffect(() => { setDraft(value !== undefined ? String(value) : ''); }, [value]);
-  return (
-    <span className="wc-moment-dock-num-wrap">
-      <input
-        className="wc-moment-dock-input wc-moment-dock-num"
-        value={draft}
-        placeholder={placeholder ?? '0'}
-        onChange={(e) => setDraft(e.target.value)}
-        onBlur={() => {
-          const n = Number(draft);
-          if (Number.isFinite(n) && n >= 0) onCommit(n);
-          else setDraft(value !== undefined ? String(value) : '');
-        }}
-        onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
-        data-jourj={testId}
-      />
-      {suffix && <span className="wc-moment-dock-suffix">{suffix}</span>}
-    </span>
   );
 }

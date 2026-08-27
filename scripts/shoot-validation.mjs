@@ -119,7 +119,6 @@ await settle(1400);
 
 const editor = await page.evaluate(() => {
   const dock = document.querySelector('[data-jourj="moment-dock"]');
-  const card = document.querySelector('[data-jourj="moment-card"]');
   const selected = document.querySelector('[data-jourj="moment"].is-selected, [data-selected="yes"]');
   const plus = document.querySelector('[data-jourj="moment-plus"]');
   const hub = document.querySelector('[data-jourj="hub"]');
@@ -127,9 +126,12 @@ const editor = await page.evaluate(() => {
   const headerAdd = [...document.querySelectorAll('[data-jourj="add-moment"]')]
     .filter((el) => el.closest('.wc-jourj-tools'));
   const dockFixed = dock ? getComputedStyle(dock).position === 'fixed' : false;
+  const wheels = document.querySelectorAll('.wc-time-wheel').length;
+  const closeBtn = document.querySelector('[data-jourj="hub-close"]');
+  const idleDup = /Moment sélectionné/.test(dock?.textContent || '');
   return {
     dock: !!dock,
-    card: !!card,
+    dockAlways: dock?.getAttribute('data-active') != null,
     selected: !!selected,
     plus: !!plus,
     faceOnFilm: !!face,
@@ -137,11 +139,16 @@ const editor = await page.evaluate(() => {
     noHeaderAdd: headerAdd.length === 0,
     titleField: !!document.querySelector('[data-jourj="hub-title"]'),
     dockFixed,
+    wheels,
+    noClose: !closeBtn,
+    noDupLabel: !idleDup,
   };
 });
 console.log('editor', JSON.stringify(editor));
-if (!editor.dock || !editor.selected || !editor.plus || !editor.faceOnFilm || !editor.noHubUnder || !editor.noHeaderAdd || !editor.dockFixed || !editor.titleField) {
-  console.error('FAIL: moment editor must be the bottom dock; film card stays a face only');
+if (!editor.dock || !editor.selected || !editor.plus || !editor.faceOnFilm || !editor.noHubUnder
+  || !editor.noHeaderAdd || !editor.dockFixed || !editor.titleField || editor.wheels < 2
+  || !editor.noClose || !editor.noDupLabel) {
+  console.error('FAIL: permanent bottom toolbar with time wheels; face on film; no Fermer/dup text');
   process.exit(1);
 }
 // Compose a shot that keeps the strip + the top of the editor together.

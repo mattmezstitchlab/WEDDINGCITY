@@ -237,7 +237,12 @@ try {
   r.check(/is-selected/.test(studio) && /openMomentEditor/.test(studio),
     'opening a moment selects it on the film');
   r.check(/MomentDock/.test(studio) && /moment-plus/.test(read('components', 'mirror', 'timeline', 'MomentDock.tsx')),
-    'the selected moment opens a bottom dock capsule — not an in-card form');
+    'the Jour J page keeps a permanent bottom toolbar dock for moment editing');
+  r.check(/TimeWheel|wc-time-wheel/.test(read('components', 'mirror', 'timeline', 'MomentDock.tsx')),
+    'hours use a wheel-style picker, not a free-text clock field');
+  r.check(!/data-jourj=\"hub-close\"/.test(read('components', 'mirror', 'timeline', 'MomentDock.tsx'))
+    && !/>\s*Fermer\s*</.test(read('components', 'mirror', 'timeline', 'MomentDock.tsx')),
+    'the toolbar has no close control — deselect is a second card click or Escape');
   r.check(!/MomentHub/.test(studio),
     'no MomentHub under the film; editing is the bottom dock');
   r.check(!/data-jourj=\"open-moment\"/.test(studio),
@@ -906,7 +911,7 @@ try {
       `${what} of a moment is no longer edited in the composition surface`);
   }
   r.check(/openMoment\(/.test(canvasUx), 'it leads to the moment instead');
-  r.check(/testId="hub-title"/.test(hubUx) && /store\.setPhaseTitle\(/.test(hubUx),
+  r.check(/hub-title/.test(hubUx) && /setPhaseTitle\(/.test(hubUx),
     'and the title is edited on the moment itself');
 
   // The event's own fields have exactly one writer.
