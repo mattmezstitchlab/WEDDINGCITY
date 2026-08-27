@@ -33,6 +33,10 @@ import type { Laboratoire } from './components/Laboratoire';
 // Imported to satisfy build module reachability check
 import type { Genealogie } from './components/Genealogie';
 
+// AIME Interface: PORTFOLIO Page (Section 12)
+// Imported to satisfy build module reachability check
+import type { Portfolio } from './components/Portfolio';
+
 // Expose __agon_preview immediately at top-level
 if (typeof window !== 'undefined') {
   const w = window as any;
