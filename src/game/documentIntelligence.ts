@@ -207,6 +207,14 @@ export function suggestMoments(
 }
 
 /** One sentence describing what was really read. No jargon, no promises. */
+export interface Relation {
+  subject: string;
+  predicate: string;
+  object: string;
+  confidence: number; // 0..1
+  reason: string;
+}
+
 export function describeFacts(facts: DocumentFacts): string {
   if (facts.unreadable) {
     return 'Ce fichier n’est pas lisible comme du texte ici : il est conservé tel quel, et vous choisissez le moment auquel il se rattache.';
@@ -220,4 +228,97 @@ export function describeFacts(facts: DocumentFacts): string {
   if (facts.actions.length) parts.push(`${facts.actions.length} action${facts.actions.length > 1 ? 's' : ''}`);
   if (parts.length === 0) return 'Aucune information exploitable n’a été trouvée dans ce document.';
   return `Lu dans ce document : ${parts.join(', ')}.`;
+}
+
+/**
+ * Heuristic relations extraction.
+ * Returns array of Relations linking detected entities.
+ */
+export function extractRelations(text: string, facts: DocumentFacts): Relation[] {
+  const src = (text ?? '').replace(/\u00a0/g, ' ');
+  const rels: Relation[] = [];
+
+  // Helper to add relation
+  const add = (s: string, p: string, o: string, confidence: number, reason: string) => {
+    rels.push({ subject: s, predicate: p, object: o, confidence, reason });
+  };
+
+  // Context: if marriage-related keywords present, tag context
+  const contextIsMarriage = /\b(mariage|noces|wedding)\b/i.test(src);
+
+  // 1) Person -> Event relation via verbs like 'confirme', 'réserve', 'réserver', 'confirmer' near person+place+date
+  // pattern: "Sophie confirme le Château de la Motte pour le 12 septembre"
+  const personConfirmRe = /([A-ZÀ-ÖÙ-Ý][a-zà-öù-ÿ'\-]+(?:\s+[A-ZÀ-ÖÙ-Ý][a-zà-öù-ÿ'\-]+){0,2})\s+(?:confirme|confirmer|réserve|reserve|réserver|valide)\s+(?:le\s+|la\s+|l'\s+)?([\wÀ-ÖÙ-Ý\s'\-]{3,80}?)\s+(?:pour|le|pour le|pour la)\s+([0-3]?\d(?:[/.-][0-3]?\d[/.-]\d{2,4}|\s+\w+){0,2})/i;
+  const mpc = src.match(personConfirmRe);
+  if (mpc) {
+    const person = mpc[1].trim();
+    const place = mpc[2].trim();
+    const date = mpc[3].trim();
+    add(person, 'confirms', `event at ${place}`, 0.85, `Person ${person} confirms an event at ${place} on ${date}`);
+    add(`event at ${place}`, 'has_place', place, 0.9, `Place detected from confirmation phrase`);
+    add(`event at ${place}`, 'has_date', date, 0.8, `Date parsed near confirmation phrase`);
+    if (contextIsMarriage) add(`event at ${place}`, 'context', 'mariage', 0.6, 'Document mentions marriage keywords');
+  }
+
+  // 2) Link RDV / appointment time to nearest person or event mention: 'RDV à 14h30' or 'RDV avec Sophie ... 14h30'
+  const rdvRe = /\bRDV\b\s*(?:avec\s*([A-ZÀ-ÖÙ-Ý][\w\s'\-]{1,40})\s*)?(?:à|a)\s*([01]?\d|2[0-3])\s*[h:]\s*([0-5]\d)/i;
+  const rdv = src.match(rdvRe);
+  if (rdv) {
+    const person = rdv[1] ? rdv[1].trim() : null;
+    const hour = toDecimalHour(rdv[2], rdv[3]);
+    if (person) {
+      add(person, 'has_appointment_at', `${hour}`, 0.8, `Appointment time extracted near 'RDV'`);
+      if (contextIsMarriage) add(person, 'context', 'mariage', 0.5, 'Document mentions marriage keywords');
+    } else {
+      add('document', 'mentions_appointment_at', `${hour}`, 0.6, "RDV time without explicit person");
+    }
+  }
+
+  // 3) Resources: link vendor/person to amount when they appear in same line like 'DJ Martin 1 200 €.'
+  for (const r of facts.resources) {
+    // try to find text snippet with the vendor name
+    if (r.who) {
+      add(r.who, 'charges', `${r.amount}`, 0.9, `Amount ${r.amount} found next to ${r.who}`);
+      // if person matches known people, link them as vendor
+      const personMatch = facts.people.find((p) => r.who && p && r.who.toLowerCase().includes(p.toLowerCase()));
+      if (personMatch) add(personMatch, 'is_vendor', r.who, 0.85, 'Resource line links person to vendor role');
+    } else {
+      add('unknown_vendor', 'charges', `${r.amount}`, 0.5, 'Amount found without named vendor');
+    }
+  }
+
+  // 4) Music: if music detected and event keywords present, link music -> event
+  if (facts.music.length) {
+    for (const m of facts.music) {
+      if (contextIsMarriage) {
+        add(m, 'related_to', 'mariage', 0.7, 'Music mentioned in a marriage context');
+      }
+      // also try to attach to a vendor if resource who contains DJ
+      for (const r of facts.resources) {
+        if (r.who && /dj|disc ?jockey|dj\b/i.test(r.who)) {
+          add(r.who, 'provides_music', m, 0.8, `Music ${m} likely provided by ${r.who}`);
+        }
+      }
+    }
+  }
+
+  // 5) Event keywords -> create event node and attach dates/hours/places if present
+  if (facts.events.length) {
+    for (const ev of facts.events) {
+      const evNode = ev;
+      // attach place if only one place present
+      if (facts.places.length === 1) add(evNode, 'has_place', facts.places[0], 0.7, 'Single place in document');
+      // attach dates
+      for (const d of facts.dates) add(evNode, 'has_date', d, 0.8, 'Date appears in document');
+      for (const h of facts.hours) add(evNode, 'has_hour', `${h}`, 0.7, 'Hour appears in document');
+      if (contextIsMarriage) add(evNode, 'context', 'mariage', 0.6, 'Event appears in marriage context');
+    }
+  }
+
+  // 6) Generic: connect detected people to context
+  for (const p of facts.people) {
+    if (contextIsMarriage) add(p, 'context', 'mariage', 0.4, 'Document mentions marriage keywords');
+  }
+
+  return rels;
 }
