@@ -8,6 +8,8 @@ import { OrganisationSection } from './organisation/OrganisationSection';
 import { AdminConsole } from './admin/AdminConsole';
 import { CalendarStudio } from './calendar/CalendarStudio';
 import { MiniSiteStudio } from './site/MiniSiteStudio';
+import { GuideMode } from './GuideMode';
+import { Manifesto } from './Manifesto';
 import './mirror.css';
 
 // ---------------------------------------------------------------------------
@@ -34,6 +36,8 @@ export function MirrorSite() {
       <ProductNav />
       <TimelineStudio />
       <OrganisationSection />
+      <GuideMode />
+      <Manifesto />
     </div>
   );
 }
@@ -81,6 +85,8 @@ function ProductNav() {
               >
                 Ouvrir le studio mini-site
               </button>
+              <button role="menuitem" onClick={() => { go('guide-mode'); setProjectMenuOpen(false); }}>Mode d'emploi</button>
+              <button role="menuitem" onClick={() => { go('manifesto'); setProjectMenuOpen(false); }}>Manifeste</button>
               {store.pilotsSeveralEvents() && (
                 <button role="menuitem" onClick={() => { setAdminOpen(true); setProjectMenuOpen(false); }}>Administration</button>
               )}
