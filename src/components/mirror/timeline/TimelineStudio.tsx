@@ -355,21 +355,29 @@ export function TimelineStudio() {
     ? new Date(project.weddingDate).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
     : null;
 
+  const scrollEditorIntoContext = () => {
+    // Bring the selected film card and the inline hub into the same viewport:
+    // the strip stays visible above, the editor opens under it, before Command
+    // Center. 'nearest' avoids jumping so far that the film leaves the screen.
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        const selected = document.querySelector('[data-jourj="moment"].is-selected');
+        const hub = document.querySelector('[data-jourj="hub"]');
+        selected?.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
+        hub?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      });
+    });
+  };
+
   const openMomentEditor = (phaseId: string) => {
     setOpenPhaseId(phaseId);
-    requestAnimationFrame(() => {
-      document.querySelector('[data-jourj="hub"]')
-        ?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-    });
+    scrollEditorIntoContext();
   };
 
   // ONE DOOR — focus requests also scroll the inline editor into view.
   useEffect(() => {
     if (!openPhaseId) return;
-    requestAnimationFrame(() => {
-      document.querySelector('[data-jourj="hub"]')
-        ?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-    });
+    scrollEditorIntoContext();
   }, [openPhaseId]);
 
   return (

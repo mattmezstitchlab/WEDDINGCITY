@@ -347,8 +347,11 @@ try {
     const shell = readFileSync(p2('components', 'canvas', 'MirrorCanvasShell.tsx'), 'utf8');
     const mirrorCss = readFileSync(p2('components', 'mirror', 'mirror.css'), 'utf8');
 
-    r.check(/MiniSiteStudio/.test(site) && /data-jourj="open-minisite"/.test(site),
+    r.check(/MiniSiteStudio/.test(site) && /data-jourj="open-minisite"/.test(site)
+      && /Ouvrir le studio mini-site/.test(site),
       'MirrorSite opens the Studio mini-site from the brand menu');
+    r.check(!/wc-product-calendar/.test(site),
+      'the desk header has no visible calendar button — Agenda lives on the landing');
     r.check(!/data-story="immersive-preview"/.test(site),
       'the embedded immersive preview under the desk is gone');
     r.check(!/wc-event-nav/.test(studio),

@@ -221,10 +221,17 @@ try {
   // immediate temporal tool (the calendar). Search/create/portfolio actions
   // belong to the landing and must not be duplicated here.
   r.check(/data-jourj="brand-menu"/.test(site), 'the wordmark owns timeline navigation');
-  r.check(/data-jourj="nav-calendar"/.test(site), 'the calendar remains the single header shortcut');
+  // PRODUCT DECISION: Agenda lives ONLY in the landing hero. The desk may keep
+  // a hidden bridge for EventPanel, but never a visible header calendar button.
+  r.check(!/wc-product-calendar/.test(site),
+    'the timeline header no longer shows a visible calendar / Agenda button');
+  r.check(/data-landing="agenda"/.test(read('components', 'mirror', 'MirrorLanding.tsx')),
+    'Agenda is the single persistent entry — on the landing hero');
   for (const tag of ['nav-search', 'nav-weddings', 'nav-create', 'nav-admin']) {
     r.check(!site.includes(`data-jourj="${tag}"`), `the timeline header no longer duplicates ${tag}`);
   }
+  r.check(/Ouvrir le studio mini-site/.test(site),
+    'the brand menu labels the studio entry explicitly');
   r.check(!/wc-event-nav/.test(studio) && !/data-jourj="event-nav"/.test(studio),
     'public mini-site navigation no longer sits above the working film');
   r.check(/is-selected/.test(studio) && /openMomentEditor/.test(studio),

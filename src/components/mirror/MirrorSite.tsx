@@ -15,8 +15,11 @@ import './mirror.css';
 // ---------------------------------------------------------------------------
 // Landing (no project) → Jour J timeline (the desk) → Organisation. The public
 // mini-site is a SEPARATE studio opened from the brand menu: same data, three
-// device frames, no second editor and no second store. The calendar stays one
-// projection of time, reachable from the landing hero and from the desk.
+// device frames, no second editor and no second store.
+//
+// ONE persistent calendar door: the Agenda control in the landing hero.
+// From an open project the brand menu returns to Accueil, where Agenda lives.
+// No second calendar button in the timeline header.
 // ---------------------------------------------------------------------------
 
 export function MirrorSite() {
@@ -36,8 +39,9 @@ export function MirrorSite() {
 }
 
 /**
- * Wordmark menu owns destinations. Calendar remains the single temporal
- * shortcut on the desk (also offered in the landing hero bar).
+ * Wordmark menu owns destinations. Agenda lives only in the landing hero —
+ * the single persistent entry. From the desk, EventPanel can still open the
+ * same CalendarStudio as a one-shot tool without a second header button.
  */
 function ProductNav() {
   const store = weddingStore;
@@ -52,7 +56,7 @@ function ProductNav() {
 
   return (
     <>
-      <nav style={productNavStyle} aria-label="Navigation">
+      <nav style={productNavStyle} aria-label="Navigation" data-jourj="product-nav">
         <div style={{ position: 'relative' }}>
           <button
             onClick={() => setProjectMenuOpen((value) => !value)}
@@ -75,7 +79,7 @@ function ProductNav() {
                 onClick={() => { setMiniSiteOpen(true); setProjectMenuOpen(false); }}
                 data-jourj="open-minisite"
               >
-                Studio mini-site
+                Ouvrir le studio mini-site
               </button>
               {store.pilotsSeveralEvents() && (
                 <button role="menuitem" onClick={() => { setAdminOpen(true); setProjectMenuOpen(false); }}>Administration</button>
@@ -86,15 +90,16 @@ function ProductNav() {
           )}
         </div>
         <span style={{ flex: 1 }} />
+        {/* Hidden bridge for one-shot tools (EventPanel). Not a visible header
+            control — Agenda stays only on the landing hero. */}
         <button
-          onClick={() => setCalendarOpen(true)}
-          className="wc-product-calendar"
+          type="button"
+          hidden
           data-jourj="nav-calendar"
-          aria-label="Ouvrir le calendrier"
-          title="Calendrier"
-        >
-          <span aria-hidden>▦</span>
-        </button>
+          aria-hidden
+          tabIndex={-1}
+          onClick={() => setCalendarOpen(true)}
+        />
       </nav>
       {calendarOpen && <CalendarStudio onClose={() => setCalendarOpen(false)} />}
       {adminOpen && <AdminConsole onClose={() => setAdminOpen(false)} />}

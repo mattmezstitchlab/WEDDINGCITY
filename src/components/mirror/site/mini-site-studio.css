@@ -247,3 +247,28 @@
   .wc-minisite-devices { width: 100%; margin-left: 0; order: 3; }
   .wc-minisite-close { margin-left: auto; }
 }
+
+/* Inside a device frame the hero title must scale to the FRAME, not the
+   browser viewport — otherwise "Clara" overflows an iPhone bezel. */
+.wc-minisite-device.is-phone .wc-hero-title {
+  font-size: clamp(36px, 14vw, 64px) !important;
+  line-height: 0.92 !important;
+}
+.wc-minisite-device.is-tablet .wc-hero-title {
+  font-size: clamp(48px, 10vw, 96px) !important;
+}
+.wc-minisite-device.is-phone .wc-hero,
+.wc-minisite-device.is-tablet .wc-hero {
+  min-height: 0 !important;
+  padding-top: 48px !important;
+  padding-bottom: 36px !important;
+}
+.wc-minisite-device .wc-story-scene-title {
+  overflow-wrap: anywhere;
+}
+.wc-minisite-screen .wc-hero-title,
+.wc-minisite-screen h2,
+.wc-minisite-screen h3 {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
