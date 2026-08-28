@@ -503,7 +503,6 @@ export default function App() {
 
       {/* Intent toolbar — persistent, available across main surfaces */}
       {(weddingStore.projection === 'mirror' || weddingStore.projection === 'world') && <React.Suspense fallback={null}><IntentToolbar /></React.Suspense>}
-
       {surface === 'product' && (
         <div style={{ position: 'fixed', right: 12, bottom: 12, zIndex: 800 }}>
           <button onClick={() => setSurface('laboratoire')}>LABORATOIRE</button>
