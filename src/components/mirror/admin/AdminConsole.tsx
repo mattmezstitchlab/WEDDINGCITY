@@ -122,6 +122,44 @@ export function AdminConsole({ onClose }: { onClose: () => void }) {
           <p style={{ ...muted, marginTop: 12 }}>Réception locale active. La réception centralisée et privée nécessite le service serveur authentifié prévu pour la mise en production.</p>
         </section>
 
+        <section style={block} data-admin="hero-editor">
+          <div style={eyebrow}>Hero</div>
+          <p style={{ ...muted, marginTop: 10 }}>Changer le mode visible et éditer la vitrine.</p>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 10 }}>
+            {(['event', 'video', 'manifesto', 'gallery', 'bug'] as const).map((mode) => (
+              <button
+                key={mode}
+                style={chip}
+                onClick={() => store.setHeroMode(mode)}
+                data-admin="hero-mode"
+                data-mode={mode}
+              >
+                {mode}
+              </button>
+            ))}
+          </div>
+          <div style={{ marginTop: 14, display: 'grid', gap: 10 }}>
+            {store.heroGalleryItems.map((item) => (
+              <div key={item.id} style={line} data-admin="hero-gallery-item">
+                <strong>{item.title}</strong>
+                <input
+                  value={item.title}
+                  onChange={(e) => store.updateHeroGalleryItem(item.id, { title: e.target.value })}
+                  style={search}
+                  aria-label={`Titre ${item.id}`}
+                />
+                <textarea
+                  value={item.description}
+                  onChange={(e) => store.updateHeroGalleryItem(item.id, { description: e.target.value })}
+                  style={{ ...search, minHeight: 68 }}
+                  aria-label={`Description ${item.id}`}
+                />
+              </div>
+            ))}
+          </div>
+          <button onClick={() => store.resetHeroGalleryItems()} style={linkBtn}>Réinitialiser la vitrine</button>
+        </section>
+
         {/* ---------------------------------------------------------- SEARCH */}
         <input
           value={query}

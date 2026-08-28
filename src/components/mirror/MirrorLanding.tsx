@@ -63,6 +63,8 @@ export function MirrorLanding() {
   const create = () => setIntakeOpen(true);
   const start = create;
   const schema = eventType(type);
+  const heroMode = store.heroMode;
+  const galleryItem = store.heroGalleryItems[heroSlide % store.heroGalleryItems.length];
 
   return (
     <div id="wc-mirror" className="wc-grandjour wc-landing-simple" data-landing="page">
@@ -108,11 +110,47 @@ export function MirrorLanding() {
         </nav>
 
         <div className="wc-gj-hero-center">
-          <p className="wc-simple-kicker">Du chaos à la ligne de départ. Et tout ce qui suit.</p>
+          <div className="wc-gj-hero-tabs" role="tablist" aria-label="Modes du hero">
+            {[
+              ['event', 'Évènement'],
+              ['video', 'Vidéo'],
+              ['manifesto', 'Manifeste'],
+              ['gallery', 'Galerie'],
+              ['bug', 'Bug'],
+            ].map(([mode, label]) => (
+              <button
+                key={mode}
+                type="button"
+                role="tab"
+                aria-selected={heroMode === mode}
+                className={`wc-gj-hero-tab${heroMode === mode ? ' is-active' : ''}`}
+                onClick={() => store.setHeroMode(mode as typeof heroMode)}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+
+          {heroMode === 'event' && <p className="wc-simple-kicker">Du chaos à la ligne de départ.</p>}
+          {heroMode === 'video' && <p className="wc-simple-kicker">Guide tour vidéo.</p>}
+          {heroMode === 'manifesto' && <p className="wc-simple-kicker">Le sens avant le formulaire.</p>}
+          {heroMode === 'gallery' && <p className="wc-simple-kicker">{galleryItem?.label || 'Vitrine éditoriale.'}</p>}
+          {heroMode === 'bug' && <p className="wc-simple-kicker">Remonter un souci.</p>}
+
           <h1 className="wc-gj-title">
             {PRODUCT_NAME}<span className="wc-gj-mark">{PRODUCT_MARK}</span>
           </h1>
-          <p className="wc-gj-hero-kind" aria-live="polite">{EVENT_TYPES[heroSlide]?.label}</p>
+          <p className="wc-gj-hero-kind" aria-live="polite">
+            {heroMode === 'gallery'
+              ? `${galleryItem?.title || 'Galerie'} · ${galleryItem?.description || ''}`
+              : heroMode === 'video'
+                ? 'Mariage de A à Z · vidéo'
+                : heroMode === 'manifesto'
+                  ? 'Intention · compréhension · monde'
+                  : heroMode === 'bug'
+                    ? 'Retour direct'
+                    : EVENT_TYPES[heroSlide]?.label}
+          </p>
 
           <div className="wc-gj-bar" data-landing="tool">
             <input
@@ -184,11 +222,19 @@ export function MirrorLanding() {
           </div>
 
           <p className="wc-gj-bar-hint" data-landing="hint">
-            {searchMode
-              ? 'Votre position ne sera demandée qu’au lancement de la recherche.'
-              : files.length === 0
-                ? schema.intakeLine
-                : `${files.length} fichier${files.length > 1 ? 's' : ''} prêt${files.length > 1 ? 's' : ''} à être analysé${files.length > 1 ? 's' : ''}`}
+            {heroMode === 'video'
+              ? 'Guide vidéo · lancement du parcours.'
+              : heroMode === 'manifesto'
+                ? 'Manifeste · lire en une minute.'
+                : heroMode === 'gallery'
+                  ? 'Galerie · présenter une fonction.'
+                  : heroMode === 'bug'
+                    ? 'Bug · remonter un souci.'
+                    : searchMode
+                      ? 'Votre position ne sera demandée qu’au lancement de la recherche.'
+                      : files.length === 0
+                        ? schema.intakeLine
+                        : `${files.length} fichier${files.length > 1 ? 's' : ''} prêt${files.length > 1 ? 's' : ''} à être analysé${files.length > 1 ? 's' : ''}`}
           </p>
         </div>
       </header>
@@ -204,18 +250,45 @@ export function MirrorLanding() {
       )}
 
       <main>
+        {heroMode === 'gallery' && (
+          <section className="wc-hero-gallery" aria-label="Vitrine">
+            <div className="wc-hero-gallery-shell">
+              <img src={galleryItem?.image} alt={galleryItem?.title || 'Vitrine'} />
+              <div className="wc-hero-gallery-copy">
+                <span>{galleryItem?.title}</span>
+                <h2>{galleryItem?.description}</h2>
+              </div>
+            </div>
+          </section>
+        )}
+
+        {heroMode === 'manifesto' && (
+          <section className="wc-hero-manifesto" aria-label="Manifeste court">
+            <p>Simple. Clair. Relié.</p>
+          </section>
+        )}
+
+        {heroMode === 'video' && (
+          <section className="wc-hero-video" aria-label="Guide vidéo">
+            <div className="wc-hero-video-card">
+              <h2>Mariage de A à Z</h2>
+              <p>Une vidéo guide tour racontée par l’agent.</p>
+            </div>
+          </section>
+        )}
+
         <section id="comment-ca-marche" className="wc-simple-proof" data-landing="film" aria-label="Comment ça marche">
           <div className="wc-simple-proof-head">
-            <span className="wc-simple-kicker">Du chaos au simple.</span>
-            <h2>Dites-nous tout.</h2>
+            <span className="wc-simple-kicker">Démonstration simple.</span>
+            <h2>Une phrase suffit pour commencer.</h2>
             <p>Nous lisons ce que vous donnez, demandons ce qui manque, puis construisons une timeline que vous gardez entièrement éditable.</p>
           </div>
           <ol className="wc-simple-steps">
             <li><span>01</span><strong>Racontez</strong><p>Un message, un planning ou des documents.</p></li>
             <li><span>02</span><strong>Une question</strong><p>Une seule à la fois.</p></li>
-            <li><span>03</span><strong>On avance</strong><p>Une timeline, un panneau d'édition et un site clair.</p></li>
+            <li><span>03</span><strong>On avance</strong><p>Une timeline, un panneau et un site clair.</p></li>
           </ol>
-          <p className="wc-simple-demo-note">Vos données restent chez vous.</p>
+          <p className="wc-simple-demo-note">Démonstration du parcours — vos données restent chez vous.</p>
         </section>
 
         <section id="creation-site" className="wc-site-quote" aria-label="Demander un site internet">

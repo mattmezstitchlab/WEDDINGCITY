@@ -119,6 +119,82 @@
   flex-wrap: wrap;
 }
 
+.wc-gj-hero-tabs {
+  margin-bottom: 14px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.wc-gj-hero-tab {
+  appearance: none;
+  border: 1px solid rgba(246, 245, 243, 0.18);
+  background: rgba(8, 9, 11, 0.55);
+  color: #f6f5f3;
+  border-radius: 999px;
+  padding: 8px 12px;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.wc-gj-hero-tab.is-active {
+  background: #f6f5f3;
+  color: #08090b;
+}
+
+.wc-hero-gallery,
+.wc-hero-manifesto,
+.wc-hero-video {
+  padding: clamp(30px, 5vw, 60px) clamp(18px, 5vw, 64px);
+}
+
+.wc-hero-gallery-shell {
+  position: relative;
+  min-height: 340px;
+  border-radius: 28px;
+  overflow: hidden;
+}
+
+.wc-hero-gallery-shell img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.wc-hero-gallery-copy {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 28px;
+  background: linear-gradient(180deg, transparent, rgba(8, 9, 11, 0.88));
+}
+
+.wc-hero-gallery-copy span {
+  display: inline-block;
+  margin-bottom: 8px;
+  font-size: 12px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.wc-hero-gallery-copy h2,
+.wc-hero-video-card h2,
+.wc-hero-manifesto p {
+  margin: 0;
+  font-size: clamp(24px, 5vw, 56px);
+  line-height: 1.05;
+}
+
+.wc-hero-video-card {
+  border: 1px solid rgba(246, 245, 243, 0.12);
+  border-radius: 24px;
+  padding: 28px;
+  max-width: 760px;
+}
+
 /* --- controls --------------------------------------------------------------- */
 .wc-gj-cta,
 .wc-gj-cta-small {

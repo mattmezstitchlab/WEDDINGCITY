@@ -55,8 +55,17 @@ import type { AIMemoryDataSystem } from '../architecture'
 // crashed startup. Re-exported here so every existing import keeps working.
 import { BRAND_ACCENT } from './brand';
 
-/** The six editorial sections, shared by the Mirror and the Canvas. */
+/** The six core sections, shared by the Mirror and the Canvas. */
 export type CanvasSection = 'programme' | 'people' | 'vendors' | 'places' | 'music' | 'media';
+
+export type HeroMode = 'event' | 'video' | 'manifesto' | 'gallery' | 'bug';
+export type HeroGalleryItem = {
+  id: string;
+  title: string;
+  description: string;
+  label: string;
+  image: string;
+};
 import { PlaceKind } from '../types/wedding';
 import {
   Person,
@@ -292,6 +301,37 @@ export const INITIAL_TRACKS: TrackEntity[] = [
     suggestedBy: 'Clara (La Mariée)',
     note: 'Entrée majestueuse de la mariée dans l’allée',
     votes: 35,
+  },
+];
+
+export const HERO_GALLERY_DEFAULTS: HeroGalleryItem[] = [
+  {
+    id: 'spectacle',
+    title: 'Spectacle',
+    description: 'Intermittents, scène, cachets, planning.',
+    label: 'Un espace qui respire.',
+    image: '/editorial/spectacle/regie.jpg',
+  },
+  {
+    id: 'mariage',
+    title: 'Mariage',
+    description: 'Le mariage de A à Z, lisible et vivant.',
+    label: 'Un monde simple à suivre.',
+    image: '/editorial/grandjour-hero.jpg',
+  },
+  {
+    id: 'association',
+    title: 'Association',
+    description: 'Dons, maraudes, créneaux, entraide.',
+    label: 'Les bonnes actions au bon moment.',
+    image: '/editorial/covers/cover-02.jpg',
+  },
+  {
+    id: 'radio',
+    title: 'Radio',
+    description: 'Musique, messages, votes, voix.',
+    label: 'SLÂME en direct.',
+    image: '/editorial/immersive.jpg',
   },
 ];
 
@@ -1613,6 +1653,8 @@ class WeddingStore {
   public systemNerveModalOpen: boolean = false;
   /** Composition-mode surface: guest constellation (Phase B prototype). */
   public constellationOpen: boolean = false;
+  public heroMode: HeroMode = 'event';
+  public heroGalleryItems: HeroGalleryItem[] = HERO_GALLERY_DEFAULTS.map((item) => ({ ...item }));
 
   // -------------------------------------------------------------------------
   // PROJECTIONS (Phase C)
@@ -1876,6 +1918,23 @@ class WeddingStore {
     this.brandMenuOpen = false;
     this.weddingCreationOpen = false;
     this.createWeddingModalOpen = false;
+    this.notify();
+  }
+
+  public setHeroMode(mode: HeroMode): void {
+    this.heroMode = mode;
+    this.notify();
+  }
+
+  public updateHeroGalleryItem(id: string, patch: Partial<HeroGalleryItem>): void {
+    this.heroGalleryItems = this.heroGalleryItems.map((item) => (
+      item.id === id ? { ...item, ...patch } : item
+    ));
+    this.notify();
+  }
+
+  public resetHeroGalleryItems(): void {
+    this.heroGalleryItems = HERO_GALLERY_DEFAULTS.map((item) => ({ ...item }));
     this.notify();
   }
 
