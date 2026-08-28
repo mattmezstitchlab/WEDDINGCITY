@@ -23,6 +23,7 @@ const MirrorCanvasShell = lazy(() => import('./components/canvas/MirrorCanvasShe
 import { ProjectionVeil } from './components/ui/ProjectionVeil';
 
 const MirrorSite = lazy(() => import('./components/mirror/MirrorSite').then((m) => ({ default: m.MirrorSite })));
+const TourPage = lazy(() => import('./components/mirror/TourPage').then((m) => ({ default: m.TourPage })));
 const GuestConstellation = lazy(() => import('./components/ui/GuestConstellation').then((m) => ({ default: m.GuestConstellation })));
 const SystemNerveCenterModal = lazy(() => import('./components/ui/SystemNerveCenterModal').then((m) => ({ default: m.SystemNerveCenterModal })));
 const WorldResearchModal = lazy(() => import('./components/ui/WorldResearchModal').then((m) => ({ default: m.WorldResearchModal })));
@@ -51,7 +52,7 @@ const PortfolioPage = lazy(() => import('./components/Portfolio').then((m) => ({
 export default function App() {
   const [isImportOpen, setIsImportOpen] = useState(false);
   const [isConflictsOpen, setIsConflictsOpen] = useState(false);
-  const [surface, setSurface] = useState<'product' | 'laboratoire' | 'genealogie' | 'portfolio'>('product');
+  const [surface, setSurface] = useState<'product' | 'tour' | 'laboratoire' | 'genealogie' | 'portfolio'>('tour');
 
   // Subscribe to store updates for reactive UI state
   useSyncExternalStore(
@@ -215,6 +216,12 @@ export default function App() {
       {surface === 'product' && weddingStore.projection === 'mirror' && (
         <Suspense fallback={<ProductBoot />}>
           <MirrorSite />
+        </Suspense>
+      )}
+
+      {surface === 'tour' && (
+        <Suspense fallback={<ProductBoot />}>
+          <TourPage />
         </Suspense>
       )}
 

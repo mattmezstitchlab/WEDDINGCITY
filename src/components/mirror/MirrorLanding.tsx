@@ -112,8 +112,6 @@ export function MirrorLanding() {
             {PRODUCT_NAME}<span className="wc-gj-mark">{PRODUCT_MARK}</span>
           </span>
           <span style={{ flex: 1 }} />
-          <a className="wc-gj-nav-ai" href="#comment-ca-marche">AI + ME</a>
-          <span className="wc-gj-nav-ai-sub">Commande universelle</span>
           {projects.length > 0 && (
             <div className="wc-gj-project-menu">
               <button onClick={() => setProjectMenuOpen((open) => !open)} className="wc-gj-nav-link" aria-expanded={projectMenuOpen}>
@@ -148,28 +146,16 @@ export function MirrorLanding() {
                 role="tab"
                 aria-selected={heroMode === mode}
                 className={`wc-gj-hero-tab${heroMode === mode ? ' is-active' : ''}`}
-                onClick={() => { store.setHeroMode(mode as typeof heroMode); setHeroPanel(mode === 'event' ? 'none' : mode); }}
+                onClick={() => {
+                  const nextMode = mode as 'event' | 'video' | 'manifesto' | 'gallery' | 'bug';
+                  store.setHeroMode(nextMode);
+                  setHeroPanel(nextMode === 'event' ? 'none' : nextMode);
+                }}
               >
                 {label}
               </button>
             ))}
           </div>
-
-          <div className="wc-gj-hero-actions">
-            <button type="button" className="wc-gj-cta" onClick={start}>Commencer</button>
-            <button type="button" className="wc-gj-cta-ghost" onClick={() => { setSearchMode((value) => !value); setHeroPanel('none'); }}>
-              Chercher un lieu ou un prestataire
-            </button>
-            <button type="button" className="wc-gj-cta-ghost" onClick={() => { setImportOpen(true); setHeroPanel('none'); }}>
-              Importer un document
-            </button>
-          </div>
-
-          {heroMode === 'event' && <p className="wc-simple-kicker">Du chaos à la ligne de départ.</p>}
-          {heroMode === 'video' && <p className="wc-simple-kicker">Guide tour vidéo.</p>}
-          {heroMode === 'manifesto' && <p className="wc-simple-kicker">Le sens avant le formulaire.</p>}
-          {heroMode === 'gallery' && <p className="wc-simple-kicker">{galleryItem?.label || 'Vitrine éditoriale.'}</p>}
-          {heroMode === 'bug' && <p className="wc-simple-kicker">Remonter un souci.</p>}
 
           <h1 className="wc-gj-title">
             {PRODUCT_NAME}<span className="wc-gj-mark">{PRODUCT_MARK}</span>
@@ -295,7 +281,7 @@ export function MirrorLanding() {
             </div>
             <div className="wc-hero-panel">
               <strong>À montrer maintenant</strong>
-              <p>{galleryItem?.label}</p>
+              <p>{galleryItem?.title}</p>
             </div>
           </section>
         )}
