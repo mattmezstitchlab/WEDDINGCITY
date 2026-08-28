@@ -124,9 +124,9 @@ export class MutationSystem {
       },
       validation_source: 'correction',
       is_reversible: true,
+      confidence_before: entity.certainty,
+      confidence_after: entity.certainty,
     }
-
-    entity.decision_trail.push(decision)
     entity.updated_at = new Date()
 
     // Save back to memory
@@ -189,9 +189,9 @@ export class MutationSystem {
           },
           validation_source: 'cascade_decision',
           is_reversible: true,
+          confidence_before: entity.certainty,
+          confidence_after: entity.certainty,
         }
-
-        entity.decision_trail.push(decision)
         entity.updated_at = new Date()
         this.memory.set(update.entity_id, entity)
       }

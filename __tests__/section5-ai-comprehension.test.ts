@@ -12,6 +12,7 @@ import {
   useAIComprehension
 } from '../src/components/AIComprehensionDisplay';
 import { renderHook, act } from '@testing-library/react';
+import { createEntity, addDecisionToTrail } from '../src/architecture/aiMemory';
 
 describe('SECTION 5: Complete ME↔AI Loop', () => {
   describe('AI Comprehension Engine', () => {
@@ -43,6 +44,47 @@ describe('SECTION 5: Complete ME↔AI Loop', () => {
       expect(comprehension.confidence).toBeGreaterThan(0);
       expect(comprehension.impacts).toBeDefined();
       expect(Array.isArray(comprehension.recommendations)).toBe(true);
+    });
+
+    describe('Universal Memory Provenance', () => {
+      test('should create entity with explicit source and confidence fields', () => {
+        const entity = createEntity('entity', 'wedding', { name: 'DJ Martin' }, 'user_1');
+
+        expect(entity.source.source_kind).toBe('user');
+        expect(entity.source.source_confidence).toBe('confirmed');
+        expect(entity.confidence_level).toBe('estimated');
+        expect(entity.decision_trail[0].confidence_before).toBe(0.5);
+        expect(entity.decision_trail[0].confidence_after).toBe(0.5);
+      });
+
+      test('should update confidence when a decision is appended', () => {
+        const entity = createEntity('entity', 'wedding', { name: 'DJ Martin' }, 'user_1');
+        const updated = addDecisionToTrail(entity, {
+          timestamp: new Date(),
+          sequence_number: 99,
+          validated_by: 'user_1',
+          original_extraction: {
+            facts: { name: 'DJ Martin' },
+            certainty: 0.5,
+            reasoning: 'initial'
+          },
+          impact_analysis: {
+            changed_at: new Date(),
+            changed_by: 'user_1',
+            affected_projections: ['Timeline'],
+            changes: [],
+            cascaded_to: []
+          },
+          validation_source: 'user_confirmation',
+          is_reversible: true,
+          confidence_before: 0.5,
+          confidence_after: 0.9
+        });
+
+        expect(updated.certainty).toBe(0.9);
+        expect(updated.confidence_level).toBe('confirmed');
+        expect(updated.decision_trail).toHaveLength(2);
+      });
     });
 
     test('should detect uncertainties in vendor data', async () => {

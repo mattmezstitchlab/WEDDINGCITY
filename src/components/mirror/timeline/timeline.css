@@ -12,6 +12,7 @@
   --jourj-dim: #a7a49e;
   --jourj-faint: #6f6c67;
   --jourj-line: rgba(246, 245, 243, 0.14);
+  --jourj-accent: rgba(246, 245, 243, 0.78);
   --jourj-strip-h: 460px;
   --jourj-head-pad: 40px;
   background: var(--jourj-bg);
@@ -97,6 +98,55 @@
   box-shadow: 0 0 0 1px #f6f5f3, 0 18px 40px rgba(0, 0, 0, 0.45);
   z-index: 28;
   overflow: visible;
+}
+
+.wc-jourj-moment.is-empty {
+  border-style: dashed;
+  border-color: rgba(246, 245, 243, 0.2);
+  background: linear-gradient(180deg, rgba(246, 245, 243, 0.03), rgba(246, 245, 243, 0.01));
+}
+
+.wc-jourj-moment.is-empty .wc-moment-label {
+  color: rgba(246, 245, 243, 0.72);
+}
+
+.wc-jourj-moment.is-empty .wc-moment-meta {
+  color: rgba(246, 245, 243, 0.54);
+}
+
+.wc-empty-hints {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 18px;
+}
+
+.wc-empty-hint {
+  border: 1px solid rgba(246, 245, 243, 0.12);
+  border-radius: 10px;
+  padding: 12px 14px;
+  background: rgba(246, 245, 243, 0.03);
+}
+
+.wc-empty-hint strong {
+  display: block;
+  margin-bottom: 4px;
+  color: rgba(246, 245, 243, 0.9);
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.wc-empty-hint span {
+  color: rgba(246, 245, 243, 0.68);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+@media (max-width: 680px) {
+  .wc-empty-hints {
+    grid-template-columns: 1fr;
+  }
 }
 
 .wc-jourj-moment.is-ghosted { opacity: 0.5; }

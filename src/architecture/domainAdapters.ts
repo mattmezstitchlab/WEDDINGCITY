@@ -32,11 +32,14 @@ export function createVendor(data: {
     created_at: new Date(),
     updated_at: new Date(),
     certainty: data.certainty || 0.9,
+    confidence_level: 'confirmed',
     reason_for_certainty: 'Wedding vendor confirmed',
     tags: ['wedding', 'vendor', data.role.toLowerCase()],
     source: {
       validated_by: 'system',
       timestamp: new Date(),
+      source_kind: 'system',
+      source_confidence: 'confirmed',
     },
     content: {
       entity_type: 'vendor', // Domain-specific type
@@ -73,6 +76,8 @@ export function createVendor(data: {
         },
         validation_source: 'user_confirmation',
         is_reversible: true,
+        confidence_before: 0.9,
+        confidence_after: 0.9,
       },
     ],
     access_control: {
@@ -103,11 +108,14 @@ export function createGuest(data: {
     created_at: new Date(),
     updated_at: new Date(),
     certainty: 0.8,
+    confidence_level: 'inferred',
     reason_for_certainty: 'Wedding guest added',
     tags: ['wedding', 'guest'],
     source: {
       validated_by: 'system',
       timestamp: new Date(),
+      source_kind: 'system',
+      source_confidence: 'confirmed',
     },
     content: {
       entity_type: 'guest',
@@ -138,6 +146,8 @@ export function createGuest(data: {
         },
         validation_source: 'user_confirmation',
         is_reversible: true,
+        confidence_before: 0.9,
+        confidence_after: 0.9,
       },
     ],
     access_control: {
@@ -166,11 +176,14 @@ export function createBudgetLine(data: {
     created_at: new Date(),
     updated_at: new Date(),
     certainty: 0.9,
+    confidence_level: 'confirmed',
     reason_for_certainty: 'Budget line confirmed',
     tags: ['wedding', 'budget', data.category || 'other'],
     source: {
       validated_by: 'system',
       timestamp: new Date(),
+      source_kind: 'system',
+      source_confidence: 'confirmed',
     },
     content: {
       entity_type: 'budget_line',
@@ -199,6 +212,8 @@ export function createBudgetLine(data: {
         },
         validation_source: 'user_confirmation',
         is_reversible: true,
+        confidence_before: 0.9,
+        confidence_after: 0.9,
       },
     ],
     access_control: {
@@ -227,11 +242,14 @@ export function createDocument(data: {
     created_at: new Date(),
     updated_at: new Date(),
     certainty: 0.95,
+    confidence_level: 'confirmed',
     reason_for_certainty: 'Document confirmed',
     tags: ['wedding', 'document', data.type],
     source: {
       validated_by: 'system',
       timestamp: new Date(),
+      source_kind: 'system',
+      source_confidence: 'confirmed',
     },
     content: {
       entity_type: 'document',
@@ -260,6 +278,8 @@ export function createDocument(data: {
         },
         validation_source: 'user_confirmation',
         is_reversible: true,
+        confidence_before: 0.9,
+        confidence_after: 0.9,
       },
     ],
     access_control: {

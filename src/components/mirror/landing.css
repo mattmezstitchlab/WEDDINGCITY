@@ -1639,6 +1639,50 @@
 .wc-simple-projects .wc-gj-list-name { color: #141414 !important; }
 .wc-simple-projects .wc-gj-list-meta { color: rgba(20,20,20,.52) !important; }
 /* One visual universe per offered event type; cross-fade, never layout shift. */
+
+.wc-public-detail-card {
+  position: relative;
+  overflow: hidden;
+}
+
+.wc-public-flip {
+  position: relative;
+  min-height: 520px;
+  transform-style: preserve-3d;
+  transition: transform 520ms cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
+.wc-public-flip.is-back {
+  transform: rotateY(180deg);
+}
+
+.wc-public-flip-face {
+  position: absolute;
+  inset: 0;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+
+.wc-public-flip-back {
+  transform: rotateY(180deg);
+}
+
+.wc-public-detail-hero {
+  aspect-ratio: 16/8;
+}
+
+.wc-public-detail-use {
+  appearance: none;
+  margin-top: 22px;
+  padding: 8px 0;
+  border: 0;
+  border-bottom: 1px solid #141414;
+  background: transparent;
+  color: #141414;
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+}
 .wc-gj-hero-slide { opacity: 0; transition: opacity 1.2s ease; }
 .wc-gj-hero-slide.is-active { opacity: 1; }
 .wc-gj-hero-kind { margin: 0 0 18px; min-height: 1.3em; color: rgba(255,255,255,.76); font-size: 10px; font-weight: 700; letter-spacing: .18em; text-transform: uppercase; }

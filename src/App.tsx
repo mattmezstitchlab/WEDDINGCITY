@@ -42,12 +42,16 @@ const CreateWeddingModal = lazy(() => import('./components/ui/CreateWeddingModal
 const ConflictCenterModal = lazy(() => import('./components/ui/ConflictCenterModal').then((m) => ({ default: m.ConflictCenterModal })));
 const BrandMenuModal = lazy(() => import('./components/ui/BrandMenuModal').then((m) => ({ default: m.BrandMenuModal })));
 const SpatialAiAgentDrawer = lazy(() => import('./components/ui/SpatialAiAgentDrawer').then((m) => ({ default: m.SpatialAiAgentDrawer })));
+const LaboratoirePage = lazy(() => import('./components/Laboratoire').then((m) => ({ default: m.Laboratoire })));
+const GenealogiePage = lazy(() => import('./components/Genealogie').then((m) => ({ default: m.Genealogie })));
+const PortfolioPage = lazy(() => import('./components/Portfolio').then((m) => ({ default: m.Portfolio })));
 
 
 
 export default function App() {
   const [isImportOpen, setIsImportOpen] = useState(false);
   const [isConflictsOpen, setIsConflictsOpen] = useState(false);
+  const [surface, setSurface] = useState<'product' | 'laboratoire' | 'genealogie' | 'portfolio'>('product');
 
   // Subscribe to store updates for reactive UI state
   useSyncExternalStore(
@@ -190,9 +194,25 @@ export default function App() {
         </Suspense>
       )}
 
+      {surface === 'laboratoire' && (
+        <Suspense fallback={<ProductBoot />}>
+          <LaboratoirePage />
+        </Suspense>
+      )}
+      {surface === 'genealogie' && (
+        <Suspense fallback={<ProductBoot />}>
+          <GenealogiePage />
+        </Suspense>
+      )}
+      {surface === 'portfolio' && (
+        <Suspense fallback={<ProductBoot />}>
+          <PortfolioPage />
+        </Suspense>
+      )}
+
       {/* The product owns the first paint. While its lazy chunk is loading we
           show a neutral brand surface, never the retired World underneath. */}
-      {weddingStore.projection === 'mirror' && (
+      {surface === 'product' && weddingStore.projection === 'mirror' && (
         <Suspense fallback={<ProductBoot />}>
           <MirrorSite />
         </Suspense>
@@ -476,6 +496,15 @@ export default function App() {
 
       {/* Intent toolbar — persistent, available across main surfaces */}
       {(weddingStore.projection === 'mirror' || weddingStore.projection === 'world') && <React.Suspense fallback={null}><IntentToolbar /></React.Suspense>}
+
+      {surface === 'product' && (
+        <div style={{ position: 'fixed', right: 12, bottom: 12, zIndex: 800 }}>
+          <button onClick={() => setSurface('laboratoire')}>LABORATOIRE</button>
+          <button onClick={() => setSurface('genealogie')}>GÉNÉALOGIE</button>
+          <button onClick={() => setSurface('portfolio')}>PORTFOLIO</button>
+          <button onClick={() => setSurface('product')}>PRODUIT</button>
+        </div>
+      )}
     </div>
   );
 }

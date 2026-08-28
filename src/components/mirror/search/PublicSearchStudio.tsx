@@ -27,6 +27,8 @@ type Card = OsmResult & {
   distanceKm: number | null;
   sourceUrl: string;
   city: string | null;
+  cityQuery: string;
+  thumbnail: string;
 };
 
 type PublicSearchStatus =
@@ -54,6 +56,20 @@ function haversineKm(aLat: number, aLon: number, bLat: number, bLon: number): nu
 function firstLetter(label: string): string {
   const match = label.trim().match(/^[^a-zA-Z]*([a-zA-Z])/);
   return match ? match[1].toUpperCase() : '?';
+}
+
+function buildThumbnail(label: string, kind: string): string {
+  const first = firstLetter(label);
+  const iconByKind: Record<string, string> = {
+    amenity: '⌂',
+    place: '◌',
+    tourism: '✦',
+    shop: '◈',
+    office: '▣',
+    leisure: '❖',
+    historic: '◉',
+  };
+  return `${iconByKind[kind] || '◆'} ${first}`;
 }
 
 function resolvePosition(): Promise<{ lat: number; lon: number } | null> {
@@ -117,11 +133,13 @@ function extractCity(item: OsmResult): string | null {
 
 export function PublicSearchResults({
   query,
+  city,
   radius,
   request,
   onUse,
 }: {
   query: string;
+  city: string;
   radius: number;
   request: number;
   onUse: (value: string) => void;
@@ -142,6 +160,7 @@ export function PublicSearchResults({
 
   const [detailOpen, setDetailOpen] = useState(false);
   const [selectedCard, setSelectedCard] = useState<Card | null>(null);
+  const [cardSide, setCardSide] = useState<'front' | 'back'>('front');
 
   useEffect(() => {
     const q = query.trim();
@@ -173,7 +192,8 @@ export function PublicSearchResults({
         ? `${lon - radius / 111},${lat + radius / 111},${lon + radius / 111},${lat - radius / 111}`
         : HAVRE_DEFAULT_VIEWBOX;
 
-      const url = `${NOMINATIM_ENDPOINT}?q=${encodeURIComponent(q)}&format=jsonv2&addressdetails=1&limit=24&accept-language=fr&bounded=1&viewbox=${viewbox}`;
+      const cityQuery = city.trim();
+      const url = `${NOMINATIM_ENDPOINT}?q=${encodeURIComponent(`${q} ${cityQuery}`.trim())}&format=jsonv2&addressdetails=1&limit=24&accept-language=fr&bounded=1&viewbox=${viewbox}`;
 
       let raw: OsmResult[];
       try {
@@ -199,6 +219,8 @@ export function PublicSearchResults({
                   ? `https://www.openstreetmap.org/${item.osm_type}/${item.osm_id}`
                   : `https://www.openstreetmap.org/?mlat=${item.lat}&mlon=${item.lon}`,
               city: extractCity(item),
+              cityQuery,
+              thumbnail: buildThumbnail(title(item), item.category || item.type),
             }))
             .filter((item) => item.distanceKm <= radius)
             .sort((a, b) => a.distanceKm - b.distanceKm),
@@ -213,18 +235,20 @@ export function PublicSearchResults({
                 ? `https://www.openstreetmap.org/${item.osm_type}/${item.osm_id}`
                 : `https://www.openstreetmap.org/?mlat=${item.lat}&mlon=${item.lon}`,
             city: extractCity(item),
+            cityQuery: city.trim(),
+            thumbnail: buildThumbnail(title(item), item.category || item.type),
           })),
         );
       }
 
       if (cancelled) return;
-      setStatus(cards.length > 0 ? 'done' : 'no-results');
+      setStatus(raw.length > 0 ? 'done' : 'no-results');
     })();
 
     return () => {
       cancelled = true;
     };
-  }, [request, query, radius]);
+  }, [request, query, radius, city]);
 
   useEffect(() => {
     if (status !== 'done' && status !== 'no-position' && status !== 'no-results')
@@ -242,6 +266,7 @@ export function PublicSearchResults({
   const openDetail = (card: Card) => {
     setSelectedCard(card);
     setDetailOpen(true);
+    setCardSide('front');
   };
 
   const closeDetail = () => {
@@ -262,6 +287,10 @@ export function PublicSearchResults({
             Les éléments déjà connus de vos événements et les informations issues
             de sources publiques restent séparés et clairement identifiés. Aucune
             note, photographie, disponibilité ou tarif n'est inventé.
+          </p>
+          <p>
+            Recherche demandée pour <strong>{query}</strong>
+            {city.trim() ? <> à <strong>{city.trim()}</strong></> : null}.
           </p>
         </div>
 
@@ -289,6 +318,9 @@ export function PublicSearchResults({
                   </span>
                   <h3>{result.label}</h3>
                   <p>{result.context}</p>
+                  {('cityQuery' in result && result.cityQuery) ? (
+                    <small>Zone: {(result as any).cityQuery}</small>
+                  ) : null}
                   <button
                     type="button"
                     onClick={() => {
@@ -352,7 +384,7 @@ export function PublicSearchResults({
                     data-search-kind="public"
                   >
                     <div className="wc-public-card-art">
-                      <span>{firstLetter(title(item))}</span>
+                      <span>{item.thumbnail}</span>
                     </div>
                     <div className="wc-public-card-copy">
                       <span>Source publique · OpenStreetMap</span>
@@ -420,118 +452,134 @@ export function PublicSearchResults({
           data-search-detail="true"
         >
           <div className="wc-public-detail-card">
-            <div className="wc-public-detail-hero">
-              <button
-                type="button"
-                className="wc-public-detail-close"
-                onClick={closeDetail}
-                aria-label="Fermer la fiche"
-              >
-                Fermer
-              </button>
-              <span className="wc-public-detail-hero-letter">
-                {firstLetter(title(selectedCard))}
-              </span>
-            </div>
-
-            <div className="wc-public-detail-body">
-              <span className="wc-public-detail-tag">
-                Source publique · OpenStreetMap
-              </span>
-              <h3 className="wc-public-detail-title">{title(selectedCard)}</h3>
-              {selectedCard.city && (
-                <p className="wc-public-detail-sub">{selectedCard.city}</p>
-              )}
-              <p className="wc-public-detail-sub">{selectedCard.display_name}</p>
-
-              <dl className="wc-public-detail-facts">
-                <div>
-                  <dt>Catégorie</dt>
-                  <dd>
-                    {selectedCard.category || selectedCard.type || 'À préciser'}
-                  </dd>
-                </div>
-                <div>
-                  <dt>Localisation</dt>
-                  <dd>
-                    {selectedCard.city ? (
-                      selectedCard.city
-                    ) : (
-                      <>Sans position détectée</>
-                    )}
-                  </dd>
-                </div>
-                <div>
-                  <dt>Distance</dt>
-                  <dd>
-                    {selectedCard.distanceKm != null ? (
-                      <>{selectedCard.distanceKm.toFixed(1)} km</>
-                    ) : (
-                      <>Sans position</>
-                    )}
-                  </dd>
-                </div>
-                <div>
-                  <dt>Provenance</dt>
-                  <dd>OpenStreetMap · Nominatim</dd>
-                </div>
-                <div>
-                  <dt>Lien réel</dt>
-                  <dd>
-                    <a
-                      href={selectedCard.sourceUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                    >
-                      Voir la fiche OpenStreetMap
-                    </a>
-                  </dd>
-                </div>
-              </dl>
-
-              <div className="wc-public-detail-section">
-                <span className="wc-public-detail-section-label">
-                  Information publique complémentaire
-                </span>
-                <p>
-                  Ce résultat correspond au terme «{query}» et a été trouvé dans
-                  les sources publiques. Disponibilité, tarifs, avis et identité
-                  vérifiée ne sont pas inventés — ils restent à confirmer.
-                </p>
-                <p>
-                  Pour les services et les informations pratiques, consultez la fiche
-                  source ou demandez directement à l'organisateur.
-                </p>
-              </div>
-
-              <div className="wc-public-detail-foot">
+            <div className={`wc-public-flip ${cardSide === 'back' ? 'is-back' : ''}`}>
+              <div className="wc-public-flip-face wc-public-flip-front">
+              <div className="wc-public-detail-hero">
                 <button
                   type="button"
-                  className="wc-public-detail-use"
-                  onClick={() => {
-                    onUse(
-                      `${title(selectedCard)}, ${selectedCard.display_name} — piste publique à confirmer`,
-                    );
-                    closeDetail();
-                  }}
-                >
-                  Utiliser comme piste
-                </button>
-                <a
-                  href={selectedCard.sourceUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="wc-public-detail-source"
-                >
-                  Voir la source externe
-                </a>
-                <button
-                  type="button"
-                  className="wc-public-detail-close-flat"
+                  className="wc-public-detail-close"
                   onClick={closeDetail}
+                  aria-label="Fermer la fiche"
                 >
                   Fermer
                 </button>
+                <span className="wc-public-detail-hero-letter">
+                  {selectedCard.thumbnail}
+                </span>
+              </div>
+
+              <div className="wc-public-detail-body">
+                <span className="wc-public-detail-tag">
+                  Source publique · OpenStreetMap
+                </span>
+                <h3 className="wc-public-detail-title">{title(selectedCard)}</h3>
+                {selectedCard.city && (
+                  <p className="wc-public-detail-sub">{selectedCard.city}</p>
+                )}
+                <p className="wc-public-detail-sub">{selectedCard.display_name}</p>
+                <button
+                  type="button"
+                  className="wc-public-detail-use"
+                  onClick={() => setCardSide('back')}
+                >
+                  En savoir plus
+                </button>
+              </div>
+              </div>
+
+              <div className="wc-public-flip-face wc-public-flip-back">
+              <div className="wc-public-detail-body">
+                <span className="wc-public-detail-tag">
+                  Source publique · OpenStreetMap
+                </span>
+                <h3 className="wc-public-detail-title">{title(selectedCard)}</h3>
+                {selectedCard.city && (
+                  <p className="wc-public-detail-sub">{selectedCard.city}</p>
+                )}
+                <p className="wc-public-detail-sub">{selectedCard.display_name}</p>
+
+                <dl className="wc-public-detail-facts">
+                  <div>
+                    <dt>Catégorie</dt>
+                    <dd>
+                      {selectedCard.category || selectedCard.type || 'À préciser'}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>Localisation</dt>
+                    <dd>
+                      {selectedCard.city ? selectedCard.city : <>Sans position détectée</>}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>Distance</dt>
+                    <dd>
+                      {selectedCard.distanceKm != null ? (
+                        <>{selectedCard.distanceKm.toFixed(1)} km</>
+                      ) : (
+                        <>Sans position</>
+                      )}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>Provenance</dt>
+                    <dd>OpenStreetMap · Nominatim</dd>
+                  </div>
+                  <div>
+                    <dt>Lien réel</dt>
+                    <dd>
+                      <a
+                        href={selectedCard.sourceUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        Voir la fiche OpenStreetMap
+                      </a>
+                    </dd>
+                  </div>
+                </dl>
+
+                <div className="wc-public-detail-section">
+                  <span className="wc-public-detail-section-label">
+                    Information publique complémentaire
+                  </span>
+                  <p>
+                    Ce résultat correspond au terme «{query}» et a été trouvé dans
+                    les sources publiques. Disponibilité, tarifs, avis et identité
+                    vérifiée ne sont pas inventés — ils restent à confirmer.
+                  </p>
+                </div>
+
+                <div className="wc-public-detail-foot">
+                  <button
+                    type="button"
+                    className="wc-public-detail-use"
+                    onClick={() => {
+                      onUse(
+                        `${title(selectedCard)}, ${selectedCard.display_name} — piste publique à confirmer`,
+                      );
+                      closeDetail();
+                    }}
+                  >
+                    Utiliser comme piste
+                  </button>
+                  <a
+                    href={selectedCard.sourceUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="wc-public-detail-source"
+                  >
+                    Voir la source externe
+                  </a>
+                  <button
+                    type="button"
+                    className="wc-public-detail-close-flat"
+                    onClick={() => setCardSide('front')}
+                  >
+                    Retour
+                  </button>
+                </div>
+              </div>
               </div>
             </div>
           </div>

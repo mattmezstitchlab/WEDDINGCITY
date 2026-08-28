@@ -5,12 +5,12 @@ export function Manifesto() {
   return (
     <section id="manifesto" style={manifestoStyle} aria-label="Manifeste">
       <div style={inner}>
-        <h2 style={h2}>DE L’INTENTION AU MONDE</h2>
+        <h2 style={h2}>DE L'INTENTION AU MONDE<br/><span style={{ fontSize: 13, fontWeight: 400, color: '#9ba1b0', letterSpacing: '0.04em' }}>(sans remplir 47 champs)</span></h2>
 
         <p style={lead}>
           Pendant des décennies, nous avons appris aux humains à penser comme les logiciels.
           Choisir une rubrique. Remplir un formulaire. Sélectionner une catégorie. Renseigner une date.
-          Nous avons décidé d’inverser le paradigme.
+          Nous avons décidé d'inverser le paradigme — parce que la vie ne se remplit pas en cases.
         </p>
 
         <blockquote style={quote}>
@@ -61,7 +61,7 @@ export function Manifesto() {
 
           <p style={{ marginTop: 14 }}><strong>AIME</strong> est un terrain d’expérimentation pour une idée plus vaste : passer de l’interface qui impose une structure à l’interface qui comprend une intention.</p>
 
-          <p style={{ marginTop: 18, fontWeight: 700 }}>Vous n’avez pas besoin de savoir comment organiser votre monde. Commencez simplement par nous dire ce qui est vivant.</p>
+          <p style={{ marginTop: 18, fontWeight: 700 }}>Vous n'avez pas besoin de savoir comment ranger votre monde. Commencez juste par nous dire ce qui est vivant. On s'occupe du reste — sans rien inventer.</p>
         </div>
       </div>
     </section>

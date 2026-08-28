@@ -30,12 +30,15 @@ export type AIMemoryEntity = {
   // Source tracking
   source: {
     extracted_from?: string // document name, text fragment
+    source_kind: 'user' | 'document' | 'import' | 'system' | 'cascade'
+    source_confidence: 'confirmed' | 'probable' | 'estimated' | 'missing'
     validated_by: string // user ID who confirmed this
     timestamp: Date
   }
 
   // Certainty + reasoning
   certainty: number // 0.0-1.0
+  confidence_level: 'confirmed' | 'inferred' | 'estimated' | 'missing'
   reason_for_certainty: string // "User confirmed", "Mentioned with €", etc
 
   // Complete decision trail (the crucial part)
@@ -60,6 +63,7 @@ export type AIMemoryEntity = {
     retention_policy?: 'keep' | 'archive_after_months' | 'delete_after_months'
     fiscal_entity?: boolean // relevant for tax/audit
     contract_document?: boolean // legally binding
+    provenance_notes?: string
   }
 }
 
@@ -97,6 +101,8 @@ export type DecisionRecord = {
   // For compliance/transparency
   validation_source: 'user_confirmation' | 'correction' | 'cascade_decision'
   is_reversible: boolean
+  confidence_before: number
+  confidence_after: number
 }
 
 /**
@@ -213,8 +219,11 @@ export function createEntity(
     source: {
       validated_by,
       timestamp: now,
+      source_kind: 'user',
+      source_confidence: 'confirmed',
     },
     certainty: 0.5,
+    confidence_level: 'estimated',
     reason_for_certainty: 'Initial creation',
     decision_trail: [
       {
@@ -235,6 +244,8 @@ export function createEntity(
         },
         validation_source: 'user_confirmation',
         is_reversible: true,
+        confidence_before: 0.5,
+        confidence_after: 0.5,
       },
     ],
     access_control: {
@@ -262,6 +273,8 @@ export function addDecisionToTrail(
     ...entity,
     decision_trail: trail,
     updated_at: new Date(),
+    confidence_level: decision.confidence_after >= 0.8 ? 'confirmed' : decision.confidence_after >= 0.5 ? 'inferred' : 'estimated',
+    certainty: decision.confidence_after,
   }
 }
 

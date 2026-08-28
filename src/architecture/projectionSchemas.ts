@@ -50,6 +50,10 @@ export type ProjectedData = {
   computed_fields: Record<string, any>
   validation_status: 'valid' | 'invalid' | 'warning'
   warnings: string[]
+  provenance?: {
+    sources: string[]
+    confidence_summary: 'confirmed' | 'mixed' | 'estimated'
+  }
 }
 
 /**
@@ -64,6 +68,8 @@ export type Mutation = {
   reason: string
   validated_by: string
   timestamp: Date
+  confidence_before?: number
+  confidence_after?: number
 }
 
 /**

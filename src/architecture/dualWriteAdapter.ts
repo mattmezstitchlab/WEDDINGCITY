@@ -158,11 +158,14 @@ export class DualWriteAdapter {
       created_at: legacyData.createdAt ? new Date(legacyData.createdAt) : new Date(),
       updated_at: legacyData.updatedAt ? new Date(legacyData.updatedAt) : new Date(),
       certainty: 0.85,
+      confidence_level: 'estimated',
       reason_for_certainty: 'Migrated from legacy system',
       tags: ['migrated', 'legacy'],
       source: {
         validated_by: 'migration_system',
         timestamp: new Date(),
+        source_kind: 'import',
+        source_confidence: 'estimated',
       },
       content: {
         ...legacyData,
@@ -190,6 +193,8 @@ export class DualWriteAdapter {
           },
           validation_source: 'user_confirmation',
           is_reversible: true,
+          confidence_before: 0.85,
+          confidence_after: 0.85,
         },
       ],
       access_control: {

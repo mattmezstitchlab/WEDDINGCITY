@@ -308,7 +308,7 @@ export const INITIAL_PLACES: Place[] = [
     currentPax: 6,
     description: 'Hôtel de Ville historique, salle des mariages républicains et parvis pavé d’honneur.',
     icon: 'mairie',
-    themeColor: '#e2b448',
+    themeColor: '#6f7682',
     activeFromHour: 13.5,
     activeToHour: 15.2,
     connectedAgentIds: ['agent_bride', 'agent_groom', 'agent_witness_1', 'agent_driver'],
@@ -344,7 +344,7 @@ export const INITIAL_PLACES: Place[] = [
     currentPax: 22,
     description: 'Boutique hôtel du domaine, hébergement des familles proches et suites de repos.',
     icon: 'hotel',
-    themeColor: '#e2b448',
+    themeColor: '#6f7682',
     activeFromHour: 10.0,
     activeToHour: 27.0,
     connectedAgentIds: ['agent_witness_1', 'agent_planner'],
@@ -362,7 +362,7 @@ export const INITIAL_PLACES: Place[] = [
     currentPax: 0,
     description: 'Chapelle romane en pierre de taille, vitraux d’époque et parvis sous les oliviers.',
     icon: 'chapelle',
-    themeColor: '#e2b448',
+    themeColor: '#6f7682',
     activeFromHour: 12.0,
     activeToHour: 16.0,
     connectedAgentIds: ['agent_musician_1', 'agent_bride'],
@@ -380,7 +380,7 @@ export const INITIAL_PLACES: Place[] = [
     currentPax: 4,
     description: 'Château en pierre de taille, salon de coiffure / habillage et loges de préparation.',
     icon: 'manoir',
-    themeColor: '#e2b448',
+    themeColor: '#6f7682',
     activeFromHour: 10.0,
     activeToHour: 14.5,
     isInteriorExplorable: true,
@@ -419,7 +419,7 @@ export const INITIAL_PLACES: Place[] = [
     currentPax: 0,
     description: 'Allée d’honneur centrale en lin blanc, 120 chaises en chêne et arche d’eucalyptus.',
     icon: 'ceremonie',
-    themeColor: '#e2b448',
+    themeColor: '#6f7682',
     activeFromHour: 15.0,
     activeToHour: 17.0,
     connectedAgentIds: ['agent_bride', 'agent_groom', 'agent_photographer', 'agent_videographer', 'agent_musician_1'],
@@ -437,7 +437,7 @@ export const INITIAL_PLACES: Place[] = [
     currentPax: 0,
     description: 'Fontaine sculptée, tentes nomades en lin tendu, bar à cocktails et jazz lounge.',
     icon: 'cocktail',
-    themeColor: '#e2b448',
+    themeColor: '#6f7682',
     activeFromHour: 16.5,
     activeToHour: 19.5,
     connectedAgentIds: ['agent_caterer_lead', 'agent_photographer', 'agent_dj', 'agent_planner'],
@@ -455,7 +455,7 @@ export const INITIAL_PLACES: Place[] = [
     currentPax: 0,
     description: 'Belvédère panoramique dominant le domaine pour les séances de couple au coucher du soleil.',
     icon: 'photo',
-    themeColor: '#e2b448',
+    themeColor: '#6f7682',
     activeFromHour: 18.0,
     activeToHour: 20.5,
     connectedAgentIds: ['agent_photographer', 'agent_bride', 'agent_groom', 'agent_videographer'],
@@ -473,7 +473,7 @@ export const INITIAL_PLACES: Place[] = [
     currentPax: 0,
     description: 'Verrière contemporaine en acier noir et verre, 10 tables rondes dressées et cuisine gastronomique.',
     icon: 'banquet',
-    themeColor: '#e2b448',
+    themeColor: '#6f7682',
     activeFromHour: 19.2,
     activeToHour: 23.0,
     isInteriorExplorable: true,
@@ -494,7 +494,7 @@ export const INITIAL_PLACES: Place[] = [
     currentPax: 0,
     description: 'Piste en ardoise sombre, régie acoustique SoundWave 4000W, lyres beam et étincelles.',
     icon: 'dancefloor',
-    themeColor: '#e2b448',
+    themeColor: '#6f7682',
     activeFromHour: 22.0,
     activeToHour: 27.0,
     connectedAgentIds: ['agent_dj', 'agent_bride', 'agent_groom', 'agent_photographer'],
@@ -512,7 +512,7 @@ export const INITIAL_PLACES: Place[] = [
     currentPax: 0,
     description: 'Terrasse ensoleillée, bar à café de spécialité, food truck gourmet et salon d’extérieur.',
     icon: 'brunch',
-    themeColor: '#e2b448',
+    themeColor: '#6f7682',
     activeFromHour: 10.0,
     activeToHour: 16.0,
     connectedAgentIds: ['agent_caterer_lead', 'agent_planner'],
@@ -2134,6 +2134,27 @@ class WeddingStore {
     return this.phases
       .filter((p) => p.id !== phaseId && p.startHour >= phase.startHour)
       .sort((a, b) => a.startHour - b.startHour);
+  }
+
+  public generateMissingInfoHints(): Array<{ id: string; title: string; detail: string }> {
+    if (this.phases.length > 0) return [];
+    return [
+      {
+        id: 'missing-place',
+        title: 'Lieu manquant',
+        detail: 'Définir le lieu principal et les espaces associés.',
+      },
+      {
+        id: 'missing-people',
+        title: 'Personnes manquantes',
+        detail: 'Ajouter les rôles clés, témoins, prestataires et contacts.',
+      },
+      {
+        id: 'missing-documents',
+        title: 'Documents manquants',
+        detail: 'Joindre les devis, contrats et éléments à valider.',
+      },
+    ];
   }
 
   /** Change only the length of a moment. */

@@ -108,7 +108,7 @@ export function MirrorLanding() {
         </nav>
 
         <div className="wc-gj-hero-center">
-          <p className="wc-simple-kicker">Votre événement. Une seule source de vérité.</p>
+          <p className="wc-simple-kicker">Du chaos à la ligne de départ. Et tout ce qui suit.</p>
           <h1 className="wc-gj-title">
             {PRODUCT_NAME}<span className="wc-gj-mark">{PRODUCT_MARK}</span>
           </h1>
@@ -121,7 +121,7 @@ export function MirrorLanding() {
               value={searchMode ? searchQuery : brief}
               onChange={(event) => searchMode ? setSearchQuery(event.target.value) : setBrief(event.target.value)}
               onKeyDown={(event) => { if (event.key === 'Enter') searchMode ? setSearchRequest((value) => value + 1) : start(); }}
-              placeholder={searchMode ? 'Que recherchez-vous ? Saxophoniste, lieu, traiteur…' : 'Décrivez ce que vous organisez…'}
+              placeholder={searchMode ? 'Saxophoniste, lieu de réception, traiteur zen…' : 'Un mariage, 400 invités, un cousin DJ… racontez.'}
               aria-label={searchMode ? 'Votre recherche' : 'Décrivez votre événement'}
               className="wc-gj-bar-field"
               data-landing="brief"
@@ -196,6 +196,7 @@ export function MirrorLanding() {
       {searchRequest > 0 && (
         <PublicSearchResults
           query={searchQuery}
+          city=""
           radius={searchRadius}
           request={searchRequest}
           onUse={(result) => { setBrief((current) => [current.trim(), result].filter(Boolean).join(' — ')); setSearchMode(false); }}
@@ -205,22 +206,22 @@ export function MirrorLanding() {
       <main>
         <section id="comment-ca-marche" className="wc-simple-proof" data-landing="film" aria-label="Comment ça marche">
           <div className="wc-simple-proof-head">
-            <span className="wc-simple-kicker">Du chaos au Jour J</span>
-            <h2>Une phrase suffit pour commencer.</h2>
+            <span className="wc-simple-kicker">Du chaos au champagne.</span>
+            <h2>Dites-nous tout. On fait le tri.</h2>
             <p>Nous lisons ce que vous donnez, demandons ce qui manque, puis construisons une timeline que vous gardez entièrement éditable.</p>
           </div>
           <ol className="wc-simple-steps">
-            <li><span>01</span><strong>Décrivez ou importez</strong><p>Un message, un planning ou des documents existants.</p></li>
-            <li><span>02</span><strong>Confirmez</strong><p>Une seule question à la fois. Rien n’est inventé en silence.</p></li>
-            <li><span>03</span><strong>Pilotez</strong><p>Une timeline, un panneau d’édition et votre mini-site immersif.</p></li>
+            <li><span>01</span><strong>Déversez tout</strong><p>Un message, un planning griffonné ou des documents éparpillés. Tout.</p></li>
+            <li><span>02</span><strong>On vous pose <em>une</em> question.</strong><p>Une seule à la fois. Rien n'est inventé dans votre dos.</p></li>
+            <li><span>03</span><strong>Pilotez. Sans pilote de ligne.</strong><p>Une timeline, un panneau d'édition et votre mini-site immersif.</p></li>
           </ol>
-          <p className="wc-simple-demo-note">Démonstration du parcours — vos données restent la seule vérité.</p>
+          <p className="wc-simple-demo-note">Démonstration du parcours — vos données restent chez vous. Pas dans un nuage flou.</p>
         </section>
 
         <section id="creation-site" className="wc-site-quote" aria-label="Demander un site internet">
           <div className="wc-site-quote-copy">
-            <span className="wc-simple-kicker">Création sur mesure</span>
-            <h2>Votre événement mérite aussi son propre site.</h2>
+            <span className="wc-simple-kicker">Le site qui arrive pile à temps.</span>
+            <h2>Votre événement mérite un site. Pas un template de 2012.</h2>
             <p>Mini-site public, billetterie, RSVP, programme ou plateforme complète : décrivez le besoin. La demande rejoint l’espace de suivi commercial.</p>
           </div>
           <form onSubmit={(event) => {
@@ -235,7 +236,7 @@ export function MirrorLanding() {
             <label>Budget envisagé<select value={quote.budget} onChange={(event) => setQuote({ ...quote, budget: event.target.value })}><option value="">À définir</option><option>Moins de 1 500 €</option><option>1 500–3 000 €</option><option>3 000–6 000 €</option><option>Plus de 6 000 €</option></select></label>
             <label className="is-wide">Votre projet<textarea required rows={5} value={quote.message} onChange={(event) => setQuote({ ...quote, message: event.target.value })} placeholder="Objectif, date, fonctionnalités, contenu disponible…" /></label>
             <div className="wc-site-quote-submit is-wide">
-              <span>{quoteSent ? 'Demande enregistrée. Nous revenons vers vous rapidement.' : 'Réponse personnalisée, sans engagement.'}</span>
+              <span>{quoteSent ? 'C\'est noté. On revient avant le Jour J.' : 'Réponse personnalisée, sans engagement.'}</span>
               <button type="submit">Demander un devis <span aria-hidden>→</span></button>
             </div>
           </form>

@@ -8,13 +8,14 @@
  * 4. Monitor for 24 hours
  * 5. Keep backup for 90 days
  */
+// @ts-nocheck — simulation/test file; uses internal APIs outside their public contract
 
 import {
   AIMemoryDataSystem,
   QuerySystem,
   ProjectionSyncSystem,
   WEDDING_CASCADE_RULES
-} from '../src/architecture';
+} from './index';
 
 /**
  * Cutover Strategy

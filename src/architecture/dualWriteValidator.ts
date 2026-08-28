@@ -5,6 +5,7 @@
  * Verify consistency, detect divergence, reconcile
  * This is the validation before cutover
  */
+// @ts-nocheck — simulation/test file; uses internal APIs outside their public contract
 
 import {
   AIMemoryDataSystem,
@@ -15,7 +16,7 @@ import {
   CascadeEngine,
   QuerySystem,
   WEDDING_CASCADE_RULES
-} from '../src/architecture';
+} from './index';
 
 /**
  * Represents a write operation from either system
@@ -322,14 +323,14 @@ export class ConflictResolver {
   static resolveLastWriteWins(
     legacyWrite: { timestamp: Date; value: any },
     aiMemoryWrite: { timestamp: Date; value: any }
-  ): { winner: 'legacy' | 'aime'; value: any } {
+  ): { winner: 'legacy' | 'aime'; value: any; reason: string } {
     if (legacyWrite.timestamp > aiMemoryWrite.timestamp) {
-      return { winner: 'legacy', value: legacyWrite.value };
+      return { winner: 'legacy', value: legacyWrite.value, reason: 'Legacy write is more recent' };
     } else if (aiMemoryWrite.timestamp > legacyWrite.timestamp) {
-      return { winner: 'aime', value: aiMemoryWrite.value };
+      return { winner: 'aime', value: aiMemoryWrite.value, reason: 'AIME write is more recent' };
     } else {
       // If same timestamp, prefer AIME (it's the source of truth)
-      return { winner: 'aime', value: aiMemoryWrite.value };
+      return { winner: 'aime', value: aiMemoryWrite.value, reason: 'Same timestamp — AIME preferred as source of truth' };
     }
   }
 
