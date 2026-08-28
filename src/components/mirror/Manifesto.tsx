@@ -5,12 +5,12 @@ export function Manifesto() {
   return (
     <section id="manifesto" style={manifestoStyle} aria-label="Manifeste">
       <div style={inner}>
-        <h2 style={h2}>DE L'INTENTION AU MONDE<br/><span style={{ fontSize: 13, fontWeight: 400, color: '#9ba1b0', letterSpacing: '0.04em' }}>(sans remplir 47 champs)</span></h2>
+        <h2 style={h2}>DE L'INTENTION AU MONDE</h2>
 
         <p style={lead}>
           Pendant des décennies, nous avons appris aux humains à penser comme les logiciels.
           Choisir une rubrique. Remplir un formulaire. Sélectionner une catégorie. Renseigner une date.
-          Nous avons décidé d'inverser le paradigme — parce que la vie ne se remplit pas en cases.
+          Nous avons décidé d'inverser le paradigme.
         </p>
 
         <blockquote style={quote}>
@@ -22,12 +22,12 @@ export function Manifesto() {
         </blockquote>
 
         <div style={principles}>
-          <div style={principle}><strong>01 — VOUS N’AVEZ PAS À COMPRENDRE LA STRUCTURE</strong><div style={pdesc}>Exprimez votre intention avec vos propres mots.</div></div>
-          <div style={principle}><strong>02 — L’INFORMATION PREND DU SENS PAR SES RELATIONS</strong><div style={pdesc}>Une personne n’est pas seulement un nom. Elle peut être liée à un événement, un lieu, une prestation, une date ou une action.</div></div>
-          <div style={principle}><strong>03 — LE MONDE AVANT LES FORMULAIRES</strong><div style={pdesc}>Le système représente la réalité de l’événement plutôt qu’une collection de champs.</div></div>
-          <div style={principle}><strong>04 — L’HUMAIN GARDE LE DERNIER MOT</strong><div style={pdesc}>Chaque compréhension importante peut être vérifiée, corrigée ou refusée.</div></div>
-          <div style={principle}><strong>05 — EXPLICABLE PAR CONCEPTION</strong><div style={pdesc}>Lorsqu’une information est détectée, le système explique pourquoi.</div></div>
-          <div style={principle}><strong>06 — LA TECHNOLOGIE DOIT DISPARAÎTRE DERRIÈRE L’INTENTION</strong><div style={pdesc}>L’utilisateur ne devrait pas avoir besoin de connaître le moteur pour l’utiliser.</div></div>
+          <div style={principle}><strong>01 — SIMPLE</strong><div style={pdesc}>Dites ce que vous voulez faire.</div></div>
+          <div style={principle}><strong>02 — LIÉ</strong><div style={pdesc}>Une personne, un lieu, une date.</div></div>
+          <div style={principle}><strong>03 — CLAIR</strong><div style={pdesc}>Le monde avant les formulaires.</div></div>
+          <div style={principle}><strong>04 — HUMAIN</strong><div style={pdesc}>Vous gardez le dernier mot.</div></div>
+          <div style={principle}><strong>05 — EXPLICITE</strong><div style={pdesc}>Le système dit pourquoi.</div></div>
+          <div style={principle}><strong>06 — DISCRET</strong><div style={pdesc}>La technique s’efface.</div></div>
         </div>
 
         <div style={flow}>
@@ -61,7 +61,7 @@ export function Manifesto() {
 
           <p style={{ marginTop: 14 }}><strong>AIME</strong> est un terrain d’expérimentation pour une idée plus vaste : passer de l’interface qui impose une structure à l’interface qui comprend une intention.</p>
 
-          <p style={{ marginTop: 18, fontWeight: 700 }}>Vous n'avez pas besoin de savoir comment ranger votre monde. Commencez juste par nous dire ce qui est vivant. On s'occupe du reste — sans rien inventer.</p>
+          <p style={{ marginTop: 18, fontWeight: 700 }}>Dites simplement ce qui compte. On s'occupe du reste.</p>
         </div>
       </div>
     </section>
