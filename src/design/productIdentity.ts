@@ -8,4 +8,4 @@
 export const PRODUCT_NAME = 'LE GRAND JOUR';
 /** The registered mark is set as a separate glyph so it can be sized apart. */
 export const PRODUCT_MARK = '®';
-export const PRODUCT_TAGLINE = 'L’amour en vrai.';
+export const PRODUCT_TAGLINE = "L\u2019amour en vrai.";

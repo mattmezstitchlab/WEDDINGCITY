@@ -26,6 +26,27 @@ const HERO_IMAGES = [
   '/editorial/hero.jpg', '/editorial/mirror.jpg', '/editorial/world.jpg', '/editorial/immersive.jpg', '/editorial/matter.jpg',
 ];
 
+const LANDING_GALLERY_ITEMS = [
+  {
+    id: 'mariage-hero',
+    title: 'Mariage de A à Z',
+    description: 'Une page d’atterrissage complète, du premier mot jusqu’au guide tour narré.',
+    image: '/editorial/grandjour-hero.jpg',
+  },
+  {
+    id: 'spectacle',
+    title: 'Spectacle',
+    description: 'Intermittent du spectacle, programme, transmission, visibilité.',
+    image: '/editorial/spectacle/regie.jpg',
+  },
+  {
+    id: 'association',
+    title: 'Association',
+    description: 'Rassembler, expliquer, guider, faire circuler l’information.',
+    image: '/editorial/immersive.jpg',
+  },
+] as const;
+
 export function MirrorLanding() {
   const store = weddingStore;
   const [projects, setProjects] = useState<ReturnType<typeof getStoredProjects>>([]);
@@ -42,6 +63,7 @@ export function MirrorLanding() {
   const [heroSlide, setHeroSlide] = useState(0);
   const [quoteSent, setQuoteSent] = useState(false);
   const [calendarOpen, setCalendarOpen] = useState(false);
+  const [heroPanel, setHeroPanel] = useState<'none' | 'video' | 'manifesto' | 'gallery' | 'bug'>('none');
   const [quote, setQuote] = useState({ name: '', email: '', organisation: '', websiteNeed: '', budget: '', message: '' });
 
   useEffect(() => { setProjects(getStoredProjects()); }, []);
@@ -63,6 +85,8 @@ export function MirrorLanding() {
   const create = () => setIntakeOpen(true);
   const start = create;
   const schema = eventType(type);
+  const heroMode = store.heroMode;
+  const galleryItem = LANDING_GALLERY_ITEMS[heroSlide % LANDING_GALLERY_ITEMS.length];
 
   return (
     <div id="wc-mirror" className="wc-grandjour wc-landing-simple" data-landing="page">
@@ -108,11 +132,45 @@ export function MirrorLanding() {
         </nav>
 
         <div className="wc-gj-hero-center">
-          <p className="wc-simple-kicker">Votre événement. Une seule source de vérité.</p>
+          <div className="wc-gj-hero-tabs" role="tablist" aria-label="Modes du hero">
+            {[
+              ['event', 'Évènement'],
+              ['video', 'Vidéo'],
+              ['manifesto', 'Manifeste'],
+              ['gallery', 'Galerie'],
+              ['bug', 'Bug'],
+            ].map(([mode, label]) => (
+              <button
+                key={mode}
+                type="button"
+                role="tab"
+                aria-selected={heroMode === mode}
+                className={`wc-gj-hero-tab${heroMode === mode ? ' is-active' : ''}`}
+                onClick={() => {
+                  const nextMode = mode as 'event' | 'video' | 'manifesto' | 'gallery' | 'bug';
+                  store.setHeroMode(nextMode);
+                  setHeroPanel(nextMode === 'event' ? 'none' : nextMode);
+                }}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+
           <h1 className="wc-gj-title">
             {PRODUCT_NAME}<span className="wc-gj-mark">{PRODUCT_MARK}</span>
           </h1>
-          <p className="wc-gj-hero-kind" aria-live="polite">{EVENT_TYPES[heroSlide]?.label}</p>
+          <p className="wc-gj-hero-kind" aria-live="polite">
+            {heroMode === 'gallery'
+              ? `${galleryItem?.title || 'Galerie'} · ${galleryItem?.description || ''}`
+              : heroMode === 'video'
+                ? 'Mariage de A à Z · vidéo'
+                : heroMode === 'manifesto'
+                  ? 'Intention · compréhension · monde'
+                  : heroMode === 'bug'
+                    ? 'Retour direct'
+                    : EVENT_TYPES[heroSlide]?.label}
+          </p>
 
           <div className="wc-gj-bar" data-landing="tool">
             <input
@@ -121,7 +179,7 @@ export function MirrorLanding() {
               value={searchMode ? searchQuery : brief}
               onChange={(event) => searchMode ? setSearchQuery(event.target.value) : setBrief(event.target.value)}
               onKeyDown={(event) => { if (event.key === 'Enter') searchMode ? setSearchRequest((value) => value + 1) : start(); }}
-              placeholder={searchMode ? 'Que recherchez-vous ? Saxophoniste, lieu, traiteur…' : 'Décrivez ce que vous organisez…'}
+              placeholder={searchMode ? 'Saxophoniste, lieu, traiteur…' : 'Décrivez votre événement.'}
               aria-label={searchMode ? 'Votre recherche' : 'Décrivez votre événement'}
               className="wc-gj-bar-field"
               data-landing="brief"
@@ -184,11 +242,19 @@ export function MirrorLanding() {
           </div>
 
           <p className="wc-gj-bar-hint" data-landing="hint">
-            {searchMode
-              ? 'Votre position ne sera demandée qu’au lancement de la recherche.'
-              : files.length === 0
-                ? schema.intakeLine
-                : `${files.length} fichier${files.length > 1 ? 's' : ''} prêt${files.length > 1 ? 's' : ''} à être analysé${files.length > 1 ? 's' : ''}`}
+            {heroMode === 'video'
+              ? 'Guide vidéo · lancement du parcours.'
+              : heroMode === 'manifesto'
+                ? 'Manifeste · lire en une minute.'
+                : heroMode === 'gallery'
+                  ? 'Galerie · présenter une fonction.'
+                  : heroMode === 'bug'
+                    ? 'Bug · remonter un souci.'
+                    : searchMode
+                      ? 'Votre position ne sera demandée qu’au lancement de la recherche.'
+                      : files.length === 0
+                        ? schema.intakeLine
+                        : `${files.length} fichier${files.length > 1 ? 's' : ''} prêt${files.length > 1 ? 's' : ''} à être analysé${files.length > 1 ? 's' : ''}`}
           </p>
         </div>
       </header>
@@ -196,6 +262,7 @@ export function MirrorLanding() {
       {searchRequest > 0 && (
         <PublicSearchResults
           query={searchQuery}
+          city=""
           radius={searchRadius}
           request={searchRequest}
           onUse={(result) => { setBrief((current) => [current.trim(), result].filter(Boolean).join(' — ')); setSearchMode(false); }}
@@ -203,25 +270,80 @@ export function MirrorLanding() {
       )}
 
       <main>
+        {heroMode === 'gallery' && (
+          <section className="wc-hero-gallery" aria-label="Vitrine">
+            <div className="wc-hero-gallery-shell">
+              <img src={galleryItem?.image} alt={galleryItem?.title || 'Vitrine'} />
+              <div className="wc-hero-gallery-copy">
+                <span>{galleryItem?.title}</span>
+                <h2>{galleryItem?.description}</h2>
+              </div>
+            </div>
+            <div className="wc-hero-panel">
+              <strong>À montrer maintenant</strong>
+              <p>{galleryItem?.title}</p>
+            </div>
+          </section>
+        )}
+
+        {heroMode === 'manifesto' && (
+          <section className="wc-hero-manifesto" aria-label="Manifeste court">
+            <p>Simple. Clair. Relié.</p>
+            <div className="wc-hero-panel">
+              <strong>Le principe</strong>
+              <p>Une mémoire, plusieurs projections, une seule interface humaine.</p>
+            </div>
+          </section>
+        )}
+
+        {heroMode === 'video' && (
+          <section className="wc-hero-video" aria-label="Guide vidéo">
+            <div className="wc-hero-video-card">
+              <h2>Mariage de A à Z</h2>
+              <p>Une vidéo guide tour racontée par l’agent.</p>
+              <button type="button" className="wc-gj-cta-small" onClick={() => setCalendarOpen(true)}>Lancer le tour</button>
+            </div>
+          </section>
+        )}
+
+        {heroMode === 'bug' && (
+          <section className="wc-hero-manifesto" aria-label="Retour de problème">
+            <div className="wc-hero-video-card">
+              <h2>Remonter un souci</h2>
+              <p>Décris ce qui bloque, où, et ce que tu attendais à la place.</p>
+              <button type="button" className="wc-gj-cta-small" onClick={() => setSearchMode(true)}>Décrire le problème</button>
+            </div>
+          </section>
+        )}
+
+        {heroPanel === 'none' && heroMode === 'event' && (
+          <section className="wc-hero-manifesto" aria-label="Point de départ">
+            <div className="wc-hero-video-card">
+              <h2>Un seul point d’entrée.</h2>
+              <p>Tu écris, on lit, puis on demande ce qui manque. Rien de plus.</p>
+            </div>
+          </section>
+        )}
+
         <section id="comment-ca-marche" className="wc-simple-proof" data-landing="film" aria-label="Comment ça marche">
           <div className="wc-simple-proof-head">
-            <span className="wc-simple-kicker">Du chaos au Jour J</span>
+            <span className="wc-simple-kicker">Démonstration simple.</span>
             <h2>Une phrase suffit pour commencer.</h2>
             <p>Nous lisons ce que vous donnez, demandons ce qui manque, puis construisons une timeline que vous gardez entièrement éditable.</p>
           </div>
           <ol className="wc-simple-steps">
-            <li><span>01</span><strong>Décrivez ou importez</strong><p>Un message, un planning ou des documents existants.</p></li>
-            <li><span>02</span><strong>Confirmez</strong><p>Une seule question à la fois. Rien n’est inventé en silence.</p></li>
-            <li><span>03</span><strong>Pilotez</strong><p>Une timeline, un panneau d’édition et votre mini-site immersif.</p></li>
+            <li><span>01</span><strong>Racontez</strong><p>Un message, un planning ou des documents.</p></li>
+            <li><span>02</span><strong>Une question</strong><p>Une seule à la fois.</p></li>
+            <li><span>03</span><strong>On avance</strong><p>Une timeline, un panneau et un site clair.</p></li>
           </ol>
-          <p className="wc-simple-demo-note">Démonstration du parcours — vos données restent la seule vérité.</p>
+          <p className="wc-simple-demo-note">Démonstration du parcours — vos données restent chez vous.</p>
         </section>
 
         <section id="creation-site" className="wc-site-quote" aria-label="Demander un site internet">
           <div className="wc-site-quote-copy">
-            <span className="wc-simple-kicker">Création sur mesure</span>
-            <h2>Votre événement mérite aussi son propre site.</h2>
-            <p>Mini-site public, billetterie, RSVP, programme ou plateforme complète : décrivez le besoin. La demande rejoint l’espace de suivi commercial.</p>
+            <span className="wc-simple-kicker">Un site, vite.</span>
+            <h2>Votre événement mérite un site.</h2>
+            <p>Mini-site public, billetterie, RSVP, programme ou plateforme complète : décrivez le besoin.</p>
           </div>
           <form onSubmit={(event) => {
             event.preventDefault();
@@ -235,8 +357,8 @@ export function MirrorLanding() {
             <label>Budget envisagé<select value={quote.budget} onChange={(event) => setQuote({ ...quote, budget: event.target.value })}><option value="">À définir</option><option>Moins de 1 500 €</option><option>1 500–3 000 €</option><option>3 000–6 000 €</option><option>Plus de 6 000 €</option></select></label>
             <label className="is-wide">Votre projet<textarea required rows={5} value={quote.message} onChange={(event) => setQuote({ ...quote, message: event.target.value })} placeholder="Objectif, date, fonctionnalités, contenu disponible…" /></label>
             <div className="wc-site-quote-submit is-wide">
-              <span>{quoteSent ? 'Demande enregistrée. Nous revenons vers vous rapidement.' : 'Réponse personnalisée, sans engagement.'}</span>
-              <button type="submit">Demander un devis <span aria-hidden>→</span></button>
+              <span>{quoteSent ? 'Bien reçu.' : 'Réponse personnalisée.'}</span>
+              <button type="submit">Demander</button>
             </div>
           </form>
         </section>

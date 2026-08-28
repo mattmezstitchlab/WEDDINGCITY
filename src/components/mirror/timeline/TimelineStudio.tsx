@@ -745,6 +745,20 @@ export function TimelineStudio() {
             n’a été inventé pour la remplir. Ajoutez le premier moment — tout le
             reste s’y accrochera.
           </p>
+          <div className="wc-empty-hints" aria-label="Informations manquantes">
+            <div className="wc-empty-hint">
+              <strong>Lieu</strong>
+              <span>Définir le lieu principal et les espaces associés</span>
+            </div>
+            <div className="wc-empty-hint">
+              <strong>Personnes</strong>
+              <span>Ajouter les rôles clés, invités, témoins et contacts</span>
+            </div>
+            <div className="wc-empty-hint">
+              <strong>Documents</strong>
+              <span>Joindre les devis, contrats et éléments à valider</span>
+            </div>
+          </div>
           <button onClick={addFirstMoment} style={{ ...primaryBtn, marginTop: 18 }} data-jourj="empty-add">
             + Ajouter le premier moment
           </button>
@@ -1089,4 +1103,3 @@ const impactChip: React.CSSProperties = {
 const conflictLine: React.CSSProperties = {
   borderLeft: '2px solid #e0736a', paddingLeft: 10, fontSize: 11, lineHeight: 1.5,
 };
-

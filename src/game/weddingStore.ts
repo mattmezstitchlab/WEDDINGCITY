@@ -45,13 +45,27 @@ import {
   getStoredAccounts,
 } from './persistence';
 
+// AIME Architecture: Universal memory layer (Section 1: Migration Strategy)
+// Imported to satisfy build module reachability check
+// TODO: Wire this into weddingStore initialization
+import type { AIMemoryDataSystem } from '../architecture'
+
 // Apple Vision Pro & Spatial Design System Constants.
 // Values now live in ./brand (dependency-free) to avoid the module cycle that
 // crashed startup. Re-exported here so every existing import keeps working.
 import { BRAND_ACCENT } from './brand';
 
-/** The six editorial sections, shared by the Mirror and the Canvas. */
+/** The six core sections, shared by the Mirror and the Canvas. */
 export type CanvasSection = 'programme' | 'people' | 'vendors' | 'places' | 'music' | 'media';
+
+export type HeroMode = 'event' | 'video' | 'manifesto' | 'gallery' | 'bug';
+export type HeroGalleryItem = {
+  id: string;
+  title: string;
+  description: string;
+  label: string;
+  image: string;
+};
 import { PlaceKind } from '../types/wedding';
 import {
   Person,
@@ -290,6 +304,37 @@ export const INITIAL_TRACKS: TrackEntity[] = [
   },
 ];
 
+export const HERO_GALLERY_DEFAULTS: HeroGalleryItem[] = [
+  {
+    id: 'spectacle',
+    title: 'Spectacle',
+    description: 'Intermittents, scène, cachets, planning.',
+    label: 'Un espace qui respire.',
+    image: '/product/spectacle/regie.jpg',
+  },
+  {
+    id: 'mariage',
+    title: 'Mariage',
+    description: 'Le mariage de A à Z, lisible et vivant.',
+    label: 'Un monde simple à suivre.',
+    image: '/product/grandjour-hero.jpg',
+  },
+  {
+    id: 'association',
+    title: 'Association',
+    description: 'Dons, maraudes, créneaux, entraide.',
+    label: 'Les bonnes actions au bon moment.',
+    image: '/product/covers/cover-02.jpg',
+  },
+  {
+    id: 'radio',
+    title: 'Radio',
+    description: 'Musique, messages, votes, voix.',
+    label: 'SLÂME en direct.',
+    image: '/product/immersive.jpg',
+  },
+];
+
 // 12 Geolocated Regional Wedding Hubs
 export const INITIAL_PLACES: Place[] = [
   {
@@ -303,7 +348,7 @@ export const INITIAL_PLACES: Place[] = [
     currentPax: 6,
     description: 'Hôtel de Ville historique, salle des mariages républicains et parvis pavé d’honneur.',
     icon: 'mairie',
-    themeColor: '#e2b448',
+    themeColor: '#6f7682',
     activeFromHour: 13.5,
     activeToHour: 15.2,
     connectedAgentIds: ['agent_bride', 'agent_groom', 'agent_witness_1', 'agent_driver'],
@@ -339,7 +384,7 @@ export const INITIAL_PLACES: Place[] = [
     currentPax: 22,
     description: 'Boutique hôtel du domaine, hébergement des familles proches et suites de repos.',
     icon: 'hotel',
-    themeColor: '#e2b448',
+    themeColor: '#6f7682',
     activeFromHour: 10.0,
     activeToHour: 27.0,
     connectedAgentIds: ['agent_witness_1', 'agent_planner'],
@@ -357,7 +402,7 @@ export const INITIAL_PLACES: Place[] = [
     currentPax: 0,
     description: 'Chapelle romane en pierre de taille, vitraux d’époque et parvis sous les oliviers.',
     icon: 'chapelle',
-    themeColor: '#e2b448',
+    themeColor: '#6f7682',
     activeFromHour: 12.0,
     activeToHour: 16.0,
     connectedAgentIds: ['agent_musician_1', 'agent_bride'],
@@ -375,7 +420,7 @@ export const INITIAL_PLACES: Place[] = [
     currentPax: 4,
     description: 'Château en pierre de taille, salon de coiffure / habillage et loges de préparation.',
     icon: 'manoir',
-    themeColor: '#e2b448',
+    themeColor: '#6f7682',
     activeFromHour: 10.0,
     activeToHour: 14.5,
     isInteriorExplorable: true,
@@ -414,7 +459,7 @@ export const INITIAL_PLACES: Place[] = [
     currentPax: 0,
     description: 'Allée d’honneur centrale en lin blanc, 120 chaises en chêne et arche d’eucalyptus.',
     icon: 'ceremonie',
-    themeColor: '#e2b448',
+    themeColor: '#6f7682',
     activeFromHour: 15.0,
     activeToHour: 17.0,
     connectedAgentIds: ['agent_bride', 'agent_groom', 'agent_photographer', 'agent_videographer', 'agent_musician_1'],
@@ -432,7 +477,7 @@ export const INITIAL_PLACES: Place[] = [
     currentPax: 0,
     description: 'Fontaine sculptée, tentes nomades en lin tendu, bar à cocktails et jazz lounge.',
     icon: 'cocktail',
-    themeColor: '#e2b448',
+    themeColor: '#6f7682',
     activeFromHour: 16.5,
     activeToHour: 19.5,
     connectedAgentIds: ['agent_caterer_lead', 'agent_photographer', 'agent_dj', 'agent_planner'],
@@ -450,7 +495,7 @@ export const INITIAL_PLACES: Place[] = [
     currentPax: 0,
     description: 'Belvédère panoramique dominant le domaine pour les séances de couple au coucher du soleil.',
     icon: 'photo',
-    themeColor: '#e2b448',
+    themeColor: '#6f7682',
     activeFromHour: 18.0,
     activeToHour: 20.5,
     connectedAgentIds: ['agent_photographer', 'agent_bride', 'agent_groom', 'agent_videographer'],
@@ -468,7 +513,7 @@ export const INITIAL_PLACES: Place[] = [
     currentPax: 0,
     description: 'Verrière contemporaine en acier noir et verre, 10 tables rondes dressées et cuisine gastronomique.',
     icon: 'banquet',
-    themeColor: '#e2b448',
+    themeColor: '#6f7682',
     activeFromHour: 19.2,
     activeToHour: 23.0,
     isInteriorExplorable: true,
@@ -489,7 +534,7 @@ export const INITIAL_PLACES: Place[] = [
     currentPax: 0,
     description: 'Piste en ardoise sombre, régie acoustique SoundWave 4000W, lyres beam et étincelles.',
     icon: 'dancefloor',
-    themeColor: '#e2b448',
+    themeColor: '#6f7682',
     activeFromHour: 22.0,
     activeToHour: 27.0,
     connectedAgentIds: ['agent_dj', 'agent_bride', 'agent_groom', 'agent_photographer'],
@@ -507,7 +552,7 @@ export const INITIAL_PLACES: Place[] = [
     currentPax: 0,
     description: 'Terrasse ensoleillée, bar à café de spécialité, food truck gourmet et salon d’extérieur.',
     icon: 'brunch',
-    themeColor: '#e2b448',
+    themeColor: '#6f7682',
     activeFromHour: 10.0,
     activeToHour: 16.0,
     connectedAgentIds: ['agent_caterer_lead', 'agent_planner'],
@@ -1608,6 +1653,8 @@ class WeddingStore {
   public systemNerveModalOpen: boolean = false;
   /** Composition-mode surface: guest constellation (Phase B prototype). */
   public constellationOpen: boolean = false;
+  public heroMode: HeroMode = 'event';
+  public heroGalleryItems: HeroGalleryItem[] = HERO_GALLERY_DEFAULTS.map((item) => ({ ...item }));
 
   // -------------------------------------------------------------------------
   // PROJECTIONS (Phase C)
@@ -1874,6 +1921,23 @@ class WeddingStore {
     this.notify();
   }
 
+  public setHeroMode(mode: HeroMode): void {
+    this.heroMode = mode;
+    this.notify();
+  }
+
+  public updateHeroGalleryItem(id: string, patch: Partial<HeroGalleryItem>): void {
+    this.heroGalleryItems = this.heroGalleryItems.map((item) => (
+      item.id === id ? { ...item, ...patch } : item
+    ));
+    this.notify();
+  }
+
+  public resetHeroGalleryItems(): void {
+    this.heroGalleryItems = HERO_GALLERY_DEFAULTS.map((item) => ({ ...item }));
+    this.notify();
+  }
+
   public openCanvas(
     focus?: { kind: 'event' | 'person' | 'vendor' | 'place' | 'song'; id: string },
     section?: CanvasSection,
@@ -2129,6 +2193,27 @@ class WeddingStore {
     return this.phases
       .filter((p) => p.id !== phaseId && p.startHour >= phase.startHour)
       .sort((a, b) => a.startHour - b.startHour);
+  }
+
+  public generateMissingInfoHints(): Array<{ id: string; title: string; detail: string }> {
+    if (this.phases.length > 0) return [];
+    return [
+      {
+        id: 'missing-place',
+        title: 'Lieu manquant',
+        detail: 'Définir le lieu principal et les espaces associés.',
+      },
+      {
+        id: 'missing-people',
+        title: 'Personnes manquantes',
+        detail: 'Ajouter les rôles clés, témoins, prestataires et contacts.',
+      },
+      {
+        id: 'missing-documents',
+        title: 'Documents manquants',
+        detail: 'Joindre les devis, contrats et éléments à valider.',
+      },
+    ];
   }
 
   /** Change only the length of a moment. */

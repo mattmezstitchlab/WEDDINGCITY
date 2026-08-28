@@ -46,6 +46,7 @@
   align-items: center;
   gap: 12px;
   padding: 22px clamp(18px, 5vw, 64px);
+  z-index: 2;
 }
 
 .wc-gj-wordmark {
@@ -112,11 +113,173 @@
   color: rgba(246, 245, 243, 0.84);
 }
 
-.wc-gj-hero-actions {
-  margin-top: clamp(22px, 4vw, 40px);
+.wc-gj-hero-tabs {
+  margin-bottom: 14px;
   display: flex;
-  gap: 10px;
   flex-wrap: wrap;
+  gap: 8px;
+}
+
+.wc-gj-hero-tab {
+  appearance: none;
+  border: 1px solid rgba(246, 245, 243, 0.18);
+  background: rgba(8, 9, 11, 0.55);
+  color: #f6f5f3;
+  border-radius: 999px;
+  padding: 8px 12px;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.wc-gj-hero-tab.is-active {
+  background: #f6f5f3;
+  color: #08090b;
+}
+
+.wc-hero-gallery,
+.wc-hero-manifesto,
+.wc-hero-video {
+  padding: clamp(30px, 5vw, 60px) clamp(18px, 5vw, 64px);
+}
+
+.wc-simple-kicker {
+  margin: 0 0 10px;
+  color: rgba(246, 245, 243, 0.84);
+  font-size: 14px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.wc-gj-hero-kind {
+  margin: 8px 0 0;
+  font-size: 16px;
+  color: rgba(246, 245, 243, 0.88);
+}
+
+.wc-gj-bar {
+  position: relative;
+  margin-top: 26px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto auto auto auto;
+  gap: 10px;
+  align-items: center;
+  background: rgba(255, 255, 255, 0.96);
+  color: #08090b;
+  border-radius: 24px;
+  padding: 12px;
+  box-shadow: 0 16px 44px rgba(0, 0, 0, 0.28);
+}
+
+.wc-gj-bar-field {
+  min-width: 0;
+  width: 100%;
+  padding: 12px 14px;
+  border: 0;
+  background: transparent;
+  color: #08090b;
+  font: inherit;
+  font-size: 15px;
+}
+
+.wc-gj-bar-field::placeholder {
+  color: rgba(8, 9, 11, 0.52);
+}
+
+.wc-gj-bar-icon,
+.wc-gj-bar-go,
+.wc-gj-bar-type {
+  border: 0;
+  border-radius: 16px;
+  padding: 12px 14px;
+  font: inherit;
+}
+
+.wc-gj-bar-icon,
+.wc-gj-bar-type {
+  background: rgba(8, 9, 11, 0.06);
+}
+
+.wc-gj-bar-go {
+  background: #08090b;
+  color: #f6f5f3;
+  font-weight: 700;
+}
+
+.wc-gj-bar-hint {
+  margin: 10px 0 0;
+  color: rgba(246, 245, 243, 0.78);
+  font-size: 13px;
+}
+
+.wc-hero-gallery-shell {
+  position: relative;
+  min-height: 340px;
+  border-radius: 28px;
+  overflow: hidden;
+}
+
+.wc-hero-gallery-shell img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.wc-hero-gallery-copy {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 28px;
+  background: linear-gradient(180deg, transparent, rgba(8, 9, 11, 0.88));
+}
+
+.wc-hero-gallery-copy span {
+  display: inline-block;
+  margin-bottom: 8px;
+  font-size: 12px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.wc-hero-gallery-copy h2,
+.wc-hero-video-card h2,
+.wc-hero-manifesto p {
+  margin: 0;
+  font-size: clamp(24px, 5vw, 56px);
+  line-height: 1.05;
+}
+
+.wc-hero-video-card {
+  border: 1px solid rgba(246, 245, 243, 0.12);
+  border-radius: 24px;
+  padding: 28px;
+  max-width: 760px;
+}
+
+.wc-hero-panel {
+  margin-top: 16px;
+  max-width: 760px;
+  padding: 18px 20px;
+  border-radius: 20px;
+  background: rgba(246, 245, 243, 0.08);
+  border: 1px solid rgba(246, 245, 243, 0.14);
+}
+
+.wc-hero-panel strong {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 12px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.wc-hero-panel p {
+  margin: 0;
+  color: rgba(246, 245, 243, 0.82);
+  font-size: 14px;
+  line-height: 1.55;
 }
 
 /* --- controls --------------------------------------------------------------- */
@@ -229,10 +392,72 @@
 
 @media (max-width: 900px) {
   .wc-gj-grid { grid-template-columns: repeat(2, 1fr); }
+  .wc-gj-nav {
+    align-items: flex-start;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+  .wc-gj-bar {
+    grid-template-columns: 1fr;
+  }
+  .wc-gj-bar-field,
+  .wc-gj-bar-icon,
+  .wc-gj-bar-type,
+  .wc-gj-bar-go {
+    width: 100%;
+  }
+  .wc-gj-bar-go {
+    min-height: 48px;
+  }
+  .wc-hero-gallery-shell {
+    min-height: 260px;
+  }
 }
 
 @media (max-width: 560px) {
   .wc-gj-grid { grid-template-columns: 1fr; }
+  .wc-gj-nav {
+    padding: 16px 18px;
+  }
+  .wc-gj-wordmark {
+    letter-spacing: 0.18em;
+  }
+  .wc-gj-hero-tabs {
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    padding-bottom: 2px;
+  }
+  .wc-gj-hero-tab {
+    white-space: nowrap;
+    flex: 0 0 auto;
+  }
+  .wc-gj-title {
+    font-size: clamp(34px, 18vw, 72px);
+  }
+  .wc-gj-bar {
+    padding: 10px;
+    border-radius: 20px;
+  }
+  .wc-gj-bar-field {
+    font-size: 14px;
+  }
+  .wc-gj-bar-hint {
+    font-size: 12px;
+  }
+  .wc-hero-panel,
+  .wc-hero-video-card {
+    padding: 16px;
+  }
+  .wc-simple-proof,
+  .wc-site-quote,
+  .wc-simple-footer {
+    padding-left: 18px;
+    padding-right: 18px;
+  }
+  .wc-simple-proof-head h2,
+  .wc-site-quote-copy h2 {
+    font-size: clamp(28px, 10vw, 42px);
+  }
 }
 
 /* --- my weddings ------------------------------------------------------------ */
@@ -1639,6 +1864,50 @@
 .wc-simple-projects .wc-gj-list-name { color: #141414 !important; }
 .wc-simple-projects .wc-gj-list-meta { color: rgba(20,20,20,.52) !important; }
 /* One visual universe per offered event type; cross-fade, never layout shift. */
+
+.wc-public-detail-card {
+  position: relative;
+  overflow: hidden;
+}
+
+.wc-public-flip {
+  position: relative;
+  min-height: 520px;
+  transform-style: preserve-3d;
+  transition: transform 520ms cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
+.wc-public-flip.is-back {
+  transform: rotateY(180deg);
+}
+
+.wc-public-flip-face {
+  position: absolute;
+  inset: 0;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+
+.wc-public-flip-back {
+  transform: rotateY(180deg);
+}
+
+.wc-public-detail-hero {
+  aspect-ratio: 16/8;
+}
+
+.wc-public-detail-use {
+  appearance: none;
+  margin-top: 22px;
+  padding: 8px 0;
+  border: 0;
+  border-bottom: 1px solid #141414;
+  background: transparent;
+  color: #141414;
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+}
 .wc-gj-hero-slide { opacity: 0; transition: opacity 1.2s ease; }
 .wc-gj-hero-slide.is-active { opacity: 1; }
 .wc-gj-hero-kind { margin: 0 0 18px; min-height: 1.3em; color: rgba(255,255,255,.76); font-size: 10px; font-weight: 700; letter-spacing: .18em; text-transform: uppercase; }

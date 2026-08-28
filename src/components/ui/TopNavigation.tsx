@@ -96,83 +96,7 @@ export function TopNavigation({ onOpenImport, onOpenConflicts }: TopNavigationPr
 
       {/* 3. Right Pill: Nerve Center, Connectors Hub, World Lab, Chaos Importer, DJ Playlist, Research, AI Agent & Metrics */}
       <div style={{ ...pillContainerStyle, gap: 5 }}>
-        {/* System Nerve Center Button */}
-        <button
-          onClick={() => {
-            store.systemNerveModalOpen = true;
-            store.notify();
-          }}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 4,
-            background: 'rgba(255, 255, 255, 0.04)',
-            color: '#cbd5e1',
-            border: `1px solid ${BRAND_BORDER}`,
-            borderRadius: 8,
-            padding: '5px 8px',
-            fontSize: 10.5,
-            fontWeight: 600,
-            cursor: 'pointer',
-          }}
-          title="Ouvrir le System Nerve Center (Autodiagnostic technique)"
-        >
-          <span>⚡</span>
-          <span>NERVE CENTER</span>
-        </button>
-
-        {/* Connectors Hub Button */}
-        <button
-          onClick={() => {
-            store.connectorsModalOpen = true;
-            store.notify();
-          }}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 4,
-            background: 'rgba(255, 255, 255, 0.04)',
-            color: '#cbd5e1',
-            border: `1px solid ${BRAND_BORDER}`,
-            borderRadius: 8,
-            padding: '5px 8px',
-            fontSize: 10.5,
-            fontWeight: 600,
-            cursor: 'pointer',
-          }}
-          title="Connecter vos outils (Google, Drive, Calendar, Gmail, Spotify...)"
-        >
-          <span>🔌</span>
-          <span>CONNECTEURS</span>
-        </button>
-
-        {/* World Lab Button */}
-        <button
-          onClick={() => {
-            store.worldLabModalOpen = true;
-            store.notify();
-          }}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 4,
-            background: 'linear-gradient(135deg, rgba(226, 180, 72, 0.25), rgba(226, 180, 72, 0.1))',
-            color: '#ffffff',
-            border: `1px solid ${BRAND_ACCENT}`,
-            borderRadius: 8,
-            padding: '5px 10px',
-            fontSize: 11,
-            fontWeight: 700,
-            cursor: 'pointer',
-            boxShadow: '0 0 16px rgba(226, 180, 72, 0.2)',
-          }}
-          title="Créer n’importe quel monde (Voyage, Concert, Événement, Entreprise...)"
-        >
-          <span>✨</span>
-          <span>WORLD LAB</span>
-        </button>
-
-        {/* World Web Research */}
+        {/* Production search and import entry points */}
         <button
           onClick={() => {
             store.worldResearchModalOpen = true;
@@ -197,34 +121,11 @@ export function TopNavigation({ onOpenImport, onOpenConflicts }: TopNavigationPr
           <span>RECHERCHE WEB</span>
         </button>
 
-        {/* Spatial AI Copilot Agent */}
         <button
           onClick={() => {
-            store.spatialAgentDrawerOpen = !store.spatialAgentDrawerOpen;
+            store.connectorsModalOpen = true;
             store.notify();
           }}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 4,
-            background: store.spatialAgentDrawerOpen ? BRAND_ACCENT : 'rgba(226, 180, 72, 0.12)',
-            color: store.spatialAgentDrawerOpen ? '#08090d' : BRAND_ACCENT,
-            border: `1px solid ${BRAND_ACCENT}`,
-            borderRadius: 8,
-            padding: '5px 10px',
-            fontSize: 11,
-            fontWeight: 700,
-            cursor: 'pointer',
-          }}
-          title="Ouvrir l’Agent Spatial Copilot"
-        >
-          <IconSparkles size={12} color={store.spatialAgentDrawerOpen ? '#08090d' : BRAND_ACCENT} />
-          <span>AGENT SPATIAL</span>
-        </button>
-
-        {/* DJ Playlist Button */}
-        <button
-          onClick={() => store.setDjBoothOpen(true)}
           style={{
             display: 'flex',
             alignItems: 'center',
@@ -233,14 +134,15 @@ export function TopNavigation({ onOpenImport, onOpenConflicts }: TopNavigationPr
             color: '#cbd5e1',
             border: `1px solid ${BRAND_BORDER}`,
             borderRadius: 8,
-            padding: '5px 9px',
-            fontSize: 11,
+            padding: '5px 8px',
+            fontSize: 10.5,
             fontWeight: 600,
             cursor: 'pointer',
           }}
+          title="Connecter vos outils"
         >
-          <span>🎵</span>
-          <span>DJ</span>
+          <span>🔌</span>
+          <span>CONNECTEURS</span>
         </button>
 
         {/* Importer CTA */}

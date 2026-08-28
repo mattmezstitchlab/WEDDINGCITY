@@ -1,0 +1,496 @@
+/**
+ * GÉNÉALOGIE Styling
+ */
+
+.genealogie {
+  background: linear-gradient(135deg, #0a1428 0%, #1a2332 100%);
+  color: #e2e8f0;
+  min-height: 100vh;
+  padding: 2rem;
+  font-family: 'Inter', system-ui, sans-serif;
+}
+
+.genealogie-header {
+  text-align: center;
+  margin-bottom: 3rem;
+  padding-bottom: 2rem;
+  border-bottom: 2px solid #334155;
+}
+
+.genealogie-header h1 {
+  font-size: 3rem;
+  font-weight: 700;
+  margin: 0;
+  background: linear-gradient(135deg, #10b981, #06b6d4);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.genealogie-header p {
+  font-size: 1.25rem;
+  color: #94a3b8;
+  margin-top: 0.5rem;
+}
+
+.genealogie-intro {
+  max-width: 900px;
+  margin: 0 auto 3rem;
+}
+
+.genealogie-intro article {
+  background: rgba(30, 41, 59, 0.8);
+  border: 1px solid #334155;
+  border-radius: 1rem;
+  padding: 2rem;
+  backdrop-filter: blur(10px);
+}
+
+.genealogie-intro h2 {
+  font-size: 2rem;
+  margin-top: 0;
+  color: #f1f5f9;
+}
+
+.genealogie-intro p {
+  line-height: 1.6;
+  color: #cbd5e1;
+  margin: 1rem 0;
+}
+
+.genealogie-intro strong {
+  color: #93c5fd;
+  font-weight: 600;
+}
+
+.genealogie-intro ul,
+.genealogie-intro ol {
+  margin: 1rem 0;
+  padding-left: 2rem;
+}
+
+.genealogie-intro li {
+  margin: 0.75rem 0;
+  color: #cbd5e1;
+}
+
+.phases-overview {
+  max-width: 1200px;
+  margin: 0 auto 3rem;
+}
+
+.phases-overview h2 {
+  text-align: center;
+  font-size: 2rem;
+  margin-bottom: 2rem;
+  color: #f1f5f9;
+}
+
+.phases-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 1rem;
+}
+
+.phase-card {
+  border: 2px solid #334155;
+  border-radius: 0.75rem;
+  padding: 1.5rem;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  background: transparent;
+  color: #cbd5e1;
+  font-weight: 600;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.phase-card:hover {
+  transform: translateY(-2px);
+}
+
+.phase-card.active {
+  border-color: white;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.phase-number {
+  width: 3.5rem;
+  height: 3.5rem;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 1.5rem;
+  color: white;
+}
+
+.phase-name {
+  font-size: 1rem;
+  margin: 0.5rem 0 0 0;
+}
+
+.project-count {
+  font-size: 0.85rem;
+  color: #94a3b8;
+  font-weight: 400;
+}
+
+.genealogy-tree {
+  max-width: 1200px;
+  margin: 0 auto 3rem;
+}
+
+.genealogy-tree h2 {
+  font-size: 2rem;
+  margin-bottom: 1.5rem;
+  color: #f1f5f9;
+}
+
+.projects-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 1.5rem;
+}
+
+.project-node {
+  background: rgba(30, 41, 59, 0.6);
+  border: 1px solid #334155;
+  border-left: 4px solid #cbd5e1;
+  border-radius: 0.75rem;
+  padding: 1.5rem;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  position: relative;
+}
+
+.project-node:hover {
+  background: rgba(30, 41, 59, 0.8);
+  border-color: #60a5fa;
+  transform: translateX(4px);
+}
+
+.project-node.selected {
+  background: rgba(59, 130, 246, 0.15);
+  border-color: #60a5fa;
+  box-shadow: 0 0 20px rgba(96, 165, 250, 0.3);
+}
+
+.project-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+  margin-bottom: 0.75rem;
+}
+
+.project-header h3 {
+  font-size: 1.1rem;
+  margin: 0;
+  color: #f1f5f9;
+  flex: 1;
+}
+
+.status-badge {
+  padding: 0.25rem 0.75rem;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: white;
+  flex-shrink: 0;
+}
+
+.project-date {
+  font-size: 0.85rem;
+  color: #94a3b8;
+  margin: 0.5rem 0 0.75rem 0;
+  font-weight: 500;
+}
+
+.project-description {
+  font-size: 0.95rem;
+  color: #cbd5e1;
+  margin: 0.75rem 0;
+  line-height: 1.4;
+}
+
+.project-contribution {
+  font-size: 0.9rem;
+  color: #cbd5e1;
+  margin: 0.75rem 0 0 0;
+}
+
+.project-contribution strong {
+  color: #93c5fd;
+}
+
+.project-detail {
+  max-width: 800px;
+  margin: 0 auto 3rem;
+  animation: slideIn 0.3s ease-out;
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.detail-card {
+  background: rgba(30, 41, 59, 0.9);
+  border: 2px solid #334155;
+  border-radius: 1rem;
+  padding: 2rem;
+  position: relative;
+  backdrop-filter: blur(10px);
+}
+
+.close-btn {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  background: rgba(59, 130, 246, 0.2);
+  border: 1px solid #60a5fa;
+  color: #60a5fa;
+  border-radius: 50%;
+  width: 2.5rem;
+  height: 2.5rem;
+  font-size: 1.5rem;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.close-btn:hover {
+  background: rgba(59, 130, 246, 0.3);
+  transform: rotate(90deg);
+}
+
+.detail-card h2 {
+  font-size: 2rem;
+  margin: 0 0 1.5rem 0;
+  color: #f1f5f9;
+}
+
+.detail-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 1.5rem;
+  margin-bottom: 2rem;
+}
+
+.detail-section {
+  background: rgba(59, 130, 246, 0.05);
+  border: 1px solid #334155;
+  border-radius: 0.5rem;
+  padding: 1rem;
+}
+
+.detail-section.full-width {
+  grid-column: 1 / -1;
+}
+
+.detail-section h3 {
+  font-size: 1rem;
+  margin: 0 0 0.75rem 0;
+  color: #93c5fd;
+  font-weight: 600;
+}
+
+.detail-section p {
+  margin: 0;
+  color: #cbd5e1;
+  line-height: 1.5;
+}
+
+.detail-section ul {
+  margin: 0;
+  padding-left: 1.5rem;
+}
+
+.detail-section li {
+  margin: 0.5rem 0;
+  color: #cbd5e1;
+}
+
+.related-projects {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.related-link {
+  padding: 0.5rem 1rem;
+  background: rgba(59, 130, 246, 0.2);
+  border: 1px solid #60a5fa;
+  border-radius: 0.5rem;
+  color: #60a5fa;
+  cursor: pointer;
+  font-weight: 500;
+  transition: all 0.3s ease;
+}
+
+.related-link:hover {
+  background: rgba(59, 130, 246, 0.3);
+  transform: translateY(-2px);
+}
+
+.convergence-story {
+  max-width: 900px;
+  margin: 0 auto 3rem;
+}
+
+.convergence-story article {
+  background: rgba(30, 41, 59, 0.8);
+  border: 1px solid #334155;
+  border-left: 4px solid #10b981;
+  border-radius: 1rem;
+  padding: 2rem;
+}
+
+.convergence-story h2 {
+  font-size: 2rem;
+  margin-top: 0;
+  color: #f1f5f9;
+}
+
+.convergence-story h3 {
+  font-size: 1.25rem;
+  margin: 1.5rem 0 0.75rem 0;
+  color: #93c5fd;
+}
+
+.convergence-story p {
+  line-height: 1.6;
+  color: #cbd5e1;
+  margin: 0.75rem 0;
+}
+
+.convergence-story strong {
+  color: #10b981;
+  font-weight: 600;
+}
+
+.convergence-story ul {
+  margin: 1rem 0;
+  padding-left: 2rem;
+}
+
+.convergence-story li {
+  margin: 0.75rem 0;
+  color: #cbd5e1;
+}
+
+.domains-roadmap {
+  max-width: 1200px;
+  margin: 0 auto 3rem;
+}
+
+.domains-roadmap h2 {
+  font-size: 2rem;
+  margin-bottom: 1rem;
+  color: #f1f5f9;
+}
+
+.domains-roadmap > p {
+  max-width: 700px;
+  margin-bottom: 2rem;
+  color: #cbd5e1;
+}
+
+.domains-roadmap-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 1.5rem;
+}
+
+.domain-roadmap-card {
+  background: rgba(30, 41, 59, 0.6);
+  border: 1px solid #334155;
+  border-radius: 0.75rem;
+  padding: 1.5rem;
+  transition: all 0.3s ease;
+}
+
+.domain-roadmap-card:hover {
+  border-color: #60a5fa;
+  background: rgba(59, 130, 246, 0.05);
+}
+
+.domain-roadmap-card h3 {
+  font-size: 1.1rem;
+  margin: 0 0 0.75rem 0;
+  color: #f1f5f9;
+}
+
+.domain-roadmap-card .status {
+  display: inline-block;
+  padding: 0.25rem 0.75rem;
+  background: rgba(139, 92, 246, 0.2);
+  border-radius: 0.25rem;
+  font-size: 0.85rem;
+  color: #a78bfa;
+  margin-bottom: 1rem;
+  font-weight: 600;
+}
+
+.domain-roadmap-card .stats {
+  display: flex;
+  gap: 1rem;
+  font-size: 0.9rem;
+  color: #94a3b8;
+}
+
+.genealogie-footer {
+  max-width: 900px;
+  margin: 0 auto;
+  text-align: center;
+  padding: 2rem;
+  border-top: 2px solid #334155;
+  color: #94a3b8;
+}
+
+.genealogie-footer a {
+  color: #60a5fa;
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.genealogie-footer a:hover {
+  text-decoration: underline;
+}
+
+@media (max-width: 768px) {
+  .genealogie {
+    padding: 1rem;
+  }
+
+  .genealogie-header h1 {
+    font-size: 2rem;
+  }
+
+  .phases-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .projects-list {
+    grid-template-columns: 1fr;
+  }
+
+  .detail-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .domains-roadmap-grid {
+    grid-template-columns: 1fr;
+  }
+}
