@@ -89,9 +89,16 @@ export function IntentToolbar() {
   return (
     <div style={wrapper} role="region" aria-label="Barre d'intention">
       <div style={barStyle}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: 150 }}>
+          <strong style={{ fontSize: 12, letterSpacing: '0.18em', textTransform: 'uppercase', color: '#ffffff' }}>AI + ME</strong>
+          <span style={{ fontSize: 12, color: '#9ba1b0' }}>Naviguer · lire · traduire</span>
+        </div>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
           <button onClick={() => suggest('Ajouter un prestataire')} style={chip}>Ajouter une info</button>
           <button onClick={() => suggest("Où en est mon budget ?")} style={chip}>Où en est mon budget ?</button>
+          <button onClick={() => suggest('Passer en mode vidéo')} style={chip}>Play</button>
+          <button onClick={() => suggest('Aller au prochain moment')} style={chip}>Suivant</button>
         </div>
 
         <div style={{ flex: 1 }}>

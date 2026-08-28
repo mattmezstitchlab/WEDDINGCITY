@@ -310,28 +310,28 @@ export const HERO_GALLERY_DEFAULTS: HeroGalleryItem[] = [
     title: 'Spectacle',
     description: 'Intermittents, scène, cachets, planning.',
     label: 'Un espace qui respire.',
-    image: '/editorial/spectacle/regie.jpg',
+    image: '/product/spectacle/regie.jpg',
   },
   {
     id: 'mariage',
     title: 'Mariage',
     description: 'Le mariage de A à Z, lisible et vivant.',
     label: 'Un monde simple à suivre.',
-    image: '/editorial/grandjour-hero.jpg',
+    image: '/product/grandjour-hero.jpg',
   },
   {
     id: 'association',
     title: 'Association',
     description: 'Dons, maraudes, créneaux, entraide.',
     label: 'Les bonnes actions au bon moment.',
-    image: '/editorial/covers/cover-02.jpg',
+    image: '/product/covers/cover-02.jpg',
   },
   {
     id: 'radio',
     title: 'Radio',
     description: 'Musique, messages, votes, voix.',
     label: 'SLÂME en direct.',
-    image: '/editorial/immersive.jpg',
+    image: '/product/immersive.jpg',
   },
 ];
 

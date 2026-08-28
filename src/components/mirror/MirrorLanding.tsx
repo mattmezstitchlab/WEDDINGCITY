@@ -26,6 +26,27 @@ const HERO_IMAGES = [
   '/editorial/hero.jpg', '/editorial/mirror.jpg', '/editorial/world.jpg', '/editorial/immersive.jpg', '/editorial/matter.jpg',
 ];
 
+const LANDING_GALLERY_ITEMS = [
+  {
+    id: 'mariage-hero',
+    title: 'Mariage de A à Z',
+    description: 'Une page d’atterrissage complète, du premier mot jusqu’au guide tour narré.',
+    image: '/editorial/grandjour-hero.jpg',
+  },
+  {
+    id: 'spectacle',
+    title: 'Spectacle',
+    description: 'Intermittent du spectacle, programme, transmission, visibilité.',
+    image: '/editorial/spectacle/regie.jpg',
+  },
+  {
+    id: 'association',
+    title: 'Association',
+    description: 'Rassembler, expliquer, guider, faire circuler l’information.',
+    image: '/editorial/immersive.jpg',
+  },
+] as const;
+
 export function MirrorLanding() {
   const store = weddingStore;
   const [projects, setProjects] = useState<ReturnType<typeof getStoredProjects>>([]);
@@ -42,6 +63,7 @@ export function MirrorLanding() {
   const [heroSlide, setHeroSlide] = useState(0);
   const [quoteSent, setQuoteSent] = useState(false);
   const [calendarOpen, setCalendarOpen] = useState(false);
+  const [heroPanel, setHeroPanel] = useState<'none' | 'video' | 'manifesto' | 'gallery' | 'bug'>('none');
   const [quote, setQuote] = useState({ name: '', email: '', organisation: '', websiteNeed: '', budget: '', message: '' });
 
   useEffect(() => { setProjects(getStoredProjects()); }, []);
@@ -64,7 +86,7 @@ export function MirrorLanding() {
   const start = create;
   const schema = eventType(type);
   const heroMode = store.heroMode;
-  const galleryItem = store.heroGalleryItems[heroSlide % store.heroGalleryItems.length];
+  const galleryItem = LANDING_GALLERY_ITEMS[heroSlide % LANDING_GALLERY_ITEMS.length];
 
   return (
     <div id="wc-mirror" className="wc-grandjour wc-landing-simple" data-landing="page">
@@ -90,6 +112,8 @@ export function MirrorLanding() {
             {PRODUCT_NAME}<span className="wc-gj-mark">{PRODUCT_MARK}</span>
           </span>
           <span style={{ flex: 1 }} />
+          <a className="wc-gj-nav-ai" href="#comment-ca-marche">AI + ME</a>
+          <span className="wc-gj-nav-ai-sub">Commande universelle</span>
           {projects.length > 0 && (
             <div className="wc-gj-project-menu">
               <button onClick={() => setProjectMenuOpen((open) => !open)} className="wc-gj-nav-link" aria-expanded={projectMenuOpen}>
@@ -124,11 +148,21 @@ export function MirrorLanding() {
                 role="tab"
                 aria-selected={heroMode === mode}
                 className={`wc-gj-hero-tab${heroMode === mode ? ' is-active' : ''}`}
-                onClick={() => store.setHeroMode(mode as typeof heroMode)}
+                onClick={() => { store.setHeroMode(mode as typeof heroMode); setHeroPanel(mode === 'event' ? 'none' : mode); }}
               >
                 {label}
               </button>
             ))}
+          </div>
+
+          <div className="wc-gj-hero-actions">
+            <button type="button" className="wc-gj-cta" onClick={start}>Commencer</button>
+            <button type="button" className="wc-gj-cta-ghost" onClick={() => { setSearchMode((value) => !value); setHeroPanel('none'); }}>
+              Chercher un lieu ou un prestataire
+            </button>
+            <button type="button" className="wc-gj-cta-ghost" onClick={() => { setImportOpen(true); setHeroPanel('none'); }}>
+              Importer un document
+            </button>
           </div>
 
           {heroMode === 'event' && <p className="wc-simple-kicker">Du chaos à la ligne de départ.</p>}
@@ -259,12 +293,20 @@ export function MirrorLanding() {
                 <h2>{galleryItem?.description}</h2>
               </div>
             </div>
+            <div className="wc-hero-panel">
+              <strong>À montrer maintenant</strong>
+              <p>{galleryItem?.label}</p>
+            </div>
           </section>
         )}
 
         {heroMode === 'manifesto' && (
           <section className="wc-hero-manifesto" aria-label="Manifeste court">
             <p>Simple. Clair. Relié.</p>
+            <div className="wc-hero-panel">
+              <strong>Le principe</strong>
+              <p>Une mémoire, plusieurs projections, une seule interface humaine.</p>
+            </div>
           </section>
         )}
 
@@ -273,6 +315,26 @@ export function MirrorLanding() {
             <div className="wc-hero-video-card">
               <h2>Mariage de A à Z</h2>
               <p>Une vidéo guide tour racontée par l’agent.</p>
+              <button type="button" className="wc-gj-cta-small" onClick={() => setCalendarOpen(true)}>Lancer le tour</button>
+            </div>
+          </section>
+        )}
+
+        {heroMode === 'bug' && (
+          <section className="wc-hero-manifesto" aria-label="Retour de problème">
+            <div className="wc-hero-video-card">
+              <h2>Remonter un souci</h2>
+              <p>Décris ce qui bloque, où, et ce que tu attendais à la place.</p>
+              <button type="button" className="wc-gj-cta-small" onClick={() => setSearchMode(true)}>Décrire le problème</button>
+            </div>
+          </section>
+        )}
+
+        {heroPanel === 'none' && heroMode === 'event' && (
+          <section className="wc-hero-manifesto" aria-label="Point de départ">
+            <div className="wc-hero-video-card">
+              <h2>Un seul point d’entrée.</h2>
+              <p>Tu écris, on lit, puis on demande ce qui manque. Rien de plus.</p>
             </div>
           </section>
         )}
